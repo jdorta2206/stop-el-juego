@@ -49,7 +49,7 @@ import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled, getHalloweenScare } from "@/lib/halloweenEvent";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
-import { clearSoloGameRecovery, readSoloGameRecovery, saveSoloGameRecovery, type SoloGameRecoveryEnvelope } from "@/lib/soloGameRecovery";
+import { applyConfirmedSoloGameReward, clearSoloGameRecovery, readSoloGameRecovery, saveSoloGameRecovery, type SoloGameRecoveryEnvelope } from "@/lib/soloGameRecovery";
 import { reportHalloweenEvent } from "@/hooks/useHalloweenProgress";
 import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
 import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
@@ -144,6 +144,7 @@ export default function SoloGame() {
   const [doubleUsed, setDoubleUsed] = useState(false);
   const [hintReveal, setHintReveal] = useState<{ category: string; word: string } | null>(null);
   const pendingHintRef = useRef<{ category: string; word: string } | null>(null);
+  const appliedRewardKeysRef = useRef<string[]>([]);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showClipModal, setShowClipModal] = useState(false);
@@ -585,6 +586,7 @@ export default function SoloGame() {
     if (newGame) {
       scoreTokensRef.current = [];
       rankingScoreTokensRef.current = [];
+      appliedRewardKeysRef.current = [];
       // A new logical game must be allowed to submit its own final score,
       // including after an earlier match was abandoned during an account switch.
       submittedRef.current = false;
@@ -1026,8 +1028,9 @@ export default function SoloGame() {
     setRewardedUsed(payload.rewardedUsed);
     setHintUsed(payload.hintUsed);
     setDoubleUsed(payload.doubleUsed);
-    setRewardedAdType(null);
-    pendingHintRef.current = null;
+    setRewardedAdType(payload.pendingReward);
+    pendingHintRef.current = payload.pendingHint ? { ...payload.pendingHint } : null;
+    appliedRewardKeysRef.current = [...payload.appliedRewardKeys];
     setRandomEvent(payload.randomEvent);
     setActiveCard(payload.activeCard as PowerCardId | null);
     setCardUsed(payload.cardUsed);
@@ -1108,6 +1111,7 @@ export default function SoloGame() {
     gameSubmissionIdRef.current = null;
     scoreTokensRef.current = [];
     rankingScoreTokensRef.current = [];
+    appliedRewardKeysRef.current = [];
     pendingHintRef.current = null;
     setRewardedAdType(null);
     setRoundResults(null);
@@ -1630,28 +1634,45 @@ export default function SoloGame() {
     return "";
   };
 
-  const handleRewardedComplete = async (reward: number) => {
-    // The rewarded component keeps the game paused while the native ad is
-    // actually on screen. Only resume after the reward result is confirmed.
-    resumeGameTimer();
-    window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
-    if (rewardedAdType === "extraTime") {
-      setTimeLeft(prev => prev + reward);
-      setRewardedUsed(true);
-    } else if (rewardedAdType === "hint") {
-      const pending = pendingHintRef.current;
-      pendingHintRef.current = null;
-      if (pending) {
-        setResponses(prev => ({ ...prev, [pending.category]: pending.word }));
-        setHintReveal({ category: pending.category, word: pending.word });
-        setTimeout(() => setHintReveal(null), 3500);
-        setHintUsed(true);
-      } else {
-        toast({ title: lang === "en" ? "Hint unavailable" : lang === "pt" ? "Pista indisponível" : lang === "fr" ? "Indice indisponible" : "Pista no disponible", variant: "destructive" });
+  const handleRewardedComplete = async (reward: number, requestId: string) => {
+    const rewardType = rewardedAdType;
+    if (rewardType === "extraTime" || rewardType === "hint") {
+      const storage = getSoloGameRecoveryStorage();
+      const ownerId = recoveryOwnerRef.current;
+      const snapshot = storage && ownerId ? readSoloGameRecovery(storage, ownerId) : null;
+      if (!storage || !ownerId || ownerId !== player?.id || !snapshot
+        || snapshot.gameId !== gameSubmissionIdRef.current
+        || snapshot.payload.round !== round) {
+        throw new Error("No se encontró el checkpoint seguro de esta partida.");
       }
-    } else if (rewardedAdType === "double") {
-      // Capture the current score once. The bonus is a second leaderboard write;
-      // the server must not consume the round vouchers a second time.
+
+      const pendingHint = pendingHintRef.current ?? snapshot.payload.pendingHint;
+      const applied = applyConfirmedSoloGameReward(snapshot, requestId, rewardType, reward);
+      if (applied.status === "invalid") {
+        throw new Error("La recompensa confirmada no coincide con el contexto guardado.");
+      }
+      if (applied.status === "applied" && !saveSoloGameRecovery(storage, applied.envelope)) {
+        throw new Error("No se pudo guardar la recompensa de forma segura.");
+      }
+
+      // Persist the updated game state and idempotency key BEFORE updating
+      // React state or acknowledging the SSV result. A reload can therefore
+      // restore either the pending reward or its already-applied game state.
+      const payload = applied.envelope.payload;
+      appliedRewardKeysRef.current = [...payload.appliedRewardKeys];
+      if (rewardType === "extraTime") {
+        setTimeLeft(payload.timeLeft);
+        setRewardedUsed(payload.rewardedUsed);
+      } else if (pendingHint) {
+        pendingHintRef.current = null;
+        setResponses({ ...payload.responses });
+        setHintReveal(pendingHint);
+        setTimeout(() => setHintReveal(null), 3500);
+        setHintUsed(payload.hintUsed);
+      }
+    } else if (rewardType === "double") {
+      // Results-screen double points are outside PLAYING checkpoints and
+      // remain on their existing flow; they are not restored as a live match.
       const bonus = Math.max(0, totalScore);
       if (bonus > 0) {
         submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
@@ -1659,6 +1680,9 @@ export default function SoloGame() {
         setDoubleUsed(true);
       }
     }
+
+    resumeGameTimer();
+    window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
     setRewardedAdType(null);
   };
 
@@ -1722,7 +1746,7 @@ export default function SoloGame() {
         doubleUsed,
         pendingReward: null,
         pendingHint: null,
-        appliedRewardKeys: [],
+        appliedRewardKeys: [...appliedRewardKeysRef.current],
         randomEvent,
         activeCard,
         cardUsed,
@@ -1828,6 +1852,21 @@ export default function SoloGame() {
 
         {rewardedAdType && !adsBlocked && (
           <RewardedAd
+            onRequestCreated={(requestId) => {
+              if (rewardedAdType === "double") return true;
+              if (rewardedAdType !== "extraTime" && rewardedAdType !== "hint") return false;
+              const storage = getSoloGameRecoveryStorage();
+              const ownerId = recoveryOwnerRef.current;
+              if (!storage || !ownerId || ownerId !== player?.id || !gameSubmissionIdRef.current) return false;
+              const snapshot = readSoloGameRecovery(storage, ownerId);
+              if (!snapshot || snapshot.gameId !== gameSubmissionIdRef.current || snapshot.payload.round !== round) return false;
+              const pendingHint = rewardedAdType === "hint" ? pendingHintRef.current : null;
+              if (rewardedAdType === "hint" && !pendingHint) return false;
+              snapshot.savedAt = Date.now();
+              snapshot.payload.pendingReward = rewardedAdType;
+              snapshot.payload.pendingHint = pendingHint ? { ...pendingHint } : null;
+              return saveSoloGameRecovery(storage, snapshot);
+            }}
             rewardType={rewardedAdType === "double" ? "points" : rewardedAdType}
             rewardAmount={
               rewardedAdType === "extraTime" ? 30 :
