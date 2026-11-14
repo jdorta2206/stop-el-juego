@@ -100,6 +100,7 @@ jobs:
           grep -q 'android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE' app/src/main/AndroidManifest.xml
           grep -q 'android.support.customtabs.trusted.SMALL_ICON' app/src/main/AndroidManifest.xml
           grep -q 'extends com.google.androidbrowserhelper.trusted.DelegationService' app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
+          grep -q 'STOP_TWA_NOTIFICATIONS' app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
           grep -q 'common.handle_all_urls' ../artifacts/stop-game/public/.well-known/assetlinks.json
           grep -q 'common.use_as_origin' ../artifacts/stop-game/public/.well-known/assetlinks.json
           grep -q 'app.replit.stop_el_juego.twa' ../artifacts/stop-game/public/.well-known/assetlinks.json
