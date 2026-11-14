@@ -77,6 +77,15 @@ const REWARDED_ADS_DISABLED = !ADMOB_ADS_ENABLED || (
   import.meta.env.VITE_REWARDED_ADS_DISABLED === "1" && !isLikelyPlayTwa()
 );
 
+function getSoloGameRecoveryStorage(): Storage | null {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch {
+    // Storage can be unavailable in restricted WebView/private contexts.
+    return null;
+  }
+}
+
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
   if (Math.random() > 0.3) return null; // 30% chance
@@ -977,10 +986,11 @@ export default function SoloGame() {
       return;
     }
     if (recoveryOwnerRef.current === playerId && recoveryCheckCompleteRef.current) return;
-    const snapshot = readSoloGameRecovery(window.localStorage, playerId);
+    const recoveryStorage = getSoloGameRecoveryStorage();
+    const snapshot = recoveryStorage ? readSoloGameRecovery(recoveryStorage, playerId) : null;
     recoveryCheckCompleteRef.current = true;
     if (!snapshot || snapshot.mode !== gameMode) {
-      if (snapshot) clearSoloGameRecovery(window.localStorage, playerId);
+      if (snapshot && recoveryStorage) clearSoloGameRecovery(recoveryStorage, playerId);
       if (pendingAutoStartRef.current && (!getSelectedPackId().startsWith("custom:") || !customPacksLoading)) {
         pendingAutoStartRef.current = false;
         window.setTimeout(() => startGame(), 60);
@@ -1603,7 +1613,8 @@ export default function SoloGame() {
       // The restore effect and autosave effect run in the same commit. Keep
       // the checkpoint until the PLAYING state update from restoration lands.
       if (restoredRecoveryRef.current && gameState === "LOBBY") return;
-      if (ownerId) clearSoloGameRecovery(window.localStorage, ownerId);
+      const recoveryStorage = getSoloGameRecoveryStorage();
+      if (ownerId && recoveryStorage) clearSoloGameRecovery(recoveryStorage, ownerId);
       restoredRecoveryRef.current = false;
       return;
     }
@@ -1651,7 +1662,8 @@ export default function SoloGame() {
         bestRoundScore,
       },
     };
-    saveSoloGameRecovery(window.localStorage, envelope);
+    const recoveryStorage = getSoloGameRecoveryStorage();
+    if (recoveryStorage) saveSoloGameRecovery(recoveryStorage, envelope);
     restoredRecoveryRef.current = false;
   }, [
     gameState, player?.id, rewardedAdType, gameMode, currentLetter, timeLeft,
