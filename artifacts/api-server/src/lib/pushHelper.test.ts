@@ -33,6 +33,10 @@ describe("daily push classification across supported locales", () => {
     expect(notificationKind({ title, body })).toBe("daily");
   });
 
+  it("supports classification from a trusted title without a body", () => {
+    expect(notificationKind({ title: "Tu reto STOP de hoy" })).toBe("daily");
+  });
+
   it("does not let player-controlled body text reclassify rank or invite pushes as daily", () => {
     expect(notificationKind({
       title: "Te han superado",
