@@ -85,6 +85,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Nullable private CustomTabsServiceConnection warmupConnection;
     private int playGamesSignInGeneration;
     private boolean playGamesSignInInFlightInteractive;
+    private boolean playGamesSignInRequestedInteractive;
     private boolean pendingInteractivePlayGamesSignIn;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
@@ -633,7 +634,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if (playGamesSignInInFlight) {
-            if (allowInteractiveSignIn && !playGamesSignInInFlightInteractive) {
+            if (allowInteractiveSignIn && !playGamesSignInRequestedInteractive
+                    && !playGamesSignInInFlightInteractive) {
                 pendingInteractivePlayGamesSignIn = true;
                 Log.i("STOP_PLAY_GAMES", "Queued manual sign-in behind the startup authentication check");
             }
@@ -643,7 +645,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         if (isFinishing() || isDestroyed()) return;
 
         playGamesSignInInFlight = true;
-        playGamesSignInInFlightInteractive = allowInteractiveSignIn;
+        playGamesSignInInFlightInteractive = false;
+        playGamesSignInRequestedInteractive = allowInteractiveSignIn;
         final int signInGeneration = ++playGamesSignInGeneration;
 
         // Bound the complete silent-check/interactive-sign-in flow so a stalled SDK
@@ -652,10 +655,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration
                     && !isFinishing() && !isDestroyed()) {
                 playGamesSignInGeneration++;
-                boolean retryInteractive = pendingInteractivePlayGamesSignIn;
+                boolean retryInteractive = pendingInteractivePlayGamesSignIn
+                        || (playGamesSignInRequestedInteractive && !playGamesSignInInFlightInteractive);
                 pendingInteractivePlayGamesSignIn = false;
                 playGamesSignInInFlight = false;
                 playGamesSignInInFlightInteractive = false;
+                playGamesSignInRequestedInteractive = false;
                 Log.e("STOP_PLAY_GAMES", "Authentication flow timed out");
                 if (retryInteractive) {
                     startPlayGamesSignInIfNeeded(true);
@@ -676,11 +681,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             playGamesSignInGeneration++;
                             playGamesSignInInFlight = false;
                             playGamesSignInInFlightInteractive = false;
+                            playGamesSignInRequestedInteractive = false;
                             pendingInteractivePlayGamesSignIn = false;
                             sendPlayGamesStatus(true, "authenticated");
                             return;
                         }
-                        if (allowInteractiveSignIn || pendingInteractivePlayGamesSignIn) {
+                        if (playGamesSignInRequestedInteractive || pendingInteractivePlayGamesSignIn) {
                             pendingInteractivePlayGamesSignIn = false;
                             Log.i("STOP_PLAY_GAMES", "Starting interactive sign-in after authentication status check");
                             startInteractivePlayGamesSignIn(signInGeneration);
@@ -689,13 +695,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         playGamesSignInGeneration++;
                         playGamesSignInInFlight = false;
                         playGamesSignInInFlightInteractive = false;
+                        playGamesSignInRequestedInteractive = false;
                         Log.i("STOP_PLAY_GAMES", "Startup check complete; leaving interactive sign-in to the player");
                         sendPlayGamesStatus(false, "not_authenticated");
                     });
         } catch (RuntimeException error) {
             if (signInGeneration != playGamesSignInGeneration) return;
             Log.e("STOP_PLAY_GAMES", "Authentication status check failed", error);
-            if (allowInteractiveSignIn || pendingInteractivePlayGamesSignIn) {
+            if (playGamesSignInRequestedInteractive || pendingInteractivePlayGamesSignIn) {
                 pendingInteractivePlayGamesSignIn = false;
                 startInteractivePlayGamesSignIn(signInGeneration);
                 return;
@@ -703,6 +710,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             playGamesSignInGeneration++;
             playGamesSignInInFlight = false;
             playGamesSignInInFlightInteractive = false;
+            playGamesSignInRequestedInteractive = false;
             sendPlayGamesStatus(false, "sign_in_failed");
         }
     }
@@ -717,6 +725,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         playGamesSignInGeneration++;
                         playGamesSignInInFlight = false;
                         playGamesSignInInFlightInteractive = false;
+                        playGamesSignInRequestedInteractive = false;
                         pendingInteractivePlayGamesSignIn = false;
                         boolean signedIn = signInTask.isSuccessful()
                                 && signInTask.getResult() != null
@@ -732,6 +741,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             playGamesSignInGeneration++;
             playGamesSignInInFlight = false;
             playGamesSignInInFlightInteractive = false;
+            playGamesSignInRequestedInteractive = false;
             pendingInteractivePlayGamesSignIn = false;
             Log.e("STOP_PLAY_GAMES", "Manual sign-in could not start", error);
             sendPlayGamesStatus(false, "sign_in_failed");
