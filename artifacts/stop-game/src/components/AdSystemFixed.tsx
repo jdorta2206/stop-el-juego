@@ -47,7 +47,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, onRequestCreated, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; onRequestCreated?: (requestId: string) => boolean | void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingRequestId, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; onRequestCreated?: (requestId: string) => boolean | void; pendingRequestId?: string | null; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -90,6 +90,15 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, playerId, isP
   useEffect(() => { initTwaAdBridge(); }, []);
 
   useEffect(() => {
+    // On a restored game, the request ID inside the validated game checkpoint
+    // is authoritative; local metadata is only a compatibility fallback.
+    if (phase !== "pre") return;
+    if (pendingRequestId) {
+      setRetryRequestId(pendingRequestId);
+      setErrorDetail("Hay una recompensa pendiente de una sesión anterior. Comprueba si Google ya la ha confirmado.");
+      setPhase("pending");
+      return;
+    }
     const stored = readStoredPendingReward();
     if (!stored) return;
     if (stored.playerId !== (playerId || "guest")
@@ -98,7 +107,7 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, playerId, isP
     setRetryRequestId(stored.requestId);
     setErrorDetail("Hay una recompensa pendiente de una sesión anterior. Comprueba si Google ya la ha confirmado.");
     setPhase("pending");
-  }, [playerId, rewardType, rewardAmount]);
+  }, [playerId, rewardType, rewardAmount, pendingRequestId, phase]);
 
   const startWatching = async () => {
     // Premium and unmounted overlays must never request or grant an ad reward.
