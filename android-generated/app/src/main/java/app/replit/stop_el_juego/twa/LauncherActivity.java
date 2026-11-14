@@ -831,8 +831,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                     .addOnCompleteListener(task -> {
                         if (statusGeneration != playGamesStatusGeneration
                                 || playGamesSignInInFlight || isFinishing() || isDestroyed()) return;
-                        boolean authenticated = task.isSuccessful()
-                                && task.getResult() != null
+                        if (!task.isSuccessful()) {
+                            Log.w("STOP_PLAY_GAMES", "Status-only authentication refresh failed",
+                                    task.getException());
+                            return; // Preserve the last confirmed authentication state.
+                        }
+                        boolean authenticated = task.getResult() != null
                                 && task.getResult().isAuthenticated();
                         sendPlayGamesStatus(authenticated,
                                 authenticated ? "authenticated" : "not_authenticated");
@@ -840,8 +844,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } catch (RuntimeException error) {
             if (statusGeneration != playGamesStatusGeneration || playGamesSignInInFlight
                     || isFinishing() || isDestroyed()) return;
-            Log.w("STOP_PLAY_GAMES", "Status-only authentication refresh failed", error);
-            sendPlayGamesStatus(false, "status_check_failed");
+            Log.w("STOP_PLAY_GAMES", "Status-only authentication refresh could not start", error);
+            // Preserve the last confirmed state on transient SDK failures.
         }
     }
 
