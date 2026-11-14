@@ -440,7 +440,8 @@ export default function SoloGame() {
       window.history.replaceState({}, "", window.location.pathname + (params.get("mode") ? `?mode=${params.get("mode")}` : ""));
       // Let an interrupted match take priority over a fresh auto-start.
       pendingAutoStartRef.current = true;
-    }    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Companion to the auto-start effect above: when the user picked a custom
