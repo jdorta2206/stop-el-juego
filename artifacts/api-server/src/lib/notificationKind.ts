@@ -9,9 +9,8 @@ export interface NotificationText {
 }
 
 export function notificationKind(payload: NotificationText): NotificationKind {
-  // Normalize accents so Portuguese/French variants remain consistent.
-  const text = `${payload.title} ${payload.body}`
-    .toLocaleLowerCase()
+  const text = \`${payload.title} ${payload.body}\`
+    .toLowerCase()
     .normalize("NFD")
     .replace(/[\\u0300-\\u036f]/g, "");
 
