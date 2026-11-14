@@ -1889,13 +1889,14 @@ export default function SoloGame() {
               const ownerId = recoveryOwnerRef.current;
               if (!storage || !ownerId || ownerId !== player?.id
                 || !discardSoloGamePendingReward(storage, ownerId, gameSubmissionIdRef.current || "")) {
-                return;
+                return false;
               }
               resumeGameTimer();
               window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
               pendingHintRef.current = null;
               setPendingRewardRequestId(null);
               setRewardedAdType(null);
+              return true;
             }}
             playerId={player?.id}
             isPremium={adsBlocked && !pendingRewardRequestId}
