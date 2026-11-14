@@ -28,6 +28,13 @@ describe("first-victory push subscription recovery", () => {
 });
 
 describe("push subscription initialization safeguards", () => {
+  it("provides an initialization label in all four supported locales", () => {
+    expect(notificationsPageSource).toContain('checking: "Comprobando suscripción…"');
+    expect(notificationsPageSource).toContain('checking: "Checking subscription…"');
+    expect(notificationsPageSource).toContain('checking: "A verificar a subscrição…"');
+    expect(notificationsPageSource).toContain('checking: "Vérification de l’abonnement…"');
+  });
+
   it("keeps the settings action disabled until initial subscription inspection finishes", () => {
     expect(hookSource).toContain("const [loading, setLoading] = useState(true)");
     expect(hookSource).toContain("setLoading(true);");
