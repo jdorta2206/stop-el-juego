@@ -8,11 +8,13 @@ import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.RemoteException;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsCallback;
+import androidx.browser.customtabs.EngagementSignalsCallback;
 import androidx.browser.customtabs.CustomTabsClient;
 import androidx.browser.customtabs.CustomTabsServiceConnection;
 import androidx.browser.customtabs.CustomTabsService;
@@ -73,14 +75,16 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     // CustomTabsSession remains bound for the Play Games postMessage bridge.
     private boolean retainLauncherForTwa;
     private boolean initialTwaFinishSuppressed;
-    private boolean livenessProbePending;
-    private boolean livenessProbeReceived;
-    private int livenessProbeGeneration;
-    @Nullable private String activeLivenessProbeId;
+    private boolean twaSessionEnded;
+    private boolean engagementSignalsRegistered;
+    private boolean twaTabVisible;
+    private int tabVisibilityCheckGeneration;
     private boolean twaLaunchStarted;
     private boolean warmupServiceBound;
     @Nullable private CustomTabsServiceConnection warmupConnection;
     private int playGamesSignInGeneration;
+    private boolean playGamesSignInInFlightInteractive;
+    private boolean pendingInteractivePlayGamesSignIn;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
 
@@ -193,53 +197,42 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     @Override
     public void finish() {
-        if (!retainLauncherForTwa) {
+        if (!retainLauncherForTwa || twaSessionEnded) {
             super.finish();
             return;
         }
 
-        // ABH calls finish() once immediately after opening Chrome. Suppress that
-        // first call but keep the retention flag set: onRestart() can also happen
-        // when a native Play Games screen returns while the TWA page is still open.
+        registerEngagementSignalsCallback();
+
+        // ABH calls finish() immediately after opening Chrome. Keep the launcher
+        // alive so its CustomTabsSession remains available to the Play Games bridge.
         if (!initialTwaFinishSuppressed) {
             initialTwaFinishSuppressed = true;
-            Log.i("STOP_PLAY_GAMES", "Keeping TWA launcher alive to preserve CustomTabsSession");
+            Log.i("STOP_PLAY_GAMES", "Retaining launcher until the TWA Custom Tabs session ends");
             return;
         }
 
-        if (livenessProbePending) return;
-        livenessProbePending = true;
-        livenessProbeReceived = false;
-        final int probeGeneration = ++livenessProbeGeneration;
-        final String probeId = String.valueOf(probeGeneration);
-        activeLivenessProbeId = probeId;
-
-        JSONObject probe = newMessage("STOP_TWA_LIVENESS_PROBE");
-        try {
-            probe.put("probeId", probeId);
-        } catch (JSONException error) {
-            // The probe id is a string and should never fail to serialize. If it
-            // does, let the bounded timeout close the launcher safely.
-            Log.w("STOP_PLAY_GAMES", "Unable to serialize TWA liveness probe id", error);
+        if (engagementSignalsRegistered || twaTabVisible) {
+            // onRestart() can also run when a native Play Games screen returns.
+            // Move the launcher behind Chrome instead of destroying its session.
+            Log.i("STOP_PLAY_GAMES", "TWA remains active; returning launcher behind Chrome");
+            moveTaskToBack(true);
+            return;
         }
-        sendMessage(probe);
 
-        // If the page answers, Chrome still owns the live TWA: put this launcher
-        // task behind Chrome again. If no answer arrives, the TWA has closed and
-        // it is now safe for ABH to destroy the CustomTabsSession.
+        // Fallback for providers without Engagement Signals: wait briefly for
+        // TAB_SHOWN after a native overlay. If it never returns, close the launcher.
+        final int checkGeneration = ++tabVisibilityCheckGeneration;
         getWindow().getDecorView().postDelayed(() -> {
-            if (probeGeneration != livenessProbeGeneration || isDestroyed()) return;
-            livenessProbePending = false;
-            activeLivenessProbeId = null;
-            if (livenessProbeReceived) {
-                Log.i("STOP_PLAY_GAMES", "TWA page is still active; returning launcher behind Chrome");
+            if (checkGeneration != tabVisibilityCheckGeneration || isDestroyed()) return;
+            if (twaTabVisible) {
                 moveTaskToBack(true);
                 return;
             }
             retainLauncherForTwa = false;
-            Log.i("STOP_PLAY_GAMES", "TWA page did not answer liveness probe; closing launcher session");
+            Log.w("STOP_PLAY_GAMES", "TWA tab did not return and no session-end callback is available");
             super.finish();
-        }, 1800L);
+        }, 2000L);
     }
 
     @Override
