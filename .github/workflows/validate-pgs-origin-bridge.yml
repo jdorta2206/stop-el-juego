@@ -67,8 +67,8 @@ jobs:
           finish_method = native.split("public void finish() {", 1)[1].split("\n    @Override\n    protected void onCreate", 1)[0]
           first_finish_guard = finish_method.split("if (!initialTwaFinishSuppressed) {", 1)[1].split("if (livenessProbePending)", 1)[0]
           assert "return;" in first_finish_guard and "super.finish();" not in first_finish_guard
-          guarded_finish_body = finish_method.split("if (!retainLauncherForTwa)", 1)[1]
-          pre_timeout_finish = guarded_finish_body.split("getWindow().getDecorView().postDelayed", 1)[0]
+          retained_finish_path = finish_method.split("if (!initialTwaFinishSuppressed) {", 1)[1]
+          pre_timeout_finish = retained_finish_path.split("getWindow().getDecorView().postDelayed", 1)[0]
           assert "super.finish();" not in pre_timeout_finish
           assert finish_method.rindex("super.finish();") > finish_method.index("getWindow().getDecorView().postDelayed")
           assert "STOP_TWA_LIVENESS_PROBE" in finish_method and "moveTaskToBack(true);" in finish_method
