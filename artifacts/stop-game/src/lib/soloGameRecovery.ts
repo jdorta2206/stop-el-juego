@@ -209,3 +209,61 @@ export function createSoloGameRewardKey(
 ): string {
   return `${gameId}:${round}:${reward}`;
 }
+
+export type SoloGameRewardApplyResult =
+  | { status: "applied" | "already_applied"; envelope: SoloGameRecoveryEnvelope; rewardKey: string }
+  | { status: "invalid" };
+
+/**
+ * Atomically prepares the next recoverable game snapshot for a verified
+ * AdMob reward. The caller must persist this returned envelope before
+ * changing React state or acknowledging the server-side reward.
+ */
+export function applyConfirmedSoloGameReward(
+  envelope: SoloGameRecoveryEnvelope,
+  requestId: string,
+  reward: Exclude<SoloGamePendingReward, null>,
+  rewardAmount: number,
+  now = Date.now(),
+): SoloGameRewardApplyResult {
+  if (!isValidEnvelope(envelope, now) || !/^[A-Za-z0-9_-]{20,128}$/.test(requestId)) {
+    return { status: "invalid" };
+  }
+
+  const rewardKey = createSoloGameRewardKey(envelope.gameId, envelope.payload.round, reward);
+  if (envelope.payload.appliedRewardKeys.includes(rewardKey)) {
+    return { status: "already_applied", envelope, rewardKey };
+  }
+  if (envelope.payload.pendingReward !== reward) return { status: "invalid" };
+
+  const payload: SoloGameRecoveryPayload = {
+    ...envelope.payload,
+    responses: { ...envelope.payload.responses },
+    appliedRewardKeys: [...envelope.payload.appliedRewardKeys, rewardKey],
+    pendingReward: null,
+    pendingHint: null,
+  };
+
+  if (reward === "extraTime") {
+    if (!Number.isInteger(rewardAmount) || rewardAmount < 1 || rewardAmount > 120 || payload.rewardedUsed) {
+      return { status: "invalid" };
+    }
+    payload.timeLeft = Math.min(120, payload.timeLeft + rewardAmount);
+    payload.rewardedUsed = true;
+  } else {
+    const pendingHint = envelope.payload.pendingHint;
+    if (rewardAmount !== 0 || payload.hintUsed || !pendingHint
+      || !payload.categories.includes(pendingHint.category)
+      || (payload.responses[pendingHint.category] ?? "").trim().length > 0) {
+      return { status: "invalid" };
+    }
+    payload.responses[pendingHint.category] = pendingHint.word;
+    payload.hintUsed = true;
+  }
+
+  return {
+    status: "applied",
+    rewardKey,
+    envelope: { ...envelope, savedAt: now, payload },
+  };
+}
