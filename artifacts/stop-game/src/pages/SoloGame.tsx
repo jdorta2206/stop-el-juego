@@ -970,6 +970,7 @@ export default function SoloGame() {
     }
 
     const payload = snapshot.payload;
+    pendingAutoStartRef.current = false;
     recoveryOwnerRef.current = playerId;
     restoredRecoveryRef.current = true;
     gameSubmissionIdRef.current = snapshot.gameId;
@@ -1580,6 +1581,9 @@ export default function SoloGame() {
     if (!recoveryCheckCompleteRef.current) return;
     const ownerId = recoveryOwnerRef.current;
     if (gameState !== "PLAYING") {
+      // The restore effect and autosave effect run in the same commit. Keep
+      // the checkpoint until the PLAYING state update from restoration lands.
+      if (restoredRecoveryRef.current && gameState === "LOBBY") return;
       if (ownerId) clearSoloGameRecovery(window.localStorage, ownerId);
       restoredRecoveryRef.current = false;
       return;
