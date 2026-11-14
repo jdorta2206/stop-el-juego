@@ -9,9 +9,7 @@ on:
       - ".github/workflows/validate-pgs-origin-bridge.yml"
   push:
     branches:
-      - fix/pgs-validate-native-message-origin
-      - fix/pgs-retain-launcher-session
-      - fix/pgs-retain-launcher-session-final
+      - master
   workflow_dispatch:
 
 permissions:
