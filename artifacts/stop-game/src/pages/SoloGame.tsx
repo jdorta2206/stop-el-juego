@@ -961,7 +961,14 @@ export default function SoloGame() {
   // rewarded-ad overlay is never restored or treated as an earned reward.
   useEffect(() => {
     const playerId = player?.id;
-    if (!playerId || (recoveryOwnerRef.current === playerId && recoveryCheckCompleteRef.current)) return;
+    if (!playerId) return;
+    // Never replace a match that the player has already started in this mount,
+    // and never carry one account's in-memory game into another account.
+    if (gameState !== "LOBBY") {
+      recoveryCheckCompleteRef.current = true;
+      return;
+    }
+    if (recoveryOwnerRef.current === playerId && recoveryCheckCompleteRef.current) return;
     const snapshot = readSoloGameRecovery(window.localStorage, playerId);
     recoveryCheckCompleteRef.current = true;
     if (!snapshot || snapshot.mode !== gameMode) {
@@ -1045,7 +1052,7 @@ export default function SoloGame() {
       description: lang === "en" ? `Round ${payload.round} resumed with ${payload.timeLeft}s left.` : lang === "pt" ? `Ronda ${payload.round} retomada com ${payload.timeLeft}s.` : lang === "fr" ? `Manche ${payload.round} reprise avec ${payload.timeLeft}s.` : `Ronda ${payload.round} reanudada con ${payload.timeLeft}s.`,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player?.id]);
+  }, [player?.id, gameState]);
 
   useEffect(() => {
     if (gameState === "RESULTS" && results) {
