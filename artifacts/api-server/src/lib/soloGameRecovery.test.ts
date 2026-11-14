@@ -42,11 +42,26 @@ const makeCheckpoint = (
     pendingReward: "hint",
     pendingHint: { category: "Color", word: "Azul" },
     appliedRewardKeys: [],
+    randomEvent: "easy_letter",
+    activeCard: "shield",
+    cardUsed: false,
+    sabotageCategory: null,
+    hiddenCategoryIdx: null,
+    bluffedCategories: [],
+    aiBluffSetup: { category: "Animal", wasActuallyBluffing: false },
+    spyUsesLeft: 1,
+    spyUsesThisRound: 0,
+    combo: 2,
+    insaneMode: false,
+    tutorialActive: false,
+    isFirstEverGame: false,
+    randomRoundTime: 35,
+    bestRoundScore: 25,
   },
 });
 
 describe("solo game recovery storage", () => {
-  it("round-trips a valid active-round checkpoint", () => {
+  it("round-trips a valid active-round checkpoint including gameplay modifiers", () => {
     const storage = new MemoryStorage();
     const snapshot = makeCheckpoint();
     expect(saveSoloGameRecovery(storage, snapshot)).toBe(true);
@@ -100,13 +115,26 @@ describe("solo game recovery storage", () => {
     expect(saveSoloGameRecovery(storage, snapshot)).toBe(false);
   });
 
-  it("rejects invalid round numbers and out-of-range timers", () => {
+  it("rejects invalid round numbers, timers and random-event names", () => {
     const storage = new MemoryStorage();
     const snapshot = makeCheckpoint();
     snapshot.payload.round = 4;
     expect(saveSoloGameRecovery(storage, snapshot)).toBe(false);
     snapshot.payload.round = 2;
     snapshot.payload.timeLeft = 999;
+    expect(saveSoloGameRecovery(storage, snapshot)).toBe(false);
+    snapshot.payload.timeLeft = 37;
+    snapshot.payload.randomEvent = "not-an-event" as never;
+    expect(saveSoloGameRecovery(storage, snapshot)).toBe(false);
+  });
+
+  it("rejects invalid anti-cheat and bluff state", () => {
+    const storage = new MemoryStorage();
+    const snapshot = makeCheckpoint();
+    snapshot.payload.scoreTokens = [""];
+    expect(saveSoloGameRecovery(storage, snapshot)).toBe(false);
+    snapshot.payload.scoreTokens = ["valid-token"];
+    snapshot.payload.aiBluffSetup = { category: "Animal", wasActuallyBluffing: "yes" } as never;
     expect(saveSoloGameRecovery(storage, snapshot)).toBe(false);
   });
 
