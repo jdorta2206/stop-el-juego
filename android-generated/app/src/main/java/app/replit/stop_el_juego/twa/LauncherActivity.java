@@ -782,16 +782,20 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type)) {
-            PlayGames.getAchievementsClient(this).getAchievementsIntent()
-                    .addOnSuccessListener(intent -> {
-                        try {
-                            startActivityForResult(intent, 7402);
-                        } catch (RuntimeException error) {
-                            Log.w("STOP_PLAY_GAMES", "Could not open achievements UI", error);
-                        }
-                    })
-                    .addOnFailureListener(error ->
-                            Log.w("STOP_PLAY_GAMES", "Achievements UI unavailable", error));
+            try {
+                PlayGames.getAchievementsClient(this).getAchievementsIntent()
+                        .addOnSuccessListener(intent -> {
+                            try {
+                                startActivityForResult(intent, 7402);
+                            } catch (RuntimeException error) {
+                                Log.w("STOP_PLAY_GAMES", "Could not open achievements UI", error);
+                            }
+                        })
+                        .addOnFailureListener(error ->
+                                Log.w("STOP_PLAY_GAMES", "Achievements UI unavailable", error));
+            } catch (RuntimeException error) {
+                Log.w("STOP_PLAY_GAMES", "Could not request achievements UI", error);
+            }
             return;
         }
         if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {
@@ -801,19 +805,38 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 sendPlayGamesAchievementResult(id, false, "invalid_achievement_id");
                 return;
             }
-            PlayGames.getGamesSignInClient(this).isAuthenticated().addOnCompleteListener(task -> {
-                if (!task.isSuccessful() || task.getResult() == null || !task.getResult().isAuthenticated()) {
-                    sendPlayGamesAchievementResult(id, false, "not_authenticated");
-                    return;
-                }
-                PlayGames.getAchievementsClient(this).unlockImmediate(id)
-                        .addOnSuccessListener(unused ->
-                                sendPlayGamesAchievementResult(id, true, "achievement_unlocked"))
-                        .addOnFailureListener(error -> {
-                            Log.w("STOP_PLAY_GAMES", "Achievement unlock failed", error);
-                            sendPlayGamesAchievementResult(id, false, "achievement_unlock_failed");
-                        });
-            });
+            try {
+                PlayGames.getGamesSignInClient(this).isAuthenticated().addOnCompleteListener(task -> {
+                    if (!task.isSuccessful()) {
+                        Log.w("STOP_PLAY_GAMES", "Could not verify authentication for achievement unlock",
+                                task.getException());
+                        sendPlayGamesAchievementResult(id, false, "status_check_failed");
+                        return;
+                    }
+                    boolean authenticated = task.getResult() != null && task.getResult().isAuthenticated();
+                    if (!authenticated) {
+                        sendPlayGamesAchievementResult(id, false, "not_authenticated");
+                        sendPlayGamesStatus(false, "not_authenticated");
+                        return;
+                    }
+                    try {
+                        PlayGames.getAchievementsClient(this).unlockImmediate(id)
+                                .addOnSuccessListener(unused ->
+                                        sendPlayGamesAchievementResult(id, true, "achievement_unlocked"))
+                                .addOnFailureListener(error -> {
+                                    Log.w("STOP_PLAY_GAMES", "Achievement unlock failed", error);
+                                    sendPlayGamesAchievementResult(id, false, "achievement_unlock_failed");
+                                });
+                    } catch (RuntimeException error) {
+                        Log.w("STOP_PLAY_GAMES", "Could not start achievement unlock", error);
+                        sendPlayGamesAchievementResult(id, false, "achievement_unlock_failed");
+                    }
+                });
+            } catch (RuntimeException error) {
+                Log.w("STOP_PLAY_GAMES", "Could not verify authentication for achievement unlock", error);
+                sendPlayGamesAchievementResult(id, false, "status_check_failed");
+            }
+            return;
         }
     }
 
