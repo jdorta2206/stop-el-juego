@@ -7,6 +7,9 @@
  */
 export const SOLO_GAME_RECOVERY_VERSION = 1;
 export const SOLO_GAME_RECOVERY_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+// Match the server's 24-hour AdMob reconciliation window while a signed SSV
+// result is pending; ordinary abandoned games still expire after two hours.
+export const SOLO_GAME_PENDING_REWARD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const SOLO_GAME_RECOVERY_MAX_BYTES = 256 * 1024;
 
 export type SoloGameMode = "normal" | "daily" | "quick" | "chaos" | "random";
@@ -140,8 +143,13 @@ function isValidEnvelope(value: unknown, now: number): value is SoloGameRecovery
   if (typeof value.playerId !== "string" || value.playerId.length < 1 || value.playerId.length > 128) return false;
   if (!["normal", "daily", "quick", "chaos", "random"].includes(String(value.mode))) return false;
   if (typeof value.savedAt !== "number" || !Number.isFinite(value.savedAt)) return false;
-  if (value.savedAt > now + 60_000 || now - value.savedAt > SOLO_GAME_RECOVERY_MAX_AGE_MS) return false;
-  return isValidSoloGameRecoveryPayload(value.payload) && value.payload.gameSubmissionId === value.gameId;
+  if (value.savedAt > now + 60_000) return false;
+  if (!isValidSoloGameRecoveryPayload(value.payload)) return false;
+  const maxAge = value.payload.pendingReward !== null
+    ? SOLO_GAME_PENDING_REWARD_MAX_AGE_MS
+    : SOLO_GAME_RECOVERY_MAX_AGE_MS;
+  if (now - value.savedAt > maxAge) return false;
+  return value.payload.gameSubmissionId === value.gameId;
 }
 
 function storageKey(playerId: string): string {
