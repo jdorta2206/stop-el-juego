@@ -183,6 +183,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
       applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
     }), 12000, "Push subscription timed out");
 
+    if (currentPlayerIdRef.current !== playerId) return false;
+
     const tzOffsetMinutes = -new Date().getTimezoneOffset();
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
     const res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
@@ -327,5 +329,5 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator;
 
-  return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
+  return { permission, isSubscribed, loading, permissionWaiting, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
