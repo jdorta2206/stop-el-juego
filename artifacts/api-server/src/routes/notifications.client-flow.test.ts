@@ -56,9 +56,11 @@ describe("push subscription initialization safeguards", () => {
     expect(hookSource).toContain("/api/notifications/subscribe");
   });
 
-  it("finishes registration if an Android permission result arrives after the UI timeout", () => {
+  it("keeps Android permission requests single-flight and waits for the real result", () => {
+    expect(hookSource).toContain("runSingleFlight(");
+    expect(hookSource).toContain("waitForPermissionResult(");
     expect(hookSource).toContain("Notification.requestPermission()");
-    expect(hookSource).toContain("permissionRequest.then(async (latePermission)");
-    expect(hookSource).toContain("await registerSubscription()");
+    expect(hookSource).not.toContain("withTimeout(\n        permissionRequest");
+    expect(notificationsPageSource).toContain("permissionWaiting ? t.waiting");
   });
 });
