@@ -51,6 +51,7 @@ const makeCheckpoint = (
     aiBluffSetup: { category: "Animal", wasActuallyBluffing: false },
     spyUsesLeft: 1,
     spyUsesThisRound: 0,
+    spyReveal: { category: "Animal", word: "Ardilla" },
     combo: 2,
     insaneMode: false,
     tutorialActive: false,
