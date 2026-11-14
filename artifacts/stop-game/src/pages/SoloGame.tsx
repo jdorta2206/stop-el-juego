@@ -1031,7 +1031,7 @@ export default function SoloGame() {
           }
           stopTimeoutRef.current = setTimeout(() => {
             stopTimeoutRef.current = null;
-            void handleStop();
+            void handleStopRef.current();
           }, 0);
           return 0;
         }
