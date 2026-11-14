@@ -50,6 +50,39 @@ public class RewardedResultRetryTest {
     }
 
     @Test
+    public void retriesRateLimitAndServerFailureUntilSuccess() {
+        AtomicInteger calls = new AtomicInteger();
+        List<Long> delays = new ArrayList<>();
+
+        int result = RewardedResultRetry.deliver(
+                attempt -> {
+                    int call = calls.incrementAndGet();
+                    if (call == 1) return 429;
+                    if (call == 2) return 503;
+                    return 204;
+                },
+                delays::add);
+
+        assertEquals(204, result);
+        assertEquals(3, calls.get());
+        assertEquals(Arrays.asList(500L, 1000L), delays);
+    }
+
+    @Test
+    public void returnsLastTransientStatusAfterMaximumAttempts() {
+        AtomicInteger calls = new AtomicInteger();
+        List<Long> delays = new ArrayList<>();
+
+        int result = RewardedResultRetry.deliver(
+                attempt -> { calls.incrementAndGet(); return 503; },
+                delays::add);
+
+        assertEquals(503, result);
+        assertEquals(3, calls.get());
+        assertEquals(Arrays.asList(500L, 1000L), delays);
+    }
+
+    @Test
     public void doesNotRetryPermanentClientError() {
         AtomicInteger calls = new AtomicInteger();
         List<Long> delays = new ArrayList<>();
