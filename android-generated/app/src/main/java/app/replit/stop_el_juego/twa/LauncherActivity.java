@@ -335,7 +335,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         checkForPlayUpdate();
         // Some Custom Tabs providers do not consistently emit NAVIGATION_FINISHED.
         // Retry origin validation after resume as a second, duplicate-guarded entry point.
-        getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
+        getWindow().getDecorView().postDelayed(() -> {
+            registerEngagementSignalsCallback();
+            requestUseAsOriginValidation();
+        }, 1500L);
     }
 
     @Override
@@ -361,11 +364,20 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 super.onNavigationEvent(navigationEvent, extras);
+                if (navigationEvent == CustomTabsCallback.TAB_SHOWN) {
+                    twaTabVisible = true;
+                    tabVisibilityCheckGeneration++;
+                    sessionEndCheckGeneration++;
+                    registerEngagementSignalsCallback();
+                } else if (navigationEvent == CustomTabsCallback.TAB_HIDDEN) {
+                    twaTabVisible = false;
+                }
                 if (navigationEvent != NAVIGATION_FINISHED) return;
                 // TwaLauncher validates handle_all_urls for launching the TWA, but
                 // postMessage requires the separate use_as_origin relationship.
                 // Request it explicitly; otherwise this callback may never set
                 // relationshipValidated and the native bridge remains disabled.
+                registerEngagementSignalsCallback();
                 requestUseAsOriginValidation();
                 if (relationshipValidated) requestMessageChannelWithRetry(250L);
                 // Startup authentication is triggered by the web app only after its
@@ -377,6 +389,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 channelRequestInFlight = false;
                 channelRequestAttempts = 0;
                 Log.d(TAG, "TWA message channel ready");
+                registerEngagementSignalsCallback();
                 flushPendingPlayGamesStatus();
                 sendReadyBurst(0);
             }
