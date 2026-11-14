@@ -109,7 +109,7 @@ jobs:
           assert '¡Cuenta conectada!' in home
           assert 'Conectar a Google Play Juegos' in home
           show_achievements_branch = native.split('if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type)) {', 1)[1].split('if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {', 1)[0]
-          unlock_achievement_branch = native.split('if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {', 1)[1].split('if ("STOP_PGS_STATUS".equals(type)) {', 1)[0]
+          unlock_achievement_branch = native.split('if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {', 1)[1].split('private void refreshPlayGamesStatusOnly()', 1)[0]
           assert 'sendPlayGamesStatus' not in show_achievements_branch
           assert 'sendPlayGamesStatus' not in unlock_achievement_branch
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
