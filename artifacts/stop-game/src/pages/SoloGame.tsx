@@ -450,7 +450,7 @@ export default function SoloGame() {
   // downgrades to "classic"). Idempotent thanks to the ref guard.
   useEffect(() => {
     if (!pendingAutoStartRef.current || !recoveryCheckCompleteRef.current) return;
-    if (customPacksLoading) return;
+    if (getSelectedPackId().startsWith("custom:") && customPacksLoading) return;
     pendingAutoStartRef.current = false;
     const id = setTimeout(() => startGame(), 60);
     return () => clearTimeout(id);
@@ -964,7 +964,7 @@ export default function SoloGame() {
     const playerId = player?.id;
     if (!playerId) {
       recoveryCheckCompleteRef.current = true;
-      if (pendingAutoStartRef.current && !customPacksLoading) {
+      if (pendingAutoStartRef.current && (!getSelectedPackId().startsWith("custom:") || !customPacksLoading)) {
         pendingAutoStartRef.current = false;
         window.setTimeout(() => startGame(), 60);
       }
@@ -981,7 +981,7 @@ export default function SoloGame() {
     recoveryCheckCompleteRef.current = true;
     if (!snapshot || snapshot.mode !== gameMode) {
       if (snapshot) clearSoloGameRecovery(window.localStorage, playerId);
-      if (pendingAutoStartRef.current && !customPacksLoading) {
+      if (pendingAutoStartRef.current && (!getSelectedPackId().startsWith("custom:") || !customPacksLoading)) {
         pendingAutoStartRef.current = false;
         window.setTimeout(() => startGame(), 60);
       }
