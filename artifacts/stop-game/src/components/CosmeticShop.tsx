@@ -77,6 +77,7 @@ export function CosmeticShop(props: CosmeticShopProps) {
     setPurchasing(item.id);
     try {
       const result = await buy(item.id);
+      if (result === null) return;
       if (result?.error) {
         toast.error(result.error === "Insufficient coins" ? "No tienes suficientes monedas" : result.error);
         return;
@@ -95,6 +96,7 @@ export function CosmeticShop(props: CosmeticShopProps) {
     setEquipping(`${kind}:${value}`);
     try {
       const result = await equip(kind as "avatar" | "frame" | "title" | "background", value);
+      if (result === null) return;
       if (result?.error) {
         toast.error(result.error);
         return;
