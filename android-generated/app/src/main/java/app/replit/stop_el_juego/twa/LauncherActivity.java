@@ -534,6 +534,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             Log.i("STOP_PLAY_GAMES", "Custom Tabs engagement session ended; didUserInteract="
                                     + didUserInteract);
                             runOnUiThread(() -> {
+                                if (isFinishing() || isDestroyed()) return;
                                 // Some providers may stop engagement reporting while a tab is
                                 // temporarily hidden. Wait for TAB_SHOWN before treating this
                                 // as the end of the TWA session.
