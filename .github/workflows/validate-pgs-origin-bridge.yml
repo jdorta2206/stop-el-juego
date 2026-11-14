@@ -92,6 +92,7 @@ jobs:
           startup_branch = native.split('if ("STOP_PGS_STARTUP_READY".equals(type)) {', 1)[1].split('if ("STOP_PGS_SIGN_IN".equals(type)) {', 1)[0]
           manual_branch = native.split('if ("STOP_PGS_SIGN_IN".equals(type)) {', 1)[1].split('if ("STOP_PGS_STATUS".equals(type)) {', 1)[0]
           assert 'startPlayGamesSignInIfNeeded(false);' in startup_branch
+          assert 'startPlayGamesSignInIfNeeded(true);' not in startup_branch
           assert 'startPlayGamesSignInIfNeeded(true);' in manual_branch
           assert 'startPlayGamesSignInIfNeeded();' not in native
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
