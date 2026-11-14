@@ -213,6 +213,46 @@ export function clearSoloGameRecovery(storage: RecoveryStorage, playerId: string
   try { storage.removeItem(storageKey(playerId)); } catch { /* best effort */ }
 }
 
+/**
+ * Persists the user's decision to continue without a pending rewarded ad.
+ * If the updated checkpoint cannot be saved, remove the stale checkpoint
+ * and verify removal before allowing the game to resume.
+ */
+export function discardSoloGamePendingReward(
+  storage: RecoveryStorage,
+  playerId: string,
+  gameId: string,
+): boolean {
+  if (!playerId || playerId.length > 128 || !gameId) return false;
+  const snapshot = readSoloGameRecovery(storage, playerId);
+  if (!snapshot) {
+    try { return storage.getItem(storageKey(playerId)) === null; }
+    catch { return false; }
+  }
+  if (snapshot.gameId !== gameId || snapshot.payload.pendingReward === null) return true;
+
+  const updated: SoloGameRecoveryEnvelope = {
+    ...snapshot,
+    savedAt: Date.now(),
+    payload: {
+      ...snapshot.payload,
+      pendingReward: null,
+      pendingRewardRequestId: null,
+      pendingHint: null,
+    },
+  };
+  if (saveSoloGameRecovery(storage, updated)) return true;
+
+  // Losing this recovery checkpoint is safer than resurrecting a discarded
+  // reward. The in-memory game remains active; only reload recovery is lost.
+  try {
+    storage.removeItem(storageKey(playerId));
+    return storage.getItem(storageKey(playerId)) === null;
+  } catch {
+    return false;
+  }
+}
+
 /** Stable key for applying one confirmed reward only once per game/round. */
 export function createSoloGameRewardKey(
   gameId: string,
