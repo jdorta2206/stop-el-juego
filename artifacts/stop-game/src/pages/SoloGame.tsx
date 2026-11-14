@@ -1877,6 +1877,7 @@ export default function SoloGame() {
               return saved;
             }}
             pendingRequestId={pendingRewardRequestId}
+            recoveryManaged
             rewardType={rewardedAdType === "double" ? "points" : rewardedAdType}
             rewardAmount={
               rewardedAdType === "extraTime" ? 30 :
