@@ -49,6 +49,7 @@ import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled, getHalloweenScare } from "@/lib/halloweenEvent";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
+import { clearSoloGameRecovery, readSoloGameRecovery, saveSoloGameRecovery, type SoloGameRecoveryEnvelope } from "@/lib/soloGameRecovery";
 import { reportHalloweenEvent } from "@/hooks/useHalloweenProgress";
 import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
 import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
@@ -143,6 +144,9 @@ export default function SoloGame() {
   // selected pack is a custom one — startGame() is deferred until the
   // packs hook finishes loading so the pack actually resolves.
   const pendingAutoStartRef = useRef(false);
+  const recoveryCheckCompleteRef = useRef(false);
+  const restoredRecoveryRef = useRef(false);
+  const recoveryOwnerRef = useRef<string | null>(null);
   const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
   const activePack = getPackById(packId, customPacks);
 
@@ -434,17 +438,9 @@ export default function SoloGame() {
     // see customPacks=[] and silently downgrade them to "classic".
     if (params.get("auto") === "1") {
       window.history.replaceState({}, "", window.location.pathname + (params.get("mode") ? `?mode=${params.get("mode")}` : ""));
-      const selectedAtBoot = getSelectedPackId();
-      const needsCustomLoad = selectedAtBoot.startsWith("custom:");
-      if (!needsCustomLoad) {
-        setTimeout(() => startGame(), 60);
-      } else {
-        // The effect below watching customPacksLoading will fire startGame
-        // once the hook finishes its initial fetch.
-        pendingAutoStartRef.current = true;
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // Let an interrupted match take priority over a fresh auto-start.
+      pendingAutoStartRef.current = true;
+    }    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Companion to the auto-start effect above: when the user picked a custom
@@ -452,13 +448,13 @@ export default function SoloGame() {
   // the categories resolve correctly (otherwise getSafePackId silently
   // downgrades to "classic"). Idempotent thanks to the ref guard.
   useEffect(() => {
-    if (!pendingAutoStartRef.current) return;
+    if (!pendingAutoStartRef.current || !recoveryCheckCompleteRef.current) return;
     if (customPacksLoading) return;
     pendingAutoStartRef.current = false;
     const id = setTimeout(() => startGame(), 60);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customPacksLoading]);
+  }, [customPacksLoading, player?.id]);
 
   const validateMutation = useValidateRound({
     request: {
@@ -575,6 +571,7 @@ export default function SoloGame() {
     if (newGame) {
       scoreTokensRef.current = [];
       rankingScoreTokensRef.current = [];
+      recoveryOwnerRef.current = player?.id ?? null;
     }
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
@@ -954,6 +951,96 @@ export default function SoloGame() {
   // RESULTS effect would never fire / would reuse the prior round's payload.
   const [roundResults, setRoundResults] = useState<ValidateRoundResponse | null>(null);
   const results = roundResults;
+
+
+  // Restore only a validated, account-bound PLAYING checkpoint. An in-flight
+  // rewarded-ad overlay is never restored or treated as an earned reward.
+  useEffect(() => {
+    const playerId = player?.id;
+    if (!playerId || (recoveryOwnerRef.current === playerId && recoveryCheckCompleteRef.current)) return;
+    const snapshot = readSoloGameRecovery(window.localStorage, playerId);
+    recoveryCheckCompleteRef.current = true;
+    if (!snapshot || snapshot.mode !== gameMode) {
+      if (snapshot) clearSoloGameRecovery(window.localStorage, playerId);
+      if (pendingAutoStartRef.current && !customPacksLoading) {
+        pendingAutoStartRef.current = false;
+        window.setTimeout(() => startGame(), 60);
+      }
+      return;
+    }
+
+    const payload = snapshot.payload;
+    recoveryOwnerRef.current = playerId;
+    restoredRecoveryRef.current = true;
+    gameSubmissionIdRef.current = snapshot.gameId;
+    scoreTokensRef.current = [...payload.scoreTokens];
+    rankingScoreTokensRef.current = [...payload.rankingScoreTokens];
+    responsesRef.current = { ...payload.responses };
+    categoriesRef.current = [...payload.categories];
+    currentLetterRef.current = payload.currentLetter;
+    bluffedCategoriesRef.current = new Set(payload.bluffedCategories);
+
+    setCurrentLetter(payload.currentLetter);
+    setTimeLeft(payload.timeLeft);
+    setRound(payload.round);
+    setCategories([...payload.categories]);
+    setResponses({ ...payload.responses });
+    setTotalScore(payload.totalScore);
+    setAiTotalScore(payload.aiTotalScore);
+    setRewardedUsed(payload.rewardedUsed);
+    setHintUsed(payload.hintUsed);
+    setDoubleUsed(payload.doubleUsed);
+    setRewardedAdType(null);
+    pendingHintRef.current = null;
+    setRandomEvent(payload.randomEvent);
+    setActiveCard(payload.activeCard as PowerCardId | null);
+    setCardUsed(payload.cardUsed);
+    setSabotageCategory(payload.sabotageCategory);
+    setHiddenCategoryIdx(payload.hiddenCategoryIdx);
+    setBluffedCategories(new Set(payload.bluffedCategories));
+    setAiBluffSetup(payload.aiBluffSetup);
+    setSpyUsesLeft(payload.spyUsesLeft);
+    setSpyUsesThisRound(payload.spyUsesThisRound);
+    setSpyReveal(null);
+    setCombo(payload.combo);
+    setInsaneMode(payload.insaneMode);
+    setTutorialActive(payload.tutorialActive);
+    setIsFirstEverGame(payload.isFirstEverGame);
+    setRandomRoundTime(payload.randomRoundTime);
+    setBestRoundScore(payload.bestRoundScore);
+    setRoundResults(null);
+    setRoundWon(null);
+    stoppedRef.current = false;
+    resultsAppliedRef.current = false;
+    gameTimerPausedRef.current = false;
+    resumeGameTimer();
+
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      if (gameTimerPausedRef.current || isGameTimerPaused()) return;
+      setTimeLeft((previous) => {
+        if (previous <= 1) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          stopTimeoutRef.current = setTimeout(() => {
+            stopTimeoutRef.current = null;
+            void handleStop();
+          }, 0);
+          return 0;
+        }
+        return previous - 1;
+      });
+    }, 1000);
+
+    setGameState("PLAYING");
+    toast({
+      title: lang === "en" ? "Match restored" : lang === "pt" ? "Partida recuperada" : lang === "fr" ? "Partie récupérée" : "Partida recuperada",
+      description: lang === "en" ? `Round ${payload.round} resumed with ${payload.timeLeft}s left.` : lang === "pt" ? `Ronda ${payload.round} retomada com ${payload.timeLeft}s.` : lang === "fr" ? `Manche ${payload.round} reprise avec ${payload.timeLeft}s.` : `Ronda ${payload.round} reanudada con ${payload.timeLeft}s.`,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player?.id]);
 
   useEffect(() => {
     if (gameState === "RESULTS" && results) {
@@ -1484,6 +1571,72 @@ export default function SoloGame() {
     });
     return () => timeouts.forEach(clearTimeout);
   }, [gameState, judgingPhase, bluffResults]);
+
+
+  // Save an allow-listed checkpoint while actively playing. A rewarded overlay
+  // is excluded: a reload resumes the last safe state before the ad and never
+  // assumes that an interrupted ad earned a reward.
+  useEffect(() => {
+    if (!recoveryCheckCompleteRef.current) return;
+    const ownerId = recoveryOwnerRef.current;
+    if (gameState !== "PLAYING") {
+      if (ownerId) clearSoloGameRecovery(window.localStorage, ownerId);
+      restoredRecoveryRef.current = false;
+      return;
+    }
+    if (!ownerId || ownerId !== player?.id || rewardedAdType !== null || !gameSubmissionIdRef.current) return;
+
+    const envelope: SoloGameRecoveryEnvelope = {
+      version: 1,
+      gameId: gameSubmissionIdRef.current,
+      playerId: ownerId,
+      mode: gameMode as SoloGameRecoveryEnvelope["mode"],
+      savedAt: Date.now(),
+      payload: {
+        phase: "PLAYING",
+        currentLetter,
+        timeLeft,
+        round,
+        categories: [...categories],
+        responses: { ...responses },
+        totalScore,
+        aiTotalScore,
+        gameSubmissionId: gameSubmissionIdRef.current,
+        scoreTokens: [...scoreTokensRef.current],
+        rankingScoreTokens: [...rankingScoreTokensRef.current],
+        rewardedUsed,
+        hintUsed,
+        doubleUsed,
+        pendingReward: null,
+        pendingHint: null,
+        appliedRewardKeys: [],
+        randomEvent,
+        activeCard,
+        cardUsed,
+        sabotageCategory,
+        hiddenCategoryIdx,
+        bluffedCategories: [...bluffedCategories],
+        aiBluffSetup,
+        spyUsesLeft,
+        spyUsesThisRound,
+        combo,
+        insaneMode,
+        tutorialActive,
+        isFirstEverGame,
+        randomRoundTime,
+        bestRoundScore,
+      },
+    };
+    saveSoloGameRecovery(window.localStorage, envelope);
+    restoredRecoveryRef.current = false;
+  }, [
+    gameState, player?.id, rewardedAdType, gameMode, currentLetter, timeLeft,
+    round, categories, responses, totalScore, aiTotalScore, rewardedUsed,
+    hintUsed, doubleUsed, randomEvent, activeCard, cardUsed, sabotageCategory,
+    hiddenCategoryIdx, bluffedCategories, aiBluffSetup, spyUsesLeft,
+    spyUsesThisRound, combo, insaneMode, tutorialActive, isFirstEverGame,
+    randomRoundTime, bestRoundScore,
+  ]);
 
   // Suspense chord when AI bluff phase begins
   const aiJudgeSoundFiredRef = useRef(false);
