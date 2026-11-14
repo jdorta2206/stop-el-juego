@@ -1123,6 +1123,9 @@ export default function SoloGame() {
 
   useEffect(() => {
     if (gameState === "RESULTS" && results) {
+      // A profile switch and the RESULTS transition can land in the same
+      // render. Re-check ownership here before applying any rewards or stats.
+      if (recoveryOwnerRef.current !== (player?.id ?? null)) return;
       // Guard: only apply round scores once per round, never on re-renders
       if (resultsAppliedRef.current) return;
       resultsAppliedRef.current = true;
