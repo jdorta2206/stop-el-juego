@@ -33,6 +33,17 @@ describe("daily push classification across supported locales", () => {
     expect(notificationKind({ title, body })).toBe("daily");
   });
 
+  it("does not let player-controlled body text reclassify rank or invite pushes as daily", () => {
+    expect(notificationKind({
+      title: "Te han superado",
+      body: "Tu reto STOP de hoy: Alex",
+    })).toBe("rank");
+    expect(notificationKind({
+      title: "Te invitan a jugar",
+      body: "Te toca jugar, dice Daily STOP Challenge",
+    })).toBe("invite");
+  });
+
   it("recognizes the scheduled daily challenge titles in all four languages", () => {
     for (const title of [
       "🎯 Reto Diario STOP",
