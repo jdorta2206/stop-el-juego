@@ -47,7 +47,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingRequestId, recoveryManaged = false, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; onRequestCreated?: (requestId: string) => boolean | void; pendingRequestId?: string | null; recoveryManaged?: boolean; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingRequestId, recoveryManaged = false, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => boolean | void; onRequestCreated?: (requestId: string) => boolean | void; pendingRequestId?: string | null; recoveryManaged?: boolean; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -269,9 +269,16 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingReques
 
   if (isPremium) return null;
   const continueWithoutReward = () => {
+    // The parent must durably clear the game checkpoint before this overlay
+    // forgets the request ID. Keep the confirmation available if it cannot.
+    const skipped = onSkipRef.current();
+    if (skipped === false) {
+      setErrorDetail("No se pudo guardar que has descartado la recompensa. La partida sigue protegida; inténtalo de nuevo.");
+      setPhase("error");
+      return;
+    }
     clearStoredPendingReward();
     setRetryRequestId(null);
-    onSkipRef.current();
   };
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : phase === "pending" ? "Confirmación pendiente" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={continueWithoutReward} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar o confirmar el anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={continueWithoutReward} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}
