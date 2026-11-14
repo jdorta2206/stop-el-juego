@@ -69,6 +69,16 @@ describe("solo game recovery storage", () => {
     expect(readSoloGameRecovery(storage, "player-123")).toEqual(snapshot);
   });
 
+
+  it("restores a guest checkpoint using the persisted guest identity", () => {
+    const storage = new MemoryStorage();
+    const guestId = "guest_12345678-1234-4234-8234-123456789abc";
+    const snapshot = makeCheckpoint(guestId);
+    expect(saveSoloGameRecovery(storage, snapshot)).toBe(true);
+    expect(readSoloGameRecovery(storage, guestId)).toEqual(snapshot);
+    expect(readSoloGameRecovery(storage, "guest_different-device-id")).toBeNull();
+  });
+
   it("never returns another player's checkpoint", () => {
     const storage = new MemoryStorage();
     expect(saveSoloGameRecovery(storage, makeCheckpoint("player-A"))).toBe(true);
