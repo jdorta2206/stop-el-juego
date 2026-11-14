@@ -1599,9 +1599,10 @@ export default function SoloGame() {
           xpGained={lastWinXp}
           onClose={() => setShowFirstWin(false)}
           onEnableNotifications={() => {
-            if (typeof Notification !== "undefined" && Notification.permission === "default") {
-              Notification.requestPermission().catch(() => {});
-            }
+            // Use the complete subscription flow (permission, service worker,
+            // VAPID key and server registration) instead of granting browser
+            // permission without registering a push endpoint.
+            setLocation("/notifications");
           }}
         />
 
