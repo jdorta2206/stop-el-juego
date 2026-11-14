@@ -79,6 +79,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean engagementSignalsRegistered;
     private boolean twaTabVisible;
     private int tabVisibilityCheckGeneration;
+    private int sessionEndCheckGeneration;
     private boolean twaLaunchStarted;
     private boolean warmupServiceBound;
     @Nullable private CustomTabsServiceConnection warmupConnection;
@@ -496,6 +497,54 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return null;
         }
     }
+    private void registerEngagementSignalsCallback() {
+        if (engagementSignalsRegistered || twaSessionEnded || isFinishing() || isDestroyed()) return;
+        CustomTabsSession session = getTwaSession();
+        if (session == null) return;
+        try {
+            if (!session.isEngagementSignalsApiAvailable(Bundle.EMPTY)) {
+                Log.w("STOP_PLAY_GAMES", "Custom Tabs Engagement Signals API is unavailable");
+                return;
+            }
+            engagementSignalsRegistered = session.setEngagementSignalsCallback(
+                    new EngagementSignalsCallback() {
+                        @Override
+                        public void onSessionEnded(boolean didUserInteract, @NonNull Bundle extras) {
+                            Log.i("STOP_PLAY_GAMES", "Custom Tabs engagement session ended; didUserInteract="
+                                    + didUserInteract);
+                            runOnUiThread(() -> {
+                                // Some providers may stop engagement reporting while a tab is
+                                // temporarily hidden. Wait for TAB_SHOWN before treating this
+                                // as the end of the TWA session.
+                                final int generation = ++sessionEndCheckGeneration;
+                                getWindow().getDecorView().postDelayed(() -> {
+                                    if (generation != sessionEndCheckGeneration || isDestroyed()) return;
+                                    if (twaTabVisible) {
+                                        Log.i("STOP_PLAY_GAMES", "TWA tab became visible again; retaining session");
+                                        return;
+                                    }
+                                    finishAfterTwaSessionEnded(didUserInteract);
+                                }, 1500L);
+                            });
+                        }
+                    }, Bundle.EMPTY);
+            Log.i("STOP_PLAY_GAMES", "Custom Tabs engagement callback registered=" + engagementSignalsRegistered);
+        } catch (RemoteException | RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Unable to register Custom Tabs session-end callback", error);
+        }
+    }
+
+    private void finishAfterTwaSessionEnded(boolean didUserInteract) {
+        if (isFinishing() || isDestroyed()) return;
+        twaSessionEnded = true;
+        retainLauncherForTwa = false;
+        tabVisibilityCheckGeneration++;
+        sessionEndCheckGeneration++;
+        Log.i("STOP_PLAY_GAMES", "Closing retained launcher after TWA session ended; didUserInteract="
+                + didUserInteract);
+        super.finish();
+    }
+
     @Nullable private static Object findFieldValue(Object target, String fieldName) throws ReflectiveOperationException {
         Class<?> type = target.getClass();
         while (type != null) {
