@@ -32,6 +32,7 @@ export type SoloGameRecoveryPayload = {
   hintUsed: boolean;
   doubleUsed: boolean;
   pendingReward: SoloGamePendingReward;
+  pendingRewardRequestId: string | null;
   pendingHint: { category: string; word: string } | null;
   appliedRewardKeys: string[];
   randomEvent: SoloGameRandomEvent;
@@ -104,6 +105,9 @@ export function isValidSoloGameRecoveryPayload(value: unknown): value is SoloGam
   if (!isStringArray(value.scoreTokens, 20, 4096) || !isStringArray(value.rankingScoreTokens, 20, 4096)) return false;
   if (typeof value.rewardedUsed !== "boolean" || typeof value.hintUsed !== "boolean" || typeof value.doubleUsed !== "boolean") return false;
   if (value.pendingReward !== null && value.pendingReward !== "extraTime" && value.pendingReward !== "hint") return false;
+  if (value.pendingRewardRequestId !== null
+    && (typeof value.pendingRewardRequestId !== "string" || !/^[A-Za-z0-9_-]{20,128}$/.test(value.pendingRewardRequestId))) return false;
+  if ((value.pendingReward === null) !== (value.pendingRewardRequestId === null)) return false;
   if (value.pendingHint !== null) {
     if (!isRecord(value.pendingHint) ||
       typeof value.pendingHint.category !== "string" ||
@@ -242,13 +246,14 @@ export function applyConfirmedSoloGameReward(
   if (envelope.payload.appliedRewardKeys.includes(rewardKey)) {
     return { status: "already_applied", envelope, rewardKey };
   }
-  if (envelope.payload.pendingReward !== reward) return { status: "invalid" };
+  if (envelope.payload.pendingReward !== reward || envelope.payload.pendingRewardRequestId !== requestId) return { status: "invalid" };
 
   const payload: SoloGameRecoveryPayload = {
     ...envelope.payload,
     responses: { ...envelope.payload.responses },
     appliedRewardKeys: [...envelope.payload.appliedRewardKeys, rewardKey],
     pendingReward: null,
+    pendingRewardRequestId: null,
     pendingHint: null,
   };
 
