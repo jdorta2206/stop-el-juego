@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyConfirmedSoloGameReward,
   clearSoloGameRecovery,
+  discardSoloGamePendingReward,
   createSoloGameRewardKey,
   readSoloGameRecovery,
   saveSoloGameRecovery,
@@ -192,6 +193,33 @@ describe("solo game recovery storage", () => {
     storage.setItem("stop_solo_game_recovery_v1:player-123", "{");
     expect(readSoloGameRecovery(storage, "player-123")).toBeNull();
     expect(storage.getItem("stop_solo_game_recovery_v1:player-123")).toBeNull();
+  });
+
+  it("persists a skipped pending reward, or clears stale recovery when saving fails", () => {
+    const storage = new MemoryStorage();
+    const pending = makeCheckpoint();
+    expect(saveSoloGameRecovery(storage, pending)).toBe(true);
+    expect(discardSoloGamePendingReward(storage, "player-123", "game-12345678")).toBe(true);
+    const saved = readSoloGameRecovery(storage, "player-123");
+    expect(saved?.payload.pendingReward).toBeNull();
+    expect(saved?.payload.pendingRewardRequestId).toBeNull();
+    expect(saved?.payload.pendingHint).toBeNull();
+
+    class FailingWriteStorage extends MemoryStorage {
+      setItem(_key: string, _value: string) { throw new Error("quota exceeded"); }
+    }
+    const failing = new FailingWriteStorage();
+    failing.values.set("stop_solo_game_recovery_v1:player-123", JSON.stringify(pending));
+    expect(discardSoloGamePendingReward(failing, "player-123", "game-12345678")).toBe(true);
+    expect(failing.getItem("stop_solo_game_recovery_v1:player-123")).toBeNull();
+  });
+
+  it("does not clear another game's checkpoint when skipping a reward", () => {
+    const storage = new MemoryStorage();
+    const otherGame = makeCheckpoint();
+    expect(saveSoloGameRecovery(storage, otherGame)).toBe(true);
+    expect(discardSoloGamePendingReward(storage, "player-123", "different-game-id")).toBe(true);
+    expect(readSoloGameRecovery(storage, "player-123")?.payload.pendingReward).toBe("hint");
   });
 
   it("creates stable per-round reward application keys", () => {
