@@ -102,6 +102,9 @@ jobs:
           grep -q 'extends com.google.androidbrowserhelper.trusted.DelegationService' app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
           grep -q 'common.handle_all_urls' ../artifacts/stop-game/public/.well-known/assetlinks.json
           grep -q 'common.use_as_origin' ../artifacts/stop-game/public/.well-known/assetlinks.json
+          grep -q 'app.replit.stop_el_juego.twa' ../artifacts/stop-game/public/.well-known/assetlinks.json
+          grep -q '30:B6:ED:A1:7B:C3:99:96:4C:51:E5:A6:0D:C4:05:8F:E2:47:A8:2E:CD:3B:07:E3:F5:97:79:F8:2B:97:AB:09' ../artifacts/stop-game/public/.well-known/assetlinks.json
+          grep -q 'android:name=".DelegationService"' app/src/main/AndroidManifest.xml
           grep -q 'enableNotifications: true' app/build.gradle
           echo 'Android release, PGS lifecycle and notification delegation source checks: OK'
       - name: Build signed Google Play AAB
