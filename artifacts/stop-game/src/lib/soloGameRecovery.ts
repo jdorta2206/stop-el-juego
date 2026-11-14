@@ -40,6 +40,7 @@ export type SoloGameRecoveryPayload = {
   aiBluffSetup: { category: string; wasActuallyBluffing: boolean } | null;
   spyUsesLeft: number;
   spyUsesThisRound: number;
+  spyReveal: { category: string; word: string } | null;
   combo: number;
   insaneMode: boolean;
   tutorialActive: boolean;
@@ -123,6 +124,9 @@ export function isValidSoloGameRecoveryPayload(value: unknown): value is SoloGam
     value.aiBluffSetup.category.length > 80 ||
     typeof value.aiBluffSetup.wasActuallyBluffing !== "boolean")) return false;
   if (!isBoundedInteger(value.spyUsesLeft, 0, 5) || !isBoundedInteger(value.spyUsesThisRound, 0, 5)) return false;
+  if (value.spyReveal !== null && (!isRecord(value.spyReveal) ||
+    typeof value.spyReveal.category !== "string" || value.spyReveal.category.length === 0 || value.spyReveal.category.length > 80 ||
+    typeof value.spyReveal.word !== "string" || value.spyReveal.word.length === 0 || value.spyReveal.word.length > 120)) return false;
   if (!isBoundedInteger(value.combo, 0, 100) || typeof value.insaneMode !== "boolean") return false;
   if (typeof value.tutorialActive !== "boolean" || typeof value.isFirstEverGame !== "boolean") return false;
   if (!isBoundedInteger(value.randomRoundTime, 15, 55)) return false;
