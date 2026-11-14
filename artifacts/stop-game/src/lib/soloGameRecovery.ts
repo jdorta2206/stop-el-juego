@@ -37,7 +37,10 @@ function isValidEnvelope<T>(value: unknown, now: number): value is SoloGameRecov
   if (typeof value.mode !== "string" || value.mode.length < 1 || value.mode.length > 32) return false;
   if (typeof value.savedAt !== "number" || !Number.isFinite(value.savedAt)) return false;
   if (value.savedAt > now + 60_000 || now - value.savedAt > SOLO_GAME_RECOVERY_MAX_AGE_MS) return false;
-  return Object.prototype.hasOwnProperty.call(value, "payload");
+  // A checkpoint payload must be a JSON object. Reject null, arrays and
+  // primitives so a malformed snapshot can never be mistaken for game state.
+  if (!isRecord(value.payload)) return false;
+  return true;
 }
 
 function storageKey(playerId: string): string {
@@ -45,7 +48,7 @@ function storageKey(playerId: string): string {
 }
 
 /** Saves a validated, account-scoped snapshot. Returns false if storage is unavailable. */
-export function saveSoloGameRecovery<T>(
+export function saveSoloGameRecovery<T extends Record<string, unknown>>(
   storage: RecoveryStorage,
   envelope: SoloGameRecoveryEnvelope<T>,
 ): boolean {
@@ -61,7 +64,7 @@ export function saveSoloGameRecovery<T>(
 }
 
 /** Reads only the current player's fresh checkpoint; invalid data is discarded. */
-export function readSoloGameRecovery<T>(
+export function readSoloGameRecovery<T extends Record<string, unknown>>(
   storage: RecoveryStorage,
   playerId: string,
   now = Date.now(),
