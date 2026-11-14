@@ -67,9 +67,12 @@ jobs:
           first_finish_guard = finish_method.split("if (!initialTwaFinishSuppressed) {", 1)[1].split("if (engagementSignalsRegistered || twaTabVisible)", 1)[0]
           assert "return;" in first_finish_guard and "super.finish();" not in first_finish_guard
           retained_finish_path = finish_method.split("if (!initialTwaFinishSuppressed) {", 1)[1]
-          pre_timeout_finish = retained_finish_path.split("getWindow().getDecorView().postDelayed", 1)[0]
-          assert "super.finish();" not in pre_timeout_finish
-          assert finish_method.rindex("super.finish();") > finish_method.index("getWindow().getDecorView().postDelayed")
+          assert "super.finish();" not in retained_finish_path
+          assert "scheduleFinishIfTwaTabDoesNotReturn();" in retained_finish_path
+          fallback_method = native.split("private void scheduleFinishIfTwaTabDoesNotReturn()", 1)[1].split("private void registerEngagementSignalsCallback()", 1)[0]
+          assert "postDelayed" in fallback_method and "if (twaTabVisible)" in fallback_method and "super.finish();" in fallback_method
+          resume_body = native.split("protected void onResume()", 1)[1].split("@Override", 1)[0]
+          assert "scheduleFinishIfTwaTabDoesNotReturn();" in resume_body
           assert 'EngagementSignalsCallback' in native
           assert 'isEngagementSignalsApiAvailable(Bundle.EMPTY)' in native
           assert 'setEngagementSignalsCallback(' in native
