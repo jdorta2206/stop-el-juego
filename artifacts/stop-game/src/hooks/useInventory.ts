@@ -69,6 +69,7 @@ export function useInventory(playerId?: string | null) {
   const [errorState, setErrorState] = useState<string | null>(null);
   const [slowState, setSlowState] = useState(false);
   const refreshAbortRef = useRef<AbortController | null>(null);
+  const mutationControllersRef = useRef(new Set<AbortController>());
   const activePlayerIdRef = useRef(playerId);
   activePlayerIdRef.current = playerId;
 
@@ -171,39 +172,65 @@ export function useInventory(playerId?: string | null) {
 
   useEffect(() => {
     void refresh();
-    return () => { refreshAbortRef.current?.abort(); };
+    return () => {
+      refreshAbortRef.current?.abort();
+      // A purchase/equip request started for the previous account must never
+      // complete into the UI after the active player changes.
+      for (const controller of mutationControllersRef.current) controller.abort();
+      mutationControllersRef.current.clear();
+    };
   }, [refresh]);
 
   const equip = useCallback(async (kind: EquipKind, value: string | null) => {
     if (!playerId || activePlayerIdRef.current !== playerId) return null;
-    const res = await fetch(`${API}/api/inventory/equip`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders(), "X-Stop-Player-Id": playerId },
-      body: JSON.stringify({ kind, value }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return { error: err.error || "Failed" };
+    const controller = new AbortController();
+    mutationControllersRef.current.add(controller);
+    const isCurrent = () => activePlayerIdRef.current === playerId && !controller.signal.aborted;
+    try {
+      const res = await fetch(`${API}/api/inventory/equip`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders(), "X-Stop-Player-Id": playerId },
+        body: JSON.stringify({ kind, value }),
+        signal: controller.signal,
+      });
+      if (!isCurrent()) return null;
+      const result = await res.json().catch(() => ({}));
+      if (!isCurrent()) return null;
+      if (!res.ok) return { error: result.error || "Failed" };
+      await refresh();
+      return isCurrent() ? result : null;
+    } catch {
+      return isCurrent() ? { error: "No se pudo actualizar el inventario. Inténtalo de nuevo." } : null;
+    } finally {
+      mutationControllersRef.current.delete(controller);
     }
-    await refresh();
-    return res.json();
   }, [playerId, refresh]);
 
   const buy = useCallback(async (itemId: string) => {
     if (!playerId || activePlayerIdRef.current !== playerId) return null;
-    const res = await fetch(`${API}/api/inventory/buy`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders(), "X-Stop-Player-Id": playerId },
-      body: JSON.stringify({ itemId }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return { error: err.error || "Failed" };
+    const controller = new AbortController();
+    mutationControllersRef.current.add(controller);
+    const isCurrent = () => activePlayerIdRef.current === playerId && !controller.signal.aborted;
+    try {
+      const res = await fetch(`${API}/api/inventory/buy`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders(), "X-Stop-Player-Id": playerId },
+        body: JSON.stringify({ itemId }),
+        signal: controller.signal,
+      });
+      if (!isCurrent()) return null;
+      const result = await res.json().catch(() => ({}));
+      if (!isCurrent()) return null;
+      if (!res.ok) return { error: result.error || "Failed" };
+      await refresh();
+      return isCurrent() ? result : null;
+    } catch {
+      return isCurrent() ? { error: "No se pudo completar la compra. Inténtalo de nuevo." } : null;
+    } finally {
+      mutationControllersRef.current.delete(controller);
     }
-    await refresh();
-    return res.json();
   }, [playerId, refresh]);
 
   const inventory = dataPlayerId === playerId ? data : null;
