@@ -234,7 +234,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             retainLauncherForTwa = false;
             Log.w("STOP_PLAY_GAMES", "TWA tab did not return and no session-end callback is available");
             super.finish();
-        }, 2000L);
+        }, 5000L);
     }
 
     @Override
@@ -538,7 +538,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                                         return;
                                     }
                                     finishAfterTwaSessionEnded(didUserInteract);
-                                }, 1500L);
+                                }, 5000L);
                             });
                         }
                     }, Bundle.EMPTY);
