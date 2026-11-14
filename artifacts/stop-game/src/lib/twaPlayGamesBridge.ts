@@ -57,18 +57,6 @@ function receiveNativeMessage(raw: unknown): void {
     }
     return;
   }
-  if (payload?.type === "STOP_TWA_LIVENESS_PROBE") {
-    // Android may briefly resume its launcher Activity for a native Play Games
-    // screen while Chrome still owns the live TWA. Answering lets Android put
-    // the launcher task back behind Chrome without destroying the session.
-    const probeId = typeof payload.probeId === "string" ? payload.probeId : "";
-    send({
-      type: "STOP_TWA_LIVENESS_ALIVE",
-      origin: window.location.origin,
-      probeId,
-    });
-    return;
-  }
   if (payload?.type !== "STOP_PGS_STATUS_RESULT") return;
   lastStatus = {
     ok: payload.ok === true,
