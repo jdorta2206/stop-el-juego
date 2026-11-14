@@ -9,6 +9,9 @@ on:
       - "lib/**"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "android-generated/**"
+      - ".github/workflows/android-*.yml"
+      - ".github/workflows/validate-pgs-origin-bridge.yml"
       - ".github/workflows/halloween-production-ci.yml"
   push:
     branches: [fix/halloween-production-ready, halloween-2026-final]
