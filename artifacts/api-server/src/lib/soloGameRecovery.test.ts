@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyConfirmedSoloGameReward,
   clearSoloGameRecovery,
   createSoloGameRewardKey,
   readSoloGameRecovery,
@@ -179,4 +180,43 @@ describe("solo game recovery storage", () => {
     expect(createSoloGameRewardKey("game-12345678", 2, "hint")).toBe("game-12345678:2:hint");
     expect(createSoloGameRewardKey("game-12345678", 3, "extraTime")).not.toBe("game-12345678:2:extraTime");
   });
+
+  it("atomically prepares an extra-time reward and prevents applying it twice", () => {
+    const base = makeCheckpoint();
+    base.payload.pendingReward = "extraTime";
+    base.payload.pendingHint = null;
+    const applied = applyConfirmedSoloGameReward(base, "request-id-12345678901234567890", "extraTime", 30);
+    expect(applied.status).toBe("applied");
+    if (applied.status !== "applied") return;
+    expect(applied.envelope.payload.timeLeft).toBe(67);
+    expect(applied.envelope.payload.rewardedUsed).toBe(true);
+    expect(applied.envelope.payload.pendingReward).toBeNull();
+    expect(applied.envelope.payload.appliedRewardKeys).toContain("game-12345678:2:extraTime");
+    const duplicate = applyConfirmedSoloGameReward(applied.envelope, "request-id-12345678901234567890", "extraTime", 30);
+    expect(duplicate.status).toBe("already_applied");
+  });
+
+  it("applies the exact pending hint without replacing an existing answer", () => {
+    const base = makeCheckpoint();
+    const applied = applyConfirmedSoloGameReward(base, "request-id-12345678901234567890", "hint", 0);
+    expect(applied.status).toBe("applied");
+    if (applied.status !== "applied") return;
+    expect(applied.envelope.payload.responses.Color).toBe("Azul");
+    expect(applied.envelope.payload.hintUsed).toBe(true);
+    expect(applied.envelope.payload.pendingHint).toBeNull();
+    expect(applied.envelope.payload.pendingReward).toBeNull();
+  });
+
+  it("rejects a reward when the pending category has already been answered", () => {
+    const base = makeCheckpoint();
+    base.payload.responses.Color = "Rojo";
+    expect(applyConfirmedSoloGameReward(base, "request-id-12345678901234567890", "hint", 0).status).toBe("invalid");
+  });
+
+  it("rejects a reward with the wrong pending type or malformed request id", () => {
+    const base = makeCheckpoint();
+    expect(applyConfirmedSoloGameReward(base, "bad", "hint", 0).status).toBe("invalid");
+    expect(applyConfirmedSoloGameReward(base, "request-id-12345678901234567890", "extraTime", 30).status).toBe("invalid");
+  });
+
 });
