@@ -1112,6 +1112,7 @@ export default function SoloGame() {
     setRound(1);
     setTimeLeft(0);
     recoveryOwnerRef.current = activePlayerId;
+    recoveryCheckCompleteRef.current = false;
     restoredRecoveryRef.current = false;
     setGameState("LOBBY");
     toast({
