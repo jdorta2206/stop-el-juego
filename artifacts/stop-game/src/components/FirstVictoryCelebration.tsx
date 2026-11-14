@@ -38,10 +38,9 @@ export function FirstVictoryCelebration({
   }, [open]);
 
   const supportsNotifications = typeof Notification !== "undefined";
-  const notificationsAlreadyGranted =
-    supportsNotifications && Notification.permission === "granted";
-  const showNotifyButton =
-    supportsNotifications && !notificationsAlreadyGranted && !!onEnableNotifications;
+  // Permission may already be granted while the server-side push subscription
+  // is missing. Keep the repair CTA available in that state as well.
+  const showNotifyButton = supportsNotifications && !!onEnableNotifications;
 
   return (
     <AnimatePresence>
