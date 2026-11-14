@@ -95,6 +95,20 @@ jobs:
           assert 'startPlayGamesSignInIfNeeded(true);' not in startup_branch
           assert 'startPlayGamesSignInIfNeeded(true);' in manual_branch
           assert 'startPlayGamesSignInIfNeeded();' not in native
+          # Status-only refreshes must not race with an active sign-in flow.
+          assert 'refreshPlayGamesStatusOnly();' in native
+          assert 'private void refreshPlayGamesStatusOnly()' in native
+          assert 'playGamesStatusGeneration' in native
+          assert 'statusGeneration != playGamesStatusGeneration' in native
+          assert 'if (playGamesSignInInFlight) return;' in native
+          # Achievement outcomes are separate events and must never overwrite auth state.
+          assert 'sendPlayGamesAchievementResult' in native
+          assert 'STOP_PGS_ACHIEVEMENT_RESULT' in native and 'STOP_PGS_ACHIEVEMENT_RESULT' in web
+          assert 'stop:play-games-achievement-result' in web
+          show_achievements_branch = native.split('if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type)) {', 1)[1].split('if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {', 1)[0]
+          unlock_achievement_branch = native.split('if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {', 1)[1].split('if ("STOP_PGS_STATUS".equals(type)) {', 1)[0]
+          assert 'sendPlayGamesStatus' not in show_achievements_branch
+          assert 'sendPlayGamesStatus' not in unlock_achievement_branch
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
           print("PGS web origin payload and native TWA relationship/origin guards verified.")
