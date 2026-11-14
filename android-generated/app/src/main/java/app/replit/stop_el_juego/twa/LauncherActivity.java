@@ -214,17 +214,18 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
 
-        if (engagementSignalsRegistered || twaTabVisible) {
+        if (twaTabVisible) {
             // onRestart() can also run when a native Play Games screen returns.
             // Move the launcher behind Chrome instead of destroying its session.
-            Log.i("STOP_PLAY_GAMES", "TWA remains active; returning launcher behind Chrome");
+            Log.i("STOP_PLAY_GAMES", "TWA tab is visible; returning launcher behind Chrome");
             moveTaskToBack(true);
             return;
         }
 
-        // Fallback for providers without Engagement Signals: wait for TAB_SHOWN
-        // after a native overlay. If it never returns, close the launcher.
+        // If Chrome has hidden the tab, wait for TAB_SHOWN before deciding that
+        // the TWA closed. The session-end callback provides an additional signal.
         scheduleFinishIfTwaTabDoesNotReturn();
+        moveTaskToBack(true);
     }
 
     @Override
