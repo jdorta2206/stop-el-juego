@@ -53,13 +53,14 @@ export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
 export function usePushNotifications(playerId: string | undefined, language: string) {
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const currentPlayerIdRef = useRef(playerId);
   const preferencesAbortRef = useRef<AbortController | null>(null);
   currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
 
     const controller = new AbortController();
     const initialise = async () => {
@@ -152,6 +153,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
         }
       } catch (e) {
         console.warn("[push] initialise error", e);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
