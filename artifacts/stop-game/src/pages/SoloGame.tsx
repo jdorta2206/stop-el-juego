@@ -2146,7 +2146,7 @@ export default function SoloGame() {
                   </motion.div>
                 )}
               </div>
-              <Button size="xl" onClick={startGame}>{t.game.round} {round}</Button>
+              <Button size="xl" onClick={startGame} disabled={!playerLoaded}>{t.game.round} {round}</Button>
 
               {isPremium ? (
                 <button
