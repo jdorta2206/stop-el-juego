@@ -42,4 +42,46 @@ describe("verifyAdMobSsv", () => {
     );
     expect(tampered).toEqual({ valid: false, error: "Invalid signature" });
   });
+
+  it("rejects a missing query string and missing signature without fetching keys", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await verifyAdMobSsv("/api/rewards/admob-ssv")).toEqual({ valid: false, error: "Missing query string" });
+    expect(await verifyAdMobSsv("/api/rewards/admob-ssv?ad_unit=3559554716")).toEqual({ valid: false, error: "Missing signature" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed percent escapes before contacting the key server", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await verifyAdMobSsv("/api/rewards/admob-ssv?custom_data=%E0%A4%A&signature=abc&key_id=123");
+    expect(result).toEqual({ valid: false, error: "Invalid signature encoding" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the cached Google key set once when a callback uses an unknown key id", async () => {
+    const { publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ keys: [{ keyId: 987654321, pem: publicKey.export({ type: "spki", format: "pem" }) }] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await verifyAdMobSsv("/api/rewards/admob-ssv?ad_unit=3559554716&signature=AA&key_id=987654322");
+    expect(result).toEqual({ valid: false, error: "Unknown key_id" });
+    // The preceding valid-signature test populated the module-level cache, so this call is the forced refresh.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a signature that is validly encoded but cryptographically incorrect", async () => {
+    const { publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const keyId = 456789123;
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ keys: [{ keyId, pem: publicKey.export({ type: "spki", format: "pem" }) }] }),
+    })));
+    const badSignature = Buffer.from("not-a-signature").toString("base64url");
+    const result = await verifyAdMobSsv(`/api/rewards/admob-ssv?ad_unit=3559554716&signature=${badSignature}&key_id=${keyId}`);
+    expect(result).toEqual({ valid: false, error: "Invalid signature" });
+  });
+
 });

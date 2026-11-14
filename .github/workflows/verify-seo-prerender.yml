@@ -32,6 +32,8 @@ jobs:
         run: pnpm run build
       - name: Build API server
         run: pnpm --filter @workspace/api-server build
+      - name: Test solo game recovery storage
+        run: pnpm --filter @workspace/api-server exec vitest run src/lib/soloGameRecovery.test.ts
       - name: Verify real Vite output
         working-directory: artifacts/stop-game
         shell: bash
