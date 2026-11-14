@@ -47,7 +47,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingRequestId, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; onRequestCreated?: (requestId: string) => boolean | void; pendingRequestId?: string | null; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingRequestId, recoveryManaged = false, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; onRequestCreated?: (requestId: string) => boolean | void; pendingRequestId?: string | null; recoveryManaged?: boolean; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -99,6 +99,7 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingReques
       setPhase("pending");
       return;
     }
+    if (recoveryManaged) return;
     const stored = readStoredPendingReward();
     if (!stored) return;
     if (stored.playerId !== (playerId || "guest")
