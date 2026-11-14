@@ -84,6 +84,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean warmupServiceBound;
     @Nullable private CustomTabsServiceConnection warmupConnection;
     private int playGamesSignInGeneration;
+    private int playGamesStatusGeneration;
     private boolean playGamesSignInInFlightInteractive;
     private boolean playGamesSignInRequestedInteractive;
     private boolean pendingInteractivePlayGamesSignIn;
@@ -646,6 +647,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (allowInteractiveSignIn && !playGamesSignInRequestedInteractive
                     && !playGamesSignInInFlightInteractive) {
                 pendingInteractivePlayGamesSignIn = true;
+                playGamesStatusGeneration++;
                 Log.i("STOP_PLAY_GAMES", "Queued manual sign-in behind the startup authentication check");
             }
             sendPlayGamesStatus(false, "sign_in_in_progress");
@@ -653,6 +655,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }
         if (isFinishing() || isDestroyed()) return;
 
+        playGamesStatusGeneration++;
         playGamesSignInInFlight = true;
         playGamesSignInInFlightInteractive = false;
         playGamesSignInRequestedInteractive = allowInteractiveSignIn;
@@ -775,45 +778,84 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if ("STOP_PGS_STATUS".equals(type)) {
-            PlayGames.getGamesSignInClient(this).isAuthenticated()
-                    .addOnCompleteListener(task -> {
-                        boolean authenticated = task.isSuccessful()
-                                && task.getResult() != null
-                                && task.getResult().isAuthenticated();
-                        sendPlayGamesStatus(authenticated, authenticated ? "authenticated" : "not_authenticated");
-                    });
+            refreshPlayGamesStatusOnly();
             return;
         }
         if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type)) {
             PlayGames.getAchievementsClient(this).getAchievementsIntent()
                     .addOnSuccessListener(intent -> {
-                        try { startActivityForResult(intent, 7402); sendPlayGamesStatus(true, "achievements_opened"); }
-                        catch (RuntimeException error) { sendPlayGamesStatus(false, "achievements_unavailable"); }
+                        try {
+                            startActivityForResult(intent, 7402);
+                        } catch (RuntimeException error) {
+                            Log.w("STOP_PLAY_GAMES", "Could not open achievements UI", error);
+                        }
                     })
-                    .addOnFailureListener(error -> sendPlayGamesStatus(false, "achievements_unavailable"));
+                    .addOnFailureListener(error ->
+                            Log.w("STOP_PLAY_GAMES", "Achievements UI unavailable", error));
             return;
         }
         if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {
             String id = message.optString("achievementId", "").trim();
             // Only accept Google Play achievement IDs, never arbitrary payloads.
             if (!id.matches("Cgk[A-Za-z0-9_-]{10,}")) {
-                sendPlayGamesStatus(false, "invalid_achievement_id");
+                sendPlayGamesAchievementResult(id, false, "invalid_achievement_id");
                 return;
             }
             PlayGames.getGamesSignInClient(this).isAuthenticated().addOnCompleteListener(task -> {
                 if (!task.isSuccessful() || task.getResult() == null || !task.getResult().isAuthenticated()) {
-                    sendPlayGamesStatus(false, "not_authenticated");
+                    sendPlayGamesAchievementResult(id, false, "not_authenticated");
                     return;
                 }
                 PlayGames.getAchievementsClient(this).unlockImmediate(id)
                         .addOnSuccessListener(unused ->
-                                sendPlayGamesStatus(true, "achievement_unlocked"))
+                                sendPlayGamesAchievementResult(id, true, "achievement_unlocked"))
                         .addOnFailureListener(error -> {
                             Log.w("STOP_PLAY_GAMES", "Achievement unlock failed", error);
-                            sendPlayGamesStatus(false, "achievement_unlock_failed");
+                            sendPlayGamesAchievementResult(id, false, "achievement_unlock_failed");
                         });
             });
         }
+    }
+
+    private void refreshPlayGamesStatusOnly() {
+        if (!playGamesInitialized || isFinishing() || isDestroyed()) {
+            sendPlayGamesStatus(false, "sdk_unavailable");
+            return;
+        }
+        // Do not let a status snapshot race or overwrite an active startup/manual
+        // sign-in flow. A newer sign-in also invalidates any snapshot already in flight.
+        if (playGamesSignInInFlight) return;
+        final int statusGeneration = ++playGamesStatusGeneration;
+        try {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        if (statusGeneration != playGamesStatusGeneration
+                                || playGamesSignInInFlight || isFinishing() || isDestroyed()) return;
+                        boolean authenticated = task.isSuccessful()
+                                && task.getResult() != null
+                                && task.getResult().isAuthenticated();
+                        sendPlayGamesStatus(authenticated,
+                                authenticated ? "authenticated" : "not_authenticated");
+                    });
+        } catch (RuntimeException error) {
+            if (statusGeneration != playGamesStatusGeneration || playGamesSignInInFlight
+                    || isFinishing() || isDestroyed()) return;
+            Log.w("STOP_PLAY_GAMES", "Status-only authentication refresh failed", error);
+            sendPlayGamesStatus(false, "status_check_failed");
+        }
+    }
+
+    private void sendPlayGamesAchievementResult(String achievementId, boolean ok, String status) {
+        JSONObject result = newMessage("STOP_PGS_ACHIEVEMENT_RESULT");
+        try {
+            result.put("achievementId", achievementId == null ? "" : achievementId);
+            result.put("ok", ok);
+            result.put("status", status);
+        } catch (JSONException error) {
+            Log.w("STOP_PLAY_GAMES", "Unable to serialize achievement result", error);
+            return;
+        }
+        sendMessage(result);
     }
 
     private void sendPlayGamesStatus(boolean ok, String status) {
