@@ -120,6 +120,7 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, playerId, isP
 
       if (bridgeReady || knownTwa) {
         const result = await requestRewardedAd(placement, (requestId) => {
+          let requestStored = false;
           try {
             window.localStorage.setItem(PENDING_REWARD_STORAGE_KEY, JSON.stringify({
               requestId,
@@ -128,7 +129,11 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, playerId, isP
               rewardAmount,
               createdAt: Date.now(),
             } satisfies StoredPendingReward));
+            requestStored = true;
           } catch {}
+          if (!requestStored) {
+            throw new Error("No se pudo guardar la solicitud del anuncio en este dispositivo.");
+          }
           const persisted = onRequestCreated?.(requestId);
           if (persisted === false) {
             clearStoredPendingReward();
