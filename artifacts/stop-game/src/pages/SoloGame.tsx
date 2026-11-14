@@ -1013,7 +1013,7 @@ export default function SoloGame() {
     setAiBluffSetup(payload.aiBluffSetup);
     setSpyUsesLeft(payload.spyUsesLeft);
     setSpyUsesThisRound(payload.spyUsesThisRound);
-    setSpyReveal(null);
+    setSpyReveal(payload.spyReveal);
     setCombo(payload.combo);
     setInsaneMode(payload.insaneMode);
     setTutorialActive(payload.tutorialActive);
@@ -1634,6 +1634,7 @@ export default function SoloGame() {
         aiBluffSetup,
         spyUsesLeft,
         spyUsesThisRound,
+        spyReveal,
         combo,
         insaneMode,
         tutorialActive,
@@ -1649,7 +1650,7 @@ export default function SoloGame() {
     round, categories, responses, totalScore, aiTotalScore, rewardedUsed,
     hintUsed, doubleUsed, randomEvent, activeCard, cardUsed, sabotageCategory,
     hiddenCategoryIdx, bluffedCategories, aiBluffSetup, spyUsesLeft,
-    spyUsesThisRound, combo, insaneMode, tutorialActive, isFirstEverGame,
+    spyUsesThisRound, spyReveal, combo, insaneMode, tutorialActive, isFirstEverGame,
     randomRoundTime, bestRoundScore,
   ]);
 
