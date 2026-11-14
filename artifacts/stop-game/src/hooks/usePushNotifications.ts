@@ -73,10 +73,10 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const perm = Notification.permission as NotifPermission;
         if (!cancelled) setPermission(perm);
 
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready");
         if (cancelled) return;
 
-        let sub = await reg.pushManager.getSubscription();
+        let sub = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription");
         if (cancelled) return;
 
         if (!sub) {
