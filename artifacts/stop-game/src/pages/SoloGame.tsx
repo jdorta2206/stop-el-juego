@@ -111,7 +111,7 @@ function getTodayStr(): string {
 }
 
 export default function SoloGame() {
-  const { player, showAuth } = usePlayer();
+  const { player, showAuth, isLoaded: playerLoaded } = usePlayer();
   const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
   // Fail closed consistently across Solo, Home and Rooms: if Premium cannot be
   // verified, do not show rewarded or interstitial ads until the status is known.
@@ -960,8 +960,16 @@ export default function SoloGame() {
   // Restore only a validated, account-bound PLAYING checkpoint. An in-flight
   // rewarded-ad overlay is never restored or treated as an earned reward.
   useEffect(() => {
+    if (!playerLoaded) return;
     const playerId = player?.id;
-    if (!playerId) return;
+    if (!playerId) {
+      recoveryCheckCompleteRef.current = true;
+      if (pendingAutoStartRef.current && !customPacksLoading) {
+        pendingAutoStartRef.current = false;
+        window.setTimeout(() => startGame(), 60);
+      }
+      return;
+    }
     // Never replace a match that the player has already started in this mount,
     // and never carry one account's in-memory game into another account.
     if (gameState !== "LOBBY") {
@@ -1052,7 +1060,7 @@ export default function SoloGame() {
       description: lang === "en" ? `Round ${payload.round} resumed with ${payload.timeLeft}s left.` : lang === "pt" ? `Ronda ${payload.round} retomada com ${payload.timeLeft}s.` : lang === "fr" ? `Manche ${payload.round} reprise avec ${payload.timeLeft}s.` : `Ronda ${payload.round} reanudada con ${payload.timeLeft}s.`,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player?.id, gameState]);
+  }, [player?.id, playerLoaded, gameState, customPacksLoading]);
 
   useEffect(() => {
     if (gameState === "RESULTS" && results) {
