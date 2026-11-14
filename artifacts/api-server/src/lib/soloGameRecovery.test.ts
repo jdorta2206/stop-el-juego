@@ -5,6 +5,7 @@ import {
   createSoloGameRewardKey,
   readSoloGameRecovery,
   saveSoloGameRecovery,
+  SOLO_GAME_PENDING_REWARD_MAX_AGE_MS,
   SOLO_GAME_RECOVERY_MAX_AGE_MS,
   type SoloGameRecoveryEnvelope,
 } from "../../../stop-game/src/lib/soloGameRecovery";
@@ -91,6 +92,16 @@ describe("solo game recovery storage", () => {
     const now = Date.now();
     expect(saveSoloGameRecovery(storage, makeCheckpoint("player-123", now))).toBe(true);
     expect(readSoloGameRecovery(storage, "player-123", now + SOLO_GAME_RECOVERY_MAX_AGE_MS + 1)).toBeNull();
+  });
+
+ 
+  it("retains a pending rewarded-ad checkpoint for the server SSV reconciliation window", () => {
+    const storage = new MemoryStorage();
+    const now = Date.now();
+    const snapshot = makeCheckpoint("player-123", now);
+    storage.setItem("stop_solo_game_recovery_v1:player-123", JSON.stringify(snapshot));
+    expect(readSoloGameRecovery(storage, "player-123", now + SOLO_GAME_RECOVERY_MAX_AGE_MS + 1)).not.toBeNull();
+    expect(readSoloGameRecovery(storage, "player-123", now + SOLO_GAME_PENDING_REWARD_MAX_AGE_MS + 1)).toBeNull();
   });
 
   it("rejects timestamps too far in the future", () => {
