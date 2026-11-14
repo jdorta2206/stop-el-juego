@@ -39,7 +39,7 @@ describe("push subscription initialization safeguards", () => {
     expect(hookSource).toContain("const [loading, setLoading] = useState(true)");
     expect(hookSource).toContain("setLoading(true);");
     expect(hookSource).toContain("finally {\n        if (!cancelled) setLoading(false);");
-    expect(notificationsPageSource).toContain("{loading ? t.checking : isSubscribed ? t.disableBtn : t.enableBtn}");
+    expect(notificationsPageSource).toContain("{permissionWaiting ? t.waiting : loading ? t.checking : isSubscribed ? t.disableBtn : t.enableBtn}");
   });
 
   it("bounds service-worker and existing-subscription initialization waits", () => {
