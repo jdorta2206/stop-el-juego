@@ -68,9 +68,14 @@ export function readSoloGameRecovery<T>(
 ): SoloGameRecoveryEnvelope<T> | null {
   if (!playerId || playerId.length > 128) return null;
   const key = storageKey(playerId);
+  let raw: string | null;
   try {
-    const raw = storage.getItem(key);
-    if (!raw) return null;
+    raw = storage.getItem(key);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  try {
     if (new TextEncoder().encode(raw).byteLength > SOLO_GAME_RECOVERY_MAX_BYTES) {
       storage.removeItem(key);
       return null;
@@ -82,6 +87,8 @@ export function readSoloGameRecovery<T>(
     }
     return parsed;
   } catch {
+    // Malformed JSON must not remain in storage and be retried on every launch.
+    try { storage.removeItem(key); } catch { /* best effort */ }
     return null;
   }
 }
