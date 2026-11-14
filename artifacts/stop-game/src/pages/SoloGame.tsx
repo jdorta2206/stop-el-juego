@@ -475,6 +475,7 @@ export default function SoloGame() {
   // Guards to prevent handleStop / results-accumulation from firing more than once per round
   const stoppedRef = useRef(false);
   const resultsAppliedRef = useRef(false);
+  const handleStopRef = useRef<() => Promise<void>>(async () => {});
 
   // Always-current refs so handleStop never reads stale closure values
   const responsesRef = useRef<Record<string, string>>({});
@@ -700,7 +701,7 @@ export default function SoloGame() {
           // Schedule handleStop outside the state-setter (safe async trigger)
           stopTimeoutRef.current = setTimeout(() => {
             stopTimeoutRef.current = null;
-            void handleStop();
+            void handleStopRef.current();
           }, 0);
           return 0;
         }
@@ -950,6 +951,8 @@ export default function SoloGame() {
   // from `validateMutation.data` is critical for the offline flow: when the
   // network call throws, mutation.data stays stale (or undefined) and the
   // RESULTS effect would never fire / would reuse the prior round's payload.
+  handleStopRef.current = handleStop;
+
   const [roundResults, setRoundResults] = useState<ValidateRoundResponse | null>(null);
   const results = roundResults;
 
