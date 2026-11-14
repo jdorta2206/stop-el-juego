@@ -42,6 +42,7 @@ const makeCheckpoint = (
     hintUsed: false,
     doubleUsed: false,
     pendingReward: "hint",
+    pendingRewardRequestId: "request-id-12345678901234567890",
     pendingHint: { category: "Color", word: "Azul" },
     appliedRewardKeys: [],
     randomEvent: "easy_letter",
@@ -121,6 +122,7 @@ describe("solo game recovery storage", () => {
     const storage = new MemoryStorage();
     const snapshot = makeCheckpoint();
     snapshot.payload.pendingHint = null;
+    snapshot.payload.pendingRewardRequestId = null;
     expect(saveSoloGameRecovery(storage, snapshot)).toBe(false);
   });
 
@@ -128,6 +130,7 @@ describe("solo game recovery storage", () => {
     const storage = new MemoryStorage();
     const snapshot = makeCheckpoint();
     snapshot.payload.pendingReward = "extraTime";
+    snapshot.payload.pendingRewardRequestId = "request-id-12345678901234567890";
     expect(saveSoloGameRecovery(storage, snapshot)).toBe(false);
   });
 
@@ -195,6 +198,7 @@ describe("solo game recovery storage", () => {
   it("atomically prepares an extra-time reward and prevents applying it twice", () => {
     const base = makeCheckpoint();
     base.payload.pendingReward = "extraTime";
+    base.payload.pendingRewardRequestId = "request-id-12345678901234567890";
     base.payload.pendingHint = null;
     const applied = applyConfirmedSoloGameReward(base, "request-id-12345678901234567890", "extraTime", 30);
     expect(applied.status).toBe("applied");
@@ -227,6 +231,7 @@ describe("solo game recovery storage", () => {
   it("rejects a reward with the wrong pending type or malformed request id", () => {
     const base = makeCheckpoint();
     expect(applyConfirmedSoloGameReward(base, "bad", "hint", 0).status).toBe("invalid");
+    expect(applyConfirmedSoloGameReward(base, "request-id-different-12345678901234567890", "hint", 0).status).toBe("invalid");
     expect(applyConfirmedSoloGameReward(base, "request-id-12345678901234567890", "extraTime", 30).status).toBe("invalid");
   });
 
