@@ -139,6 +139,7 @@ export default function SoloGame() {
   const [aiTotalScore, setAiTotalScore] = useState(0);
   // null = closed, otherwise the type of reward being shown
   const [rewardedAdType, setRewardedAdType] = useState<null | "extraTime" | "hint" | "double">(null);
+  const [pendingRewardRequestId, setPendingRewardRequestId] = useState<string | null>(null);
   const [rewardedUsed, setRewardedUsed] = useState(false);
   const [hintUsed, setHintUsed] = useState(false);
   const [doubleUsed, setDoubleUsed] = useState(false);
@@ -587,6 +588,7 @@ export default function SoloGame() {
       scoreTokensRef.current = [];
       rankingScoreTokensRef.current = [];
       appliedRewardKeysRef.current = [];
+      setPendingRewardRequestId(null);
       // A new logical game must be allowed to submit its own final score,
       // including after an earlier match was abandoned during an account switch.
       submittedRef.current = false;
@@ -1029,6 +1031,7 @@ export default function SoloGame() {
     setHintUsed(payload.hintUsed);
     setDoubleUsed(payload.doubleUsed);
     setRewardedAdType(payload.pendingReward);
+    setPendingRewardRequestId(payload.pendingRewardRequestId);
     pendingHintRef.current = payload.pendingHint ? { ...payload.pendingHint } : null;
     appliedRewardKeysRef.current = [...payload.appliedRewardKeys];
     setRandomEvent(payload.randomEvent);
@@ -1112,6 +1115,7 @@ export default function SoloGame() {
     scoreTokensRef.current = [];
     rankingScoreTokensRef.current = [];
     appliedRewardKeysRef.current = [];
+    setPendingRewardRequestId(null);
     pendingHintRef.current = null;
     setRewardedAdType(null);
     setRoundResults(null);
@@ -1660,6 +1664,7 @@ export default function SoloGame() {
       // restore either the pending reward or its already-applied game state.
       const payload = applied.envelope.payload;
       appliedRewardKeysRef.current = [...payload.appliedRewardKeys];
+      setPendingRewardRequestId(null);
       if (rewardType === "extraTime") {
         setTimeLeft(payload.timeLeft);
         setRewardedUsed(payload.rewardedUsed);
@@ -1745,6 +1750,7 @@ export default function SoloGame() {
         hintUsed,
         doubleUsed,
         pendingReward: null,
+        pendingRewardRequestId: null,
         pendingHint: null,
         appliedRewardKeys: [...appliedRewardKeysRef.current],
         randomEvent,
@@ -1864,9 +1870,13 @@ export default function SoloGame() {
               if (rewardedAdType === "hint" && !pendingHint) return false;
               snapshot.savedAt = Date.now();
               snapshot.payload.pendingReward = rewardedAdType;
+              snapshot.payload.pendingRewardRequestId = requestId;
               snapshot.payload.pendingHint = pendingHint ? { ...pendingHint } : null;
-              return saveSoloGameRecovery(storage, snapshot);
+              const saved = saveSoloGameRecovery(storage, snapshot);
+              if (saved) setPendingRewardRequestId(requestId);
+              return saved;
             }}
+            pendingRequestId={pendingRewardRequestId}
             rewardType={rewardedAdType === "double" ? "points" : rewardedAdType}
             rewardAmount={
               rewardedAdType === "extraTime" ? 30 :
@@ -1876,6 +1886,7 @@ export default function SoloGame() {
               resumeGameTimer();
               window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
               pendingHintRef.current = null;
+              setPendingRewardRequestId(null);
               setRewardedAdType(null);
             }}
             playerId={player?.id}
