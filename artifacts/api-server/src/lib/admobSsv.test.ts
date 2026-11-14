@@ -59,7 +59,7 @@ describe("verifyAdMobSsv", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("refreshes Google's key set once when a callback uses an unknown key id", async () => {
+  it("refreshes the cached Google key set once when a callback uses an unknown key id", async () => {
     const { publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -68,7 +68,8 @@ describe("verifyAdMobSsv", () => {
     vi.stubGlobal("fetch", fetchMock);
     const result = await verifyAdMobSsv("/api/rewards/admob-ssv?ad_unit=3559554716&signature=AA&key_id=987654322");
     expect(result).toEqual({ valid: false, error: "Unknown key_id" });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // The preceding valid-signature test populated the module-level cache, so this call is the forced refresh.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a signature that is validly encoded but cryptographically incorrect", async () => {
