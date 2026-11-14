@@ -1072,6 +1072,55 @@ export default function SoloGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player?.id, playerLoaded, gameState, customPacksLoading]);
 
+  // If the active identity changes mid-match, abandon that match before
+  // any account-scoped progression (XP, records, daily completion or ranking)
+  // can be attributed to the newly selected profile.
+  useEffect(() => {
+    if (!playerLoaded || gameState === "LOBBY") return;
+    const ownerId = recoveryOwnerRef.current;
+    const activePlayerId = player?.id ?? null;
+    if (ownerId === activePlayerId) return;
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (stopTimeoutRef.current) {
+      clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+    }
+    if (hiddenRevealTimeoutRef.current) {
+      clearTimeout(hiddenRevealTimeoutRef.current);
+      hiddenRevealTimeoutRef.current = null;
+    }
+    const recoveryStorage = getSoloGameRecoveryStorage();
+    if (ownerId && recoveryStorage) clearSoloGameRecovery(recoveryStorage, ownerId);
+
+    stoppedRef.current = true;
+    resultsAppliedRef.current = true;
+    submittedRef.current = true;
+    gameSubmissionIdRef.current = null;
+    scoreTokensRef.current = [];
+    rankingScoreTokensRef.current = [];
+    pendingHintRef.current = null;
+    setRewardedAdType(null);
+    setRoundResults(null);
+    setRoundWon(null);
+    setResponses({});
+    setTotalScore(0);
+    setAiTotalScore(0);
+    setRound(1);
+    setTimeLeft(0);
+    recoveryOwnerRef.current = activePlayerId;
+    restoredRecoveryRef.current = false;
+    setGameState("LOBBY");
+    toast({
+      title: lang === "en" ? "Account changed" : lang === "pt" ? "A conta mudou" : lang === "fr" ? "Le compte a changé" : "La cuenta ha cambiado",
+      description: lang === "en" ? "The current match was stopped to protect your progress." : lang === "pt" ? "A partida foi interrompida para proteger o teu progresso." : lang === "fr" ? "La partie a été arrêtée pour protéger ta progression." : "Hemos detenido la partida para proteger tu progreso.",
+      variant: "destructive",
+    });
+  }, [player?.id, playerLoaded, gameState, toast, lang]);
+
   useEffect(() => {
     if (gameState === "RESULTS" && results) {
       // Guard: only apply round scores once per round, never on re-renders
