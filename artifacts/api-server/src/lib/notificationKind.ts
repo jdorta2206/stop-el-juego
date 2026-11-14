@@ -9,10 +9,10 @@ export interface NotificationText {
 }
 
 export function notificationKind(payload: NotificationText): NotificationKind {
-  const text = \`${payload.title} ${payload.body}\`
+  const text = (payload.title + " " + payload.body)
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\\u0300-\\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "");
 
   if (/reto diario|daily stop challenge|today's stop challenge|desafio diario|defi quotidien|tu reto stop de hoy|te toca jugar|hora de tu stop|time to play|stop time|o teu desafio stop de hoje|hora de jogar|hora do teu stop|ton defi stop du jour|a toi de jouer|l'heure de ton stop/.test(text)) return "daily";
   if (/te han superado|you.?ve been overtaken|superaram|depasse/.test(text)) return "rank";
