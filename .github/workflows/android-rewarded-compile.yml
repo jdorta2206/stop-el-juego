@@ -1,0 +1,36 @@
+name: Android rewarded compile-only
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "android-generated/**"
+      - ".github/workflows/android-rewarded-compile.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Compile Android debug sources only
+        working-directory: android-generated
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:compileDebugJavaWithJavac --no-daemon --stacktrace
+
+      - name: Confirm no APK or AAB packaging task was requested
+        run: echo "Compile-only validation completed; no assemble/bundle task was invoked."
