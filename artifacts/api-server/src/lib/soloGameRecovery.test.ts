@@ -88,10 +88,14 @@ describe("solo game recovery storage", () => {
     expect(readSoloGameRecovery(storage, "player-B")).toBeNull();
   });
 
-  it("discards expired checkpoints", () => {
+  it("discards expired ordinary checkpoints", () => {
     const storage = new MemoryStorage();
     const now = Date.now();
-    expect(saveSoloGameRecovery(storage, makeCheckpoint("player-123", now))).toBe(true);
+    const snapshot = makeCheckpoint("player-123", now);
+    snapshot.payload.pendingReward = null;
+    snapshot.payload.pendingRewardRequestId = null;
+    snapshot.payload.pendingHint = null;
+    expect(saveSoloGameRecovery(storage, snapshot)).toBe(true);
     expect(readSoloGameRecovery(storage, "player-123", now + SOLO_GAME_RECOVERY_MAX_AGE_MS + 1)).toBeNull();
   });
 
