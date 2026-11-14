@@ -578,6 +578,9 @@ export default function SoloGame() {
   }, [halloweenScare?.id, player?.id, round]);
 
   const startGame = (newGame = true) => {
+    // Do not start before usePlayer has resolved the stable guest/account ID;
+    // otherwise the recovery owner could be captured as null.
+    if (!playerLoaded) return;
     if (!gameSubmissionIdRef.current) gameSubmissionIdRef.current = createSubmissionId();
     if (newGame) {
       scoreTokensRef.current = [];
