@@ -8,7 +8,10 @@ on:
       - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
       - ".github/workflows/validate-pgs-origin-bridge.yml"
   push:
-    branches: [fix/pgs-validate-native-message-origin]
+    branches:
+      - fix/pgs-validate-native-message-origin
+      - fix/pgs-retain-launcher-session
+      - fix/pgs-retain-launcher-session-final
   workflow_dispatch:
 
 permissions:
@@ -41,10 +44,57 @@ jobs:
           from pathlib import Path
           web = Path("artifacts/stop-game/src/lib/twaPlayGamesBridge.ts").read_text()
           native = Path("android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java").read_text()
+          manifest = Path("android-generated/app/src/main/AndroidManifest.xml").read_text()
           assert 'const message = { type, ...extra, origin: window.location.origin };' in web
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'String origin = message.optString("origin", "");' in native
           assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
+          # Keep the launcher/session alive until Chrome reports the TWA session has ended.
+          assert 'protected boolean shouldLaunchImmediately()' in native
+          launch_gate = native.split("protected boolean shouldLaunchImmediately() {", 1)[1].split("}", 1)[0]
+          assert "return false;" in launch_gate
+          assert 'TwaProviderPicker.pickProvider(getPackageManager())' in native
+          assert 'CustomTabsClient.bindCustomTabsService' in native
+          assert 'client.warmup(0L)' in native
+          assert 'warmupCustomTabsThenLaunchTwa();' in native
+          assert 'isFinishing() || isDestroyed()' in native
+          assert 'protected void launchTwa()' in native
+          assert 'retainLauncherForTwa = true;' in native
+          assert 'if (!retainLauncherForTwa || twaSessionEnded)' in native
+          assert 'super.finish();' in native
+          assert 'Retaining launcher until the TWA Custom Tabs session ends' in native
+          finish_method = native.split("public void finish() {", 1)[1].split("\n    @Override\n    protected void onCreate", 1)[0]
+          first_finish_guard = finish_method.split("if (!initialTwaFinishSuppressed) {", 1)[1].split("if (twaTabVisible)", 1)[0]
+          assert "return;" in first_finish_guard and "super.finish();" not in first_finish_guard
+          retained_finish_path = finish_method.split("if (!initialTwaFinishSuppressed) {", 1)[1]
+          assert "super.finish();" not in retained_finish_path
+          assert "scheduleFinishIfTwaTabDoesNotReturn();" in retained_finish_path
+          fallback_method = native.split("private void scheduleFinishIfTwaTabDoesNotReturn()", 1)[1].split("private void registerEngagementSignalsCallback()", 1)[0]
+          assert "postDelayed" in fallback_method and "if (twaTabVisible)" in fallback_method and "super.finish();" in fallback_method
+          resume_body = native.split("protected void onResume()", 1)[1].split("@Override", 1)[0]
+          assert "scheduleFinishIfTwaTabDoesNotReturn();" in resume_body
+          assert 'EngagementSignalsCallback' in native
+          assert 'isEngagementSignalsApiAvailable(Bundle.EMPTY)' in native
+          assert 'setEngagementSignalsCallback(' in native
+          assert 'onSessionEnded(boolean didUserInteract' in native
+          assert 'finishAfterTwaSessionEnded(didUserInteract)' in native
+          assert 'CustomTabsCallback.TAB_SHOWN' in native and 'CustomTabsCallback.TAB_HIDDEN' in native
+          assert 'STOP_TWA_LIVENESS_PROBE' not in native and 'STOP_TWA_LIVENESS_PROBE' not in web
+          assert 'android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|fontWeightAdjustment|uiMode|orientation|screenSize|smallestScreenSize|density|layoutDirection|colorMode|grammaticalGender"' in manifest
+          assert 'registerEngagementSignalsCallback();' in native and 'requestUseAsOriginValidation();' in native
+          assert 'TWA CustomTabsSession unavailable for origin validation attempt=' in native
+          # A manual sign-in request arriving during silent startup authentication must be queued.
+          assert 'pendingInteractivePlayGamesSignIn = true;' in native
+          assert 'playGamesSignInRequestedInteractive' in native
+          assert 'startInteractivePlayGamesSignIn(signInGeneration);' in native
+          assert 'Queued manual sign-in behind the startup authentication check' in native
+          # PGS v2 startup stays silent; interactive sign-in is player-initiated.
+          startup_branch = native.split('if ("STOP_PGS_STARTUP_READY".equals(type)) {', 1)[1].split('if ("STOP_PGS_SIGN_IN".equals(type)) {', 1)[0]
+          manual_branch = native.split('if ("STOP_PGS_SIGN_IN".equals(type)) {', 1)[1].split('if ("STOP_PGS_STATUS".equals(type)) {', 1)[0]
+          assert 'startPlayGamesSignInIfNeeded(false);' in startup_branch
+          assert 'startPlayGamesSignInIfNeeded(true);' not in startup_branch
+          assert 'startPlayGamesSignInIfNeeded(true);' in manual_branch
+          assert 'startPlayGamesSignInIfNeeded();' not in native
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
           print("PGS web origin payload and native TWA relationship/origin guards verified.")

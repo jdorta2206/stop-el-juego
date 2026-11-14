@@ -2,16 +2,21 @@ package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.RemoteException;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsCallback;
+import androidx.browser.customtabs.EngagementSignalsCallback;
+import androidx.browser.customtabs.CustomTabsClient;
+import androidx.browser.customtabs.CustomTabsServiceConnection;
 import androidx.browser.customtabs.CustomTabsService;
 import androidx.browser.customtabs.CustomTabsSession;
 
@@ -29,6 +34,7 @@ import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
+import com.google.androidbrowserhelper.trusted.TwaProviderPicker;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -64,13 +70,168 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
     private boolean playGamesStartupSignInAttempted;
+    // Android Browser Helper finishes LauncherActivity as soon as Chrome opens
+    // the TWA. Keep this Activity alive until the TWA returns so its
+    // CustomTabsSession remains bound for the Play Games postMessage bridge.
+    private boolean retainLauncherForTwa;
+    private boolean initialTwaFinishSuppressed;
+    private boolean twaSessionEnded;
+    private boolean engagementSignalsRegistered;
+    private boolean twaTabVisible;
+    private int tabVisibilityCheckGeneration;
+    private int sessionEndCheckGeneration;
+    private boolean twaLaunchStarted;
+    private boolean warmupServiceBound;
+    @Nullable private CustomTabsServiceConnection warmupConnection;
     private int playGamesSignInGeneration;
+    private boolean playGamesSignInInFlightInteractive;
+    private boolean playGamesSignInRequestedInteractive;
+    private boolean pendingInteractivePlayGamesSignIn;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
 
     @Override
+    protected boolean shouldLaunchImmediately() {
+        // Warm up the selected Custom Tabs provider before TwaLauncher creates
+        // its session. PostMessage origin validation requires warmup even on
+        // Chrome versions that can launch a TWA without it.
+        return false;
+    }
+
+    private void warmupCustomTabsThenLaunchTwa() {
+        if (isFinishing() || isDestroyed()) return;
+        final TwaProviderPicker.Action provider;
+        try {
+            provider = TwaProviderPicker.pickProvider(getPackageManager());
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Unable to select Custom Tabs provider for warmup; launching normally", error);
+            launchTwaOnce();
+            return;
+        }
+
+        final String providerPackage = provider.provider;
+        if (providerPackage == null || provider.launchMode == TwaProviderPicker.LaunchMode.BROWSER) {
+            Log.w("STOP_PLAY_GAMES", "No Custom Tabs service available for warmup; launching fallback");
+            launchTwaOnce();
+            return;
+        }
+
+        warmupConnection = new CustomTabsServiceConnection() {
+            @Override
+            public void onCustomTabsServiceConnected(ComponentName name, CustomTabsClient client) {
+                if (isFinishing() || isDestroyed()) {
+                    unbindWarmupService();
+                    return;
+                }
+                try {
+                    boolean warmed = client.warmup(0L);
+                    Log.i("STOP_PLAY_GAMES", "Custom Tabs warmup before TWA launch=" + warmed
+                            + " provider=" + providerPackage);
+                } catch (RuntimeException error) {
+                    Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup failed; continuing to launch TWA", error);
+                }
+                unbindWarmupService();
+                launchTwaOnce();
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+                Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup service disconnected; continuing to launch TWA");
+                unbindWarmupService();
+                launchTwaOnce();
+            }
+        };
+
+        try {
+            warmupServiceBound = CustomTabsClient.bindCustomTabsService(
+                    this, providerPackage, warmupConnection);
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Could not bind Custom Tabs warmup service", error);
+            warmupServiceBound = false;
+        }
+
+        if (!warmupServiceBound) {
+            warmupConnection = null;
+            launchTwaOnce();
+            return;
+        }
+
+        // Never leave a player on the launcher screen if a provider does not
+        // answer its warmup bind promptly.
+        getWindow().getDecorView().postDelayed(() -> {
+            if (!twaLaunchStarted && !isFinishing() && !isDestroyed()) {
+                Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup timed out; launching without waiting");
+                unbindWarmupService();
+                launchTwaOnce();
+            }
+        }, 1500L);
+    }
+
+    private void unbindWarmupService() {
+        if (warmupServiceBound && warmupConnection != null) {
+            try {
+                unbindService(warmupConnection);
+            } catch (IllegalArgumentException error) {
+                Log.d("STOP_PLAY_GAMES", "Custom Tabs warmup service was already unbound");
+            }
+        }
+        warmupServiceBound = false;
+        warmupConnection = null;
+    }
+
+    private void launchTwaOnce() {
+        if (twaLaunchStarted || isFinishing() || isDestroyed()) return;
+        twaLaunchStarted = true;
+        unbindWarmupService();
+        launchTwa();
+    }
+
+    @Override
+    protected void launchTwa() {
+        retainLauncherForTwa = true;
+        try {
+            super.launchTwa();
+        } catch (RuntimeException error) {
+            retainLauncherForTwa = false;
+            throw error;
+        }
+    }
+
+    @Override
+    public void finish() {
+        if (!retainLauncherForTwa || twaSessionEnded) {
+            super.finish();
+            return;
+        }
+
+        registerEngagementSignalsCallback();
+
+        // ABH calls finish() immediately after opening Chrome. Keep the launcher
+        // alive so its CustomTabsSession remains available to the Play Games bridge.
+        if (!initialTwaFinishSuppressed) {
+            initialTwaFinishSuppressed = true;
+            Log.i("STOP_PLAY_GAMES", "Retaining launcher until the TWA Custom Tabs session ends");
+            return;
+        }
+
+        if (twaTabVisible) {
+            // onRestart() can also run when a native Play Games screen returns.
+            // Move the launcher behind Chrome instead of destroying its session.
+            Log.i("STOP_PLAY_GAMES", "TWA tab is visible; returning launcher behind Chrome");
+            moveTaskToBack(true);
+            return;
+        }
+
+        // If Chrome has hidden the tab, wait for TAB_SHOWN before deciding that
+        // the TWA closed. The session-end callback provides an additional signal.
+        scheduleFinishIfTwaTabDoesNotReturn();
+        moveTaskToBack(true);
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (isFinishing()) return;
         appUpdateManager = AppUpdateManagerFactory.create(this);
         // StopApplication initializes PGS before any activity. Retain an activity-level
         // fallback only if application initialization failed, without blocking gameplay.
@@ -112,6 +273,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
+        warmupCustomTabsThenLaunchTwa();
+    }
+
+    @Override
+    protected void onDestroy() {
+        unbindWarmupService();
+        super.onDestroy();
     }
 
     private void checkForPlayUpdate() {
@@ -157,6 +325,15 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
+        // Some Custom Tabs providers do not consistently emit NAVIGATION_FINISHED.
+        // Retry origin validation after resume as a second, duplicate-guarded entry point.
+        getWindow().getDecorView().postDelayed(() -> {
+            registerEngagementSignalsCallback();
+            requestUseAsOriginValidation();
+            if (initialTwaFinishSuppressed && retainLauncherForTwa && !twaTabVisible) {
+                scheduleFinishIfTwaTabDoesNotReturn();
+            }
+        }, 1500L);
     }
 
     @Override
@@ -182,11 +359,20 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 super.onNavigationEvent(navigationEvent, extras);
+                if (navigationEvent == CustomTabsCallback.TAB_SHOWN) {
+                    twaTabVisible = true;
+                    tabVisibilityCheckGeneration++;
+                    sessionEndCheckGeneration++;
+                    registerEngagementSignalsCallback();
+                } else if (navigationEvent == CustomTabsCallback.TAB_HIDDEN) {
+                    twaTabVisible = false;
+                }
                 if (navigationEvent != NAVIGATION_FINISHED) return;
                 // TwaLauncher validates handle_all_urls for launching the TWA, but
                 // postMessage requires the separate use_as_origin relationship.
                 // Request it explicitly; otherwise this callback may never set
                 // relationshipValidated and the native bridge remains disabled.
+                registerEngagementSignalsCallback();
                 requestUseAsOriginValidation();
                 if (relationshipValidated) requestMessageChannelWithRetry(250L);
                 // Startup authentication is triggered by the web app only after its
@@ -198,6 +384,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 channelRequestInFlight = false;
                 channelRequestAttempts = 0;
                 Log.d(TAG, "TWA message channel ready");
+                registerEngagementSignalsCallback();
                 flushPendingPlayGamesStatus();
                 sendReadyBurst(0);
             }
@@ -210,11 +397,15 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void requestUseAsOriginValidation() {
-        if (relationshipValidated || originValidationRequestPending || isFinishing()
+        if (relationshipValidated || originValidationRequestPending || isFinishing() || isDestroyed()
                 || originValidationAttempts >= 10) return;
         originValidationAttempts++;
         final int requestGeneration = ++originValidationGeneration;
         CustomTabsSession session = getTwaSession();
+        if (session == null && (originValidationAttempts == 1 || originValidationAttempts == 10)) {
+            Log.w("STOP_PLAY_GAMES", "TWA CustomTabsSession unavailable for origin validation attempt="
+                    + originValidationAttempts);
+        }
         if (session != null) {
             try {
                 boolean requested = session.validateRelationship(
@@ -309,11 +500,74 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (!(launcher instanceof TwaLauncher)) return null;
             Object session = findFieldValue(launcher, "mSession");
             return session instanceof CustomTabsSession ? (CustomTabsSession) session : null;
-        } catch (ReflectiveOperationException | ClassCastException error) {
+        } catch (ReflectiveOperationException | RuntimeException error) {
             Log.w(TAG, "Unable to obtain TWA CustomTabsSession", error);
             return null;
         }
     }
+    private void scheduleFinishIfTwaTabDoesNotReturn() {
+        final int checkGeneration = ++tabVisibilityCheckGeneration;
+        getWindow().getDecorView().postDelayed(() -> {
+            if (checkGeneration != tabVisibilityCheckGeneration || isDestroyed()) return;
+            if (twaTabVisible) {
+                moveTaskToBack(true);
+                return;
+            }
+            retainLauncherForTwa = false;
+            Log.w("STOP_PLAY_GAMES", "TWA tab did not return; finishing retained launcher");
+            super.finish();
+        }, 5000L);
+    }
+
+    private void registerEngagementSignalsCallback() {
+        if (engagementSignalsRegistered || twaSessionEnded || isFinishing() || isDestroyed()) return;
+        CustomTabsSession session = getTwaSession();
+        if (session == null) return;
+        try {
+            if (!session.isEngagementSignalsApiAvailable(Bundle.EMPTY)) {
+                Log.w("STOP_PLAY_GAMES", "Custom Tabs Engagement Signals API is unavailable");
+                return;
+            }
+            engagementSignalsRegistered = session.setEngagementSignalsCallback(
+                    new EngagementSignalsCallback() {
+                        @Override
+                        public void onSessionEnded(boolean didUserInteract, @NonNull Bundle extras) {
+                            Log.i("STOP_PLAY_GAMES", "Custom Tabs engagement session ended; didUserInteract="
+                                    + didUserInteract);
+                            runOnUiThread(() -> {
+                                if (isFinishing() || isDestroyed()) return;
+                                // Some providers may stop engagement reporting while a tab is
+                                // temporarily hidden. Wait for TAB_SHOWN before treating this
+                                // as the end of the TWA session.
+                                final int generation = ++sessionEndCheckGeneration;
+                                getWindow().getDecorView().postDelayed(() -> {
+                                    if (generation != sessionEndCheckGeneration || isDestroyed()) return;
+                                    if (twaTabVisible) {
+                                        Log.i("STOP_PLAY_GAMES", "TWA tab became visible again; retaining session");
+                                        return;
+                                    }
+                                    finishAfterTwaSessionEnded(didUserInteract);
+                                }, 5000L);
+                            });
+                        }
+                    }, Bundle.EMPTY);
+            Log.i("STOP_PLAY_GAMES", "Custom Tabs engagement callback registered=" + engagementSignalsRegistered);
+        } catch (RemoteException | RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Unable to register Custom Tabs session-end callback", error);
+        }
+    }
+
+    private void finishAfterTwaSessionEnded(boolean didUserInteract) {
+        if (isFinishing() || isDestroyed()) return;
+        twaSessionEnded = true;
+        retainLauncherForTwa = false;
+        tabVisibilityCheckGeneration++;
+        sessionEndCheckGeneration++;
+        Log.i("STOP_PLAY_GAMES", "Closing retained launcher after TWA session ended; didUserInteract="
+                + didUserInteract);
+        super.finish();
+    }
+
     @Nullable private static Object findFieldValue(Object target, String fieldName) throws ReflectiveOperationException {
         Class<?> type = target.getClass();
         while (type != null) {
@@ -389,66 +643,116 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if (playGamesSignInInFlight) {
+            if (allowInteractiveSignIn && !playGamesSignInRequestedInteractive
+                    && !playGamesSignInInFlightInteractive) {
+                pendingInteractivePlayGamesSignIn = true;
+                Log.i("STOP_PLAY_GAMES", "Queued manual sign-in behind the startup authentication check");
+            }
             sendPlayGamesStatus(false, "sign_in_in_progress");
             return;
         }
-        if (isFinishing()) return;
+        if (isFinishing() || isDestroyed()) return;
+
         playGamesSignInInFlight = true;
+        playGamesSignInInFlightInteractive = false;
+        playGamesSignInRequestedInteractive = allowInteractiveSignIn;
         final int signInGeneration = ++playGamesSignInGeneration;
-        // Bound the authentication status check so a stalled SDK cannot block startup.
+
+        // Bound the complete silent-check/interactive-sign-in flow so a stalled SDK
+        // cannot leave the player waiting indefinitely.
         getWindow().getDecorView().postDelayed(() -> {
-            if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration && !isFinishing()) {
+            if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration
+                    && !isFinishing() && !isDestroyed()) {
                 playGamesSignInGeneration++;
+                boolean retryInteractive = pendingInteractivePlayGamesSignIn
+                        || (playGamesSignInRequestedInteractive && !playGamesSignInInFlightInteractive);
+                pendingInteractivePlayGamesSignIn = false;
                 playGamesSignInInFlight = false;
-                Log.e("STOP_PLAY_GAMES", "Startup/manual authentication check timed out");
-                sendPlayGamesStatus(false, "sign_in_timeout");
+                playGamesSignInInFlightInteractive = false;
+                playGamesSignInRequestedInteractive = false;
+                Log.e("STOP_PLAY_GAMES", "Authentication flow timed out");
+                if (retryInteractive) {
+                    startPlayGamesSignInIfNeeded(true);
+                } else {
+                    sendPlayGamesStatus(false, "sign_in_timeout");
+                }
             }
         }, 15000L);
+
         try {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
-                        if (signInGeneration != playGamesSignInGeneration || isFinishing()) return;
-                        playGamesSignInGeneration++;
-                        if (!task.isSuccessful()) {
-                            Log.w("STOP_PLAY_GAMES", "Authentication status check failed; continuing without blocking startup", task.getException());
-                        }
+                        if (signInGeneration != playGamesSignInGeneration || isFinishing() || isDestroyed()) return;
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
                                 && task.getResult().isAuthenticated();
                         if (authenticated) {
+                            playGamesSignInGeneration++;
                             playGamesSignInInFlight = false;
+                            playGamesSignInInFlightInteractive = false;
+                            playGamesSignInRequestedInteractive = false;
+                            pendingInteractivePlayGamesSignIn = false;
                             sendPlayGamesStatus(true, "authenticated");
                             return;
                         }
-                        if (!allowInteractiveSignIn) {
-                            playGamesSignInInFlight = false;
-                            sendPlayGamesStatus(false, "not_authenticated");
-                            Log.i("STOP_PLAY_GAMES", "Startup check complete; leaving interactive sign-in to the player");
+                        if (playGamesSignInRequestedInteractive || pendingInteractivePlayGamesSignIn) {
+                            pendingInteractivePlayGamesSignIn = false;
+                            Log.i("STOP_PLAY_GAMES", "Starting interactive sign-in after authentication status check");
+                            startInteractivePlayGamesSignIn(signInGeneration);
                             return;
                         }
-                        try {
-                            PlayGames.getGamesSignInClient(this).signIn()
-                                    .addOnCompleteListener(signInTask -> {
-                                        if (!signInTask.isSuccessful()) {
-                                            Log.e("STOP_PLAY_GAMES", "Manual signIn task failed", signInTask.getException());
-                                        }
-                                        boolean signedIn = signInTask.isSuccessful()
-                                                && signInTask.getResult() != null
-                                                && signInTask.getResult().isAuthenticated();
-                                        playGamesSignInInFlight = false;
-                                        sendPlayGamesStatus(signedIn,
-                                                signedIn ? "authenticated" : "sign_in_failed");
-                                    });
-                        } catch (RuntimeException error) {
-                            playGamesSignInInFlight = false;
-                            Log.e("STOP_PLAY_GAMES", "Manual sign-in could not start", error);
-                            sendPlayGamesStatus(false, "sign_in_failed");
-                        }
+                        playGamesSignInGeneration++;
+                        playGamesSignInInFlight = false;
+                        playGamesSignInInFlightInteractive = false;
+                        playGamesSignInRequestedInteractive = false;
+                        Log.i("STOP_PLAY_GAMES", "Startup check complete; leaving interactive sign-in to the player");
+                        sendPlayGamesStatus(false, "not_authenticated");
                     });
         } catch (RuntimeException error) {
-            if (signInGeneration == playGamesSignInGeneration) playGamesSignInGeneration++;
-            playGamesSignInInFlight = false;
+            if (signInGeneration != playGamesSignInGeneration) return;
             Log.e("STOP_PLAY_GAMES", "Authentication status check failed", error);
+            if (playGamesSignInRequestedInteractive || pendingInteractivePlayGamesSignIn) {
+                pendingInteractivePlayGamesSignIn = false;
+                startInteractivePlayGamesSignIn(signInGeneration);
+                return;
+            }
+            playGamesSignInGeneration++;
+            playGamesSignInInFlight = false;
+            playGamesSignInInFlightInteractive = false;
+            playGamesSignInRequestedInteractive = false;
+            sendPlayGamesStatus(false, "sign_in_failed");
+        }
+    }
+
+    private void startInteractivePlayGamesSignIn(final int signInGeneration) {
+        if (signInGeneration != playGamesSignInGeneration || isFinishing() || isDestroyed()) return;
+        playGamesSignInInFlightInteractive = true;
+        try {
+            PlayGames.getGamesSignInClient(this).signIn()
+                    .addOnCompleteListener(signInTask -> {
+                        if (signInGeneration != playGamesSignInGeneration || isFinishing() || isDestroyed()) return;
+                        playGamesSignInGeneration++;
+                        playGamesSignInInFlight = false;
+                        playGamesSignInInFlightInteractive = false;
+                        playGamesSignInRequestedInteractive = false;
+                        pendingInteractivePlayGamesSignIn = false;
+                        boolean signedIn = signInTask.isSuccessful()
+                                && signInTask.getResult() != null
+                                && signInTask.getResult().isAuthenticated();
+                        if (!signedIn) {
+                            Log.w("STOP_PLAY_GAMES", "Interactive sign-in did not authenticate",
+                                    signInTask.getException());
+                        }
+                        sendPlayGamesStatus(signedIn, signedIn ? "authenticated" : "sign_in_failed");
+                    });
+        } catch (RuntimeException error) {
+            if (signInGeneration != playGamesSignInGeneration) return;
+            playGamesSignInGeneration++;
+            playGamesSignInInFlight = false;
+            playGamesSignInInFlightInteractive = false;
+            playGamesSignInRequestedInteractive = false;
+            pendingInteractivePlayGamesSignIn = false;
+            Log.e("STOP_PLAY_GAMES", "Manual sign-in could not start", error);
             sendPlayGamesStatus(false, "sign_in_failed");
         }
     }
