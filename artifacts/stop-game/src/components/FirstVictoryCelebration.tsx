@@ -38,10 +38,11 @@ export function FirstVictoryCelebration({
   }, [open]);
 
   const supportsNotifications = typeof Notification !== "undefined";
-  const notificationsAlreadyGranted =
-    supportsNotifications && Notification.permission === "granted";
+  // Permission alone does not prove that a push endpoint is registered.
+  // Keep the repair CTA for granted/default states, but not when the browser
+  // has blocked notifications and the user must change browser settings.
   const showNotifyButton =
-    supportsNotifications && !notificationsAlreadyGranted && !!onEnableNotifications;
+    supportsNotifications && Notification.permission !== "denied" && !!onEnableNotifications;
 
   return (
     <AnimatePresence>
