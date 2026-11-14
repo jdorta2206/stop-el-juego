@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
-import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar, Zap, Star, Medal } from "lucide-react";
+import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar, Zap, Star, Medal, Gamepad2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { shareText, getApiUrl, authHeaders } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
@@ -50,6 +50,25 @@ export default function Home() {
   const [dailyDone, setDailyDone] = useState<boolean | null>(null);
   const [showDowntimeCompensation, setShowDowntimeCompensation] = useState(false);
   const [playGamesStatus, setPlayGamesStatus] = useState<{ ok: boolean; status: string } | null>(() => getLastPlayGamesStatus());
+  const playGamesConnected = playGamesStatus?.ok === true && playGamesStatus.status === "authenticated";
+  const playGamesConnecting = playGamesStatus?.status === "conectando" || playGamesStatus?.status === "sign_in_in_progress";
+  const playGamesStatusMessages: Record<string, string> = {
+    puente_no_disponible: "No se ha podido abrir el canal de conexión. Vuelve a intentarlo.",
+    sin_respuesta: "Google Play Juegos no responde. Puedes volver a intentarlo.",
+    sdk_unavailable: "Google Play Juegos no está disponible en este dispositivo.",
+    sign_in_in_progress: "La conexión sigue en curso. Espera unos segundos.",
+    sign_in_failed: "No se pudo conectar con Google Play Juegos.",
+    sign_in_timeout: "Google Play Juegos ha tardado demasiado en responder.",
+    not_authenticated: "Conecta tu cuenta para sincronizar tus logros.",
+    unavailable: "Google Play Juegos no está disponible ahora mismo.",
+  };
+  const playGamesStatusText = playGamesConnected
+    ? "¡Cuenta conectada! Tus logros se sincronizan con Google Play."
+    : playGamesConnecting
+      ? "Conectando con Google Play Juegos…"
+      : playGamesStatus
+        ? playGamesStatusMessages[playGamesStatus.status] ?? "Conecta tu cuenta para sincronizar tus logros."
+        : "Comprobando conexión con Google Play Juegos…";
   const playGamesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const onPlayGamesStatus = (event: Event) => {
@@ -832,28 +851,55 @@ export default function Home() {
             </motion.div>
           </Link>
 
-          {/* Play Games authentication runs silently at native startup. Keep only a manual action here. */}
+          {/* Play Games authentication runs silently at native startup; expose its state and a manual action here. */}
           {isAndroidTwa() && (
-            <div className="w-full rounded-xl border border-white/10 bg-black/15 p-3">
-              {playGamesStatus?.ok === true && playGamesStatus.status === "authenticated" ? (
+            <div className="w-full space-y-2 rounded-xl border border-amber-400/15 bg-black/15 p-3">
+              <div className="flex items-center justify-center gap-2">
+                <motion.div
+                  animate={playGamesConnecting || !playGamesStatus
+                    ? { rotate: [0, -8, 8, 0], scale: [1, 1.08, 1] }
+                    : { rotate: 0, scale: 1 }}
+                  transition={playGamesConnecting || !playGamesStatus
+                    ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
+                    : { duration: 0.2 }}
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl ${playGamesConnected ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-white"}`}
+                >
+                  <Gamepad2 className="h-5 w-5" aria-hidden="true" />
+                </motion.div>
+                <span className="text-xs font-extrabold tracking-wide text-white/75">GOOGLE PLAY JUEGOS</span>
+                {playGamesConnected && <span className="h-2 w-2 rounded-full bg-emerald-400" aria-label="Conectado" />}
+                {(playGamesConnecting || !playGamesStatus) && (
+                  <motion.span
+                    className="h-2 w-2 rounded-full bg-amber-300"
+                    animate={{ opacity: [0.25, 1, 0.25] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
+              <p className={`text-center text-sm font-semibold ${playGamesConnected ? "text-emerald-300" : "text-white/80"}`} role="status" aria-live="polite">
+                {playGamesStatusText}
+              </p>
+              {playGamesConnected ? (
                 <button
                   type="button"
                   onClick={() => showPlayGamesAchievements()}
-                  className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform"
+                  className="w-full rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-100 active:scale-[0.99] transition-transform"
                 >
                   Ver mis logros
                 </button>
               ) : (
                 <button
                   type="button"
+                  disabled={playGamesConnecting}
                   onClick={() => {
                     setPlayGamesStatus({ ok: false, status: "conectando" });
                     const sent = requestPlayGamesSignIn();
                     if (!sent) setPlayGamesStatus({ ok: false, status: "puente_no_disponible" });
                   }}
-                  className="w-full rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform"
+                  className="w-full rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform disabled:cursor-wait disabled:opacity-60"
                 >
-                  Conectar a Google Play Juegos
+                  {playGamesConnecting ? "Conectando…" : "Conectar a Google Play Juegos"}
                 </button>
               )}
             </div>

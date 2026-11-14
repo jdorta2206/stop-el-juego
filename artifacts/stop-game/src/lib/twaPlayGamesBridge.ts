@@ -57,6 +57,19 @@ function receiveNativeMessage(raw: unknown): void {
     }
     return;
   }
+  if (payload?.type === "STOP_PGS_ACHIEVEMENT_RESULT") {
+    if (typeof payload.achievementId !== "string"
+        || typeof payload.ok !== "boolean"
+        || typeof payload.status !== "string") return;
+    window.dispatchEvent(new CustomEvent("stop:play-games-achievement-result", {
+      detail: {
+        achievementId: payload.achievementId,
+        ok: payload.ok,
+        status: payload.status,
+      },
+    }));
+    return;
+  }
   if (payload?.type !== "STOP_PGS_STATUS_RESULT") return;
   lastStatus = {
     ok: payload.ok === true,
