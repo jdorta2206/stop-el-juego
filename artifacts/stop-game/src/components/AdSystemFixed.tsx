@@ -47,7 +47,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, onRequestCreated, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; onRequestCreated?: (requestId: string) => boolean | void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -65,7 +65,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     if (completedRewardRequestsRef.current.has(requestId)) return false;
     completedRewardRequestsRef.current.add(requestId);
     try {
-      await onCompleteRef.current(amount);
+      await onCompleteRef.current(amount, requestId);
       clearStoredPendingReward();
       setRetryRequestId(null);
       void acknowledgeRewardResult(requestId);
@@ -129,6 +129,11 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
               createdAt: Date.now(),
             } satisfies StoredPendingReward));
           } catch {}
+          const persisted = onRequestCreated?.(requestId);
+          if (persisted === false) {
+            clearStoredPendingReward();
+            throw new Error("No se pudo guardar la partida antes de abrir el anuncio.");
+          }
         });
         // The server only reports source=admob after validating Google's signed SSV callback.
         if (result.rewarded === true && result.source === "admob") {
