@@ -1308,6 +1308,16 @@ export default function SoloGame() {
 
   const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean }) => {
     if (!player || player.loginMethod === "guest") return;
+    // A profile can change while the game component remains mounted. Never
+    // attribute a game started by one identity to the newly selected account.
+    if (recoveryOwnerRef.current !== player.id) {
+      toast({
+        title: lang === "en" ? "Account changed during the game" : lang === "pt" ? "A conta mudou durante a partida" : lang === "fr" ? "Le compte a changé pendant la partie" : "La cuenta cambió durante la partida",
+        description: lang === "en" ? "This score was not saved to another account." : lang === "pt" ? "Esta pontuação não foi guardada noutra conta." : lang === "fr" ? "Ce score n'a pas été enregistré sur un autre compte." : "Esta puntuación no se ha guardado en otra cuenta.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (finalScore <= 0) return;
     const isBonus = opts?.bonus === true;
     const leaderboardScoreTokens = isDailyMode ? rankingScoreTokensRef.current : scoreTokensRef.current;
@@ -1423,6 +1433,16 @@ export default function SoloGame() {
   const submittedRef = useRef(false);
 
   const submitDailyResult = (finalScore: number) => {
+    // Keep daily completion attached to the identity that actually started
+    // this game; an account switch must not mark another profile as complete.
+    if (!player || recoveryOwnerRef.current !== player.id) {
+      toast({
+        title: lang === "en" ? "Account changed during the game" : lang === "pt" ? "A conta mudou durante a partida" : lang === "fr" ? "Le compte a changé pendant la partie" : "La cuenta cambió durante la partida",
+        description: lang === "en" ? "The daily result was not saved to another account." : lang === "pt" ? "O resultado diário não foi guardado noutra conta." : lang === "fr" ? "Le résultat quotidien n'a pas été enregistré sur un autre compte." : "El resultado diario no se ha guardado en otra cuenta.",
+        variant: "destructive",
+      });
+      return;
+    }
     // Guests have no server daily result, so local storage is their completion
     // record. Logged-in players are marked locally only after the server
     // confirms the score was accepted.
