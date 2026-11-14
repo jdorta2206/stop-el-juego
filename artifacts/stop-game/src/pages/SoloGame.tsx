@@ -585,6 +585,9 @@ export default function SoloGame() {
     if (newGame) {
       scoreTokensRef.current = [];
       rankingScoreTokensRef.current = [];
+      // A new logical game must be allowed to submit its own final score,
+      // including after an earlier match was abandoned during an account switch.
+      submittedRef.current = false;
       recoveryOwnerRef.current = player?.id ?? null;
     }
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
