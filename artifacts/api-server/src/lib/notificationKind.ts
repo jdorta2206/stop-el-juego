@@ -9,7 +9,9 @@ export interface NotificationText {
 }
 
 export function notificationKind(payload: NotificationText): NotificationKind {
-  const text = (payload.title + " " + payload.body)
+  // Classification must use the trusted, system-authored title only. The body may
+  // contain a player-controlled display name, which must never bypass throttling.
+  const text = payload.title
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
