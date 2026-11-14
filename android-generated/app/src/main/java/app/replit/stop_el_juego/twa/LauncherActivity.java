@@ -222,19 +222,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
 
-        // Fallback for providers without Engagement Signals: wait briefly for
-        // TAB_SHOWN after a native overlay. If it never returns, close the launcher.
-        final int checkGeneration = ++tabVisibilityCheckGeneration;
-        getWindow().getDecorView().postDelayed(() -> {
-            if (checkGeneration != tabVisibilityCheckGeneration || isDestroyed()) return;
-            if (twaTabVisible) {
-                moveTaskToBack(true);
-                return;
-            }
-            retainLauncherForTwa = false;
-            Log.w("STOP_PLAY_GAMES", "TWA tab did not return and no session-end callback is available");
-            super.finish();
-        }, 5000L);
+        // Fallback for providers without Engagement Signals: wait for TAB_SHOWN
+        // after a native overlay. If it never returns, close the launcher.
+        scheduleFinishIfTwaTabDoesNotReturn();
     }
 
     @Override
@@ -339,6 +329,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         getWindow().getDecorView().postDelayed(() -> {
             registerEngagementSignalsCallback();
             requestUseAsOriginValidation();
+            if (initialTwaFinishSuppressed && retainLauncherForTwa && !twaTabVisible) {
+                scheduleFinishIfTwaTabDoesNotReturn();
+            }
         }, 1500L);
     }
 
@@ -511,6 +504,20 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return null;
         }
     }
+    private void scheduleFinishIfTwaTabDoesNotReturn() {
+        final int checkGeneration = ++tabVisibilityCheckGeneration;
+        getWindow().getDecorView().postDelayed(() -> {
+            if (checkGeneration != tabVisibilityCheckGeneration || isDestroyed()) return;
+            if (twaTabVisible) {
+                moveTaskToBack(true);
+                return;
+            }
+            retainLauncherForTwa = false;
+            Log.w("STOP_PLAY_GAMES", "TWA tab did not return; finishing retained launcher");
+            super.finish();
+        }, 5000L);
+    }
+
     private void registerEngagementSignalsCallback() {
         if (engagementSignalsRegistered || twaSessionEnded || isFinishing() || isDestroyed()) return;
         CustomTabsSession session = getTwaSession();
