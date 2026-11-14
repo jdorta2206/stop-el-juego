@@ -113,7 +113,7 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingReques
   const startWatching = async () => {
     // Premium and unmounted overlays must never request or grant an ad reward.
     if (!ADMOB_ADS_ENABLED || isPremium || !mountedRef.current) {
-      if (mountedRef.current) onSkipRef.current();
+      if (mountedRef.current) continueWithoutReward();
       return;
     }
     setRewardedAdPlayerId(playerId);
@@ -195,7 +195,7 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingReques
           setPhase("error");
           timeoutRef.current = window.setTimeout(() => {
             timeoutRef.current = null;
-            if (mountedRef.current) onSkipRef.current();
+            if (mountedRef.current) continueWithoutReward();
           }, detail ? 5000 : 900);
         }
         return;
@@ -206,7 +206,7 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingReques
       setPhase("error");
       timeoutRef.current = window.setTimeout(() => {
         timeoutRef.current = null;
-        if (mountedRef.current) onSkipRef.current();
+        if (mountedRef.current) continueWithoutReward();
       }, 5000);
     } catch (error) {
       const stored = readStoredPendingReward();
@@ -227,7 +227,7 @@ export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingReques
       setPhase("error");
       timeoutRef.current = window.setTimeout(() => {
         timeoutRef.current = null;
-        if (mountedRef.current) onSkipRef.current();
+        if (mountedRef.current) continueWithoutReward();
       }, 5000);
     }
   };
