@@ -34,7 +34,7 @@ jobs:
         working-directory: android-generated
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:compileDebugJavaWithJavac --no-daemon --stacktrace
+          ./gradlew :app:compileDebugJavaWithJavac :app:testDebugUnitTest --no-daemon --stacktrace
 
       - name: Confirm no APK or AAB packaging task was requested
-        run: echo "Compile-only validation completed; no assemble/bundle task was invoked."
+        run: echo "Java compile and JVM unit tests completed; no assemble/bundle task was invoked."
