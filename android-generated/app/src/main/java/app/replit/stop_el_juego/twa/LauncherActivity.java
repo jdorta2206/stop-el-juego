@@ -813,6 +813,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         sendPlayGamesAchievementResult(id, false, "status_check_failed");
                         return;
                     }
+                    // Invalidate any status snapshot that began before this newer auth check.
+                    playGamesStatusGeneration++;
                     boolean authenticated = task.getResult() != null && task.getResult().isAuthenticated();
                     if (!authenticated) {
                         sendPlayGamesAchievementResult(id, false, "not_authenticated");
