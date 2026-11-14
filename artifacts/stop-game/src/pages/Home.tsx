@@ -52,21 +52,22 @@ export default function Home() {
   const [playGamesStatus, setPlayGamesStatus] = useState<{ ok: boolean; status: string } | null>(() => getLastPlayGamesStatus());
   const playGamesConnected = playGamesStatus?.ok === true && playGamesStatus.status === "authenticated";
   const playGamesConnecting = playGamesStatus?.status === "conectando" || playGamesStatus?.status === "sign_in_in_progress";
+  const playGamesStatusMessages: Record<string, string> = {
+    puente_no_disponible: "No se ha podido abrir el canal de conexión. Vuelve a intentarlo.",
+    sin_respuesta: "Google Play Juegos no responde. Puedes volver a intentarlo.",
+    sdk_unavailable: "Google Play Juegos no está disponible en este dispositivo.",
+    sign_in_in_progress: "La conexión sigue en curso. Espera unos segundos.",
+    sign_in_failed: "No se pudo conectar con Google Play Juegos.",
+    sign_in_timeout: "Google Play Juegos ha tardado demasiado en responder.",
+    not_authenticated: "Conecta tu cuenta para sincronizar tus logros.",
+    unavailable: "Google Play Juegos no está disponible ahora mismo.",
+  };
   const playGamesStatusText = playGamesConnected
     ? "¡Cuenta conectada! Tus logros se sincronizan con Google Play."
     : playGamesConnecting
       ? "Conectando con Google Play Juegos…"
       : playGamesStatus
-        ? ({
-            puente_no_disponible: "No se ha podido abrir el canal de conexión. Vuelve a intentarlo.",
-            sin_respuesta: "Google Play Juegos no responde. Puedes volver a intentarlo.",
-            sdk_unavailable: "Google Play Juegos no está disponible en este dispositivo.",
-            sign_in_in_progress: "La conexión sigue en curso. Espera unos segundos.",
-            sign_in_failed: "No se pudo conectar con Google Play Juegos.",
-            sign_in_timeout: "Google Play Juegos ha tardado demasiado en responder.",
-            not_authenticated: "Conecta tu cuenta para sincronizar tus logros.",
-            unavailable: "Google Play Juegos no está disponible ahora mismo.",
-          }[playGamesStatus.status] ?? "Conecta tu cuenta para sincronizar tus logros.")
+        ? playGamesStatusMessages[playGamesStatus.status] ?? "Conecta tu cuenta para sincronizar tus logros."
         : "Comprobando conexión con Google Play Juegos…";
   const playGamesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
