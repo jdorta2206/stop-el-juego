@@ -49,7 +49,7 @@ import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled, getHalloweenScare } from "@/lib/halloweenEvent";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
-import { applyConfirmedSoloGameReward, clearSoloGameRecovery, readSoloGameRecovery, saveSoloGameRecovery, type SoloGameRecoveryEnvelope } from "@/lib/soloGameRecovery";
+import { applyConfirmedSoloGameReward, clearSoloGameRecovery, discardSoloGamePendingReward, readSoloGameRecovery, saveSoloGameRecovery, type SoloGameRecoveryEnvelope } from "@/lib/soloGameRecovery";
 import { reportHalloweenEvent } from "@/hooks/useHalloweenProgress";
 import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
 import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
@@ -1884,19 +1884,12 @@ export default function SoloGame() {
               rewardedAdType === "double" ? totalScore : 0
             }            onComplete={handleRewardedComplete}
             onSkip={() => {
-              // Persist the user's explicit "continue without reward" choice
-              // before closing the overlay, so a reload cannot resurrect it.
+              // Do not resume until the discarded reward is durably cleared.
               const storage = getSoloGameRecoveryStorage();
               const ownerId = recoveryOwnerRef.current;
-              if (storage && ownerId && ownerId === player?.id) {
-                const snapshot = readSoloGameRecovery(storage, ownerId);
-                if (snapshot && snapshot.gameId === gameSubmissionIdRef.current) {
-                  snapshot.savedAt = Date.now();
-                  snapshot.payload.pendingReward = null;
-                  snapshot.payload.pendingRewardRequestId = null;
-                  snapshot.payload.pendingHint = null;
-                  saveSoloGameRecovery(storage, snapshot);
-                }
+              if (!storage || !ownerId || ownerId !== player?.id
+                || !discardSoloGamePendingReward(storage, ownerId, gameSubmissionIdRef.current || "")) {
+                return;
               }
               resumeGameTimer();
               window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
