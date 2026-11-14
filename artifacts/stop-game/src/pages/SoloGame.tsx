@@ -1856,7 +1856,7 @@ export default function SoloGame() {
 
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
 
-        {rewardedAdType && !adsBlocked && (
+        {rewardedAdType && (!adsBlocked || !!pendingRewardRequestId) && (
           <RewardedAd
             onRequestCreated={(requestId) => {
               if (rewardedAdType === "double") return true;
@@ -1891,7 +1891,7 @@ export default function SoloGame() {
               setRewardedAdType(null);
             }}
             playerId={player?.id}
-            isPremium={adsBlocked}
+            isPremium={adsBlocked && !pendingRewardRequestId}
           />
         )}
 
