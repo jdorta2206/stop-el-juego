@@ -574,18 +574,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         try {
             JSONObject message = new JSONObject(raw);
             String type = message.optString("type", "");
-            if ("STOP_TWA_LIVENESS_ALIVE".equals(type)) {
-                String origin = message.optString("origin", "");
-                String probeId = message.optString("probeId", "");
-                if (messageChannelReady && relationshipValidated && isAllowedOrigin(origin)
-                        && livenessProbePending && probeId.equals(activeLivenessProbeId)) {
-                    livenessProbeReceived = true;
-                    Log.i("STOP_PLAY_GAMES", "TWA liveness probe answered by active page");
-                } else {
-                    Log.w("STOP_PLAY_GAMES", "Rejected invalid TWA liveness response");
-                }
-                return;
-            }
             if (type.startsWith("STOP_PGS_")) {
                 String origin = message.optString("origin", "");
                 if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin)) {
