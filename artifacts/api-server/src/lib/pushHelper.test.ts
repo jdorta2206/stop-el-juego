@@ -1,3 +1,4 @@
+import { notificationKind } from "./notificationKind";
 import { describe, expect, it } from "vitest";
 import { isStalePushEndpointStatus } from "./pushStatus";
 
@@ -14,7 +15,6 @@ describe("push subscription stale endpoint detection", () => {
   );
 });
 
-import { notificationKind } from "./notificationKind";
 
 describe("daily push classification across supported locales", () => {
   it.each([
