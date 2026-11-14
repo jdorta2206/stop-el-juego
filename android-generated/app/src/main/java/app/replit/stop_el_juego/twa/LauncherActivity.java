@@ -633,66 +633,107 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if (playGamesSignInInFlight) {
+            if (allowInteractiveSignIn && !playGamesSignInInFlightInteractive) {
+                pendingInteractivePlayGamesSignIn = true;
+                Log.i("STOP_PLAY_GAMES", "Queued manual sign-in behind the startup authentication check");
+            }
             sendPlayGamesStatus(false, "sign_in_in_progress");
             return;
         }
-        if (isFinishing()) return;
+        if (isFinishing() || isDestroyed()) return;
+
         playGamesSignInInFlight = true;
+        playGamesSignInInFlightInteractive = allowInteractiveSignIn;
         final int signInGeneration = ++playGamesSignInGeneration;
-        // Bound the authentication status check so a stalled SDK cannot block startup.
+
+        // Bound the complete silent-check/interactive-sign-in flow so a stalled SDK
+        // cannot leave the player waiting indefinitely.
         getWindow().getDecorView().postDelayed(() -> {
-            if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration && !isFinishing()) {
+            if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration
+                    && !isFinishing() && !isDestroyed()) {
                 playGamesSignInGeneration++;
+                boolean retryInteractive = pendingInteractivePlayGamesSignIn;
+                pendingInteractivePlayGamesSignIn = false;
                 playGamesSignInInFlight = false;
-                Log.e("STOP_PLAY_GAMES", "Startup/manual authentication check timed out");
-                sendPlayGamesStatus(false, "sign_in_timeout");
+                playGamesSignInInFlightInteractive = false;
+                Log.e("STOP_PLAY_GAMES", "Authentication flow timed out");
+                if (retryInteractive) {
+                    startPlayGamesSignInIfNeeded(true);
+                } else {
+                    sendPlayGamesStatus(false, "sign_in_timeout");
+                }
             }
         }, 15000L);
+
         try {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
-                        if (signInGeneration != playGamesSignInGeneration || isFinishing()) return;
-                        playGamesSignInGeneration++;
-                        if (!task.isSuccessful()) {
-                            Log.w("STOP_PLAY_GAMES", "Authentication status check failed; continuing without blocking startup", task.getException());
-                        }
+                        if (signInGeneration != playGamesSignInGeneration || isFinishing() || isDestroyed()) return;
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
                                 && task.getResult().isAuthenticated();
                         if (authenticated) {
+                            playGamesSignInGeneration++;
                             playGamesSignInInFlight = false;
+                            playGamesSignInInFlightInteractive = false;
+                            pendingInteractivePlayGamesSignIn = false;
                             sendPlayGamesStatus(true, "authenticated");
                             return;
                         }
-                        if (!allowInteractiveSignIn) {
-                            playGamesSignInInFlight = false;
-                            sendPlayGamesStatus(false, "not_authenticated");
-                            Log.i("STOP_PLAY_GAMES", "Startup check complete; leaving interactive sign-in to the player");
+                        if (allowInteractiveSignIn || pendingInteractivePlayGamesSignIn) {
+                            pendingInteractivePlayGamesSignIn = false;
+                            Log.i("STOP_PLAY_GAMES", "Starting interactive sign-in after authentication status check");
+                            startInteractivePlayGamesSignIn(signInGeneration);
                             return;
                         }
-                        try {
-                            PlayGames.getGamesSignInClient(this).signIn()
-                                    .addOnCompleteListener(signInTask -> {
-                                        if (!signInTask.isSuccessful()) {
-                                            Log.e("STOP_PLAY_GAMES", "Manual signIn task failed", signInTask.getException());
-                                        }
-                                        boolean signedIn = signInTask.isSuccessful()
-                                                && signInTask.getResult() != null
-                                                && signInTask.getResult().isAuthenticated();
-                                        playGamesSignInInFlight = false;
-                                        sendPlayGamesStatus(signedIn,
-                                                signedIn ? "authenticated" : "sign_in_failed");
-                                    });
-                        } catch (RuntimeException error) {
-                            playGamesSignInInFlight = false;
-                            Log.e("STOP_PLAY_GAMES", "Manual sign-in could not start", error);
-                            sendPlayGamesStatus(false, "sign_in_failed");
-                        }
+                        playGamesSignInGeneration++;
+                        playGamesSignInInFlight = false;
+                        playGamesSignInInFlightInteractive = false;
+                        Log.i("STOP_PLAY_GAMES", "Startup check complete; leaving interactive sign-in to the player");
+                        sendPlayGamesStatus(false, "not_authenticated");
                     });
         } catch (RuntimeException error) {
-            if (signInGeneration == playGamesSignInGeneration) playGamesSignInGeneration++;
-            playGamesSignInInFlight = false;
+            if (signInGeneration != playGamesSignInGeneration) return;
             Log.e("STOP_PLAY_GAMES", "Authentication status check failed", error);
+            if (allowInteractiveSignIn || pendingInteractivePlayGamesSignIn) {
+                pendingInteractivePlayGamesSignIn = false;
+                startInteractivePlayGamesSignIn(signInGeneration);
+                return;
+            }
+            playGamesSignInGeneration++;
+            playGamesSignInInFlight = false;
+            playGamesSignInInFlightInteractive = false;
+            sendPlayGamesStatus(false, "sign_in_failed");
+        }
+    }
+
+    private void startInteractivePlayGamesSignIn(final int signInGeneration) {
+        if (signInGeneration != playGamesSignInGeneration || isFinishing() || isDestroyed()) return;
+        playGamesSignInInFlightInteractive = true;
+        try {
+            PlayGames.getGamesSignInClient(this).signIn()
+                    .addOnCompleteListener(signInTask -> {
+                        if (signInGeneration != playGamesSignInGeneration || isFinishing() || isDestroyed()) return;
+                        playGamesSignInGeneration++;
+                        playGamesSignInInFlight = false;
+                        playGamesSignInInFlightInteractive = false;
+                        pendingInteractivePlayGamesSignIn = false;
+                        boolean signedIn = signInTask.isSuccessful()
+                                && signInTask.getResult() != null
+                                && signInTask.getResult().isAuthenticated();
+                        if (!signedIn) {
+                            Log.w("STOP_PLAY_GAMES", "Interactive sign-in did not authenticate",
+                                    signInTask.getException());
+                        }
+                        sendPlayGamesStatus(signedIn, signedIn ? "authenticated" : "sign_in_failed");
+                    });
+        } catch (RuntimeException error) {
+            if (signInGeneration != playGamesSignInGeneration) return;
+            playGamesSignInGeneration++;
+            playGamesSignInInFlight = false;
+            playGamesSignInInFlightInteractive = false;
+            pendingInteractivePlayGamesSignIn = false;
+            Log.e("STOP_PLAY_GAMES", "Manual sign-in could not start", error);
             sendPlayGamesStatus(false, "sign_in_failed");
         }
     }
