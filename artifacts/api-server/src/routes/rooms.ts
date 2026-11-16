@@ -2803,6 +2803,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
 
     return {
       kind: "ok" as const,
+      roomId: liveRoom.id,
       pick,
       current,
       usesLeft: limit - (current + 1),
@@ -2836,8 +2837,8 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   // Keep the in-memory map in sync as a fast path for the scoring code; the
   // persisted value remains authoritative across restarts.
   let used = roomSpyUsage.get(code);
-  if (!used || used.roomId !== room.id) {
-    used = { roomId: room.id, uses: new Map<string, number>() };
+  if (!used || used.roomId !== outcome.roomId) {
+    used = { roomId: outcome.roomId, uses: new Map<string, number>() };
     roomSpyUsage.set(code, used);
   }
   used.uses.set(playerId, outcome.current + 1);
