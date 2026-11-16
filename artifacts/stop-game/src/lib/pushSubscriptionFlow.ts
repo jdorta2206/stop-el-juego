@@ -33,8 +33,24 @@ export function waitForPermissionResult<T>(
   let timer: ReturnType<typeof setTimeout> | undefined;
   return new Promise<T>((resolve, reject) => {
     timer = setTimeout(onWaiting, waitingAfterMs);
-    permissionRequest.then(resolve, reject).finally(() => {
-      if (timer !== undefined) clearTimeout(timer);
-    });
+    const clearWaitingTimer = () => {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+    };
+
+    // Use the two handlers directly. A dangling .finally() would create a
+    // second rejected Promise when Android/browser permission rejects.
+    permissionRequest.then(
+      (value) => {
+        clearWaitingTimer();
+        resolve(value);
+      },
+      (error) => {
+        clearWaitingTimer();
+        reject(error);
+      },
+    );
   });
 }
