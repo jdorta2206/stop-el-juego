@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
 const distPath = path.join(packageRoot, "dist");
 const indexPath = path.join(distPath, "index.html");
-const SITE = "https://stopjuegodepalabras.com";
+const SITE = "https://www.stopjuegodepalabras.com";
 
 const escapeHtml = (value = "") => String(value)
   .replace(/&/g, "&amp;")
