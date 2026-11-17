@@ -47,7 +47,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, onRequestCreated, pendingRequestId, recoveryManaged = false, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => boolean | void; onRequestCreated?: (requestId: string) => boolean | void; pendingRequestId?: string | null; recoveryManaged?: boolean; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -65,7 +65,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     if (completedRewardRequestsRef.current.has(requestId)) return false;
     completedRewardRequestsRef.current.add(requestId);
     try {
-      await onCompleteRef.current(amount);
+      await onCompleteRef.current(amount, requestId);
       clearStoredPendingReward();
       setRetryRequestId(null);
       void acknowledgeRewardResult(requestId);
@@ -90,6 +90,16 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   useEffect(() => { initTwaAdBridge(); }, []);
 
   useEffect(() => {
+    // On a restored game, the request ID inside the validated game checkpoint
+    // is authoritative; local metadata is only a compatibility fallback.
+    if (phase !== "pre") return;
+    if (pendingRequestId) {
+      setRetryRequestId(pendingRequestId);
+      setErrorDetail("Hay una recompensa pendiente de una sesión anterior. Comprueba si Google ya la ha confirmado.");
+      setPhase("pending");
+      return;
+    }
+    if (recoveryManaged) return;
     const stored = readStoredPendingReward();
     if (!stored) return;
     if (stored.playerId !== (playerId || "guest")
@@ -98,12 +108,12 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     setRetryRequestId(stored.requestId);
     setErrorDetail("Hay una recompensa pendiente de una sesión anterior. Comprueba si Google ya la ha confirmado.");
     setPhase("pending");
-  }, [playerId, rewardType, rewardAmount]);
+  }, [playerId, rewardType, rewardAmount, pendingRequestId, phase]);
 
   const startWatching = async () => {
     // Premium and unmounted overlays must never request or grant an ad reward.
     if (!ADMOB_ADS_ENABLED || isPremium || !mountedRef.current) {
-      if (mountedRef.current) onSkipRef.current();
+      if (mountedRef.current) continueWithoutReward();
       return;
     }
     setRewardedAdPlayerId(playerId);
@@ -120,6 +130,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
       if (bridgeReady || knownTwa) {
         const result = await requestRewardedAd(placement, (requestId) => {
+          let requestStored = false;
           try {
             window.localStorage.setItem(PENDING_REWARD_STORAGE_KEY, JSON.stringify({
               requestId,
@@ -128,7 +139,16 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
               rewardAmount,
               createdAt: Date.now(),
             } satisfies StoredPendingReward));
+            requestStored = true;
           } catch {}
+          if (!requestStored) {
+            throw new Error("No se pudo guardar la solicitud del anuncio en este dispositivo.");
+          }
+          const persisted = onRequestCreated?.(requestId);
+          if (persisted === false) {
+            clearStoredPendingReward();
+            throw new Error("No se pudo guardar la partida antes de abrir el anuncio.");
+          }
         });
         // The server only reports source=admob after validating Google's signed SSV callback.
         if (result.rewarded === true && result.source === "admob") {
@@ -175,7 +195,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
           setPhase("error");
           timeoutRef.current = window.setTimeout(() => {
             timeoutRef.current = null;
-            if (mountedRef.current) onSkipRef.current();
+            if (mountedRef.current) continueWithoutReward();
           }, detail ? 5000 : 900);
         }
         return;
@@ -186,7 +206,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       setPhase("error");
       timeoutRef.current = window.setTimeout(() => {
         timeoutRef.current = null;
-        if (mountedRef.current) onSkipRef.current();
+        if (mountedRef.current) continueWithoutReward();
       }, 5000);
     } catch (error) {
       const stored = readStoredPendingReward();
@@ -207,7 +227,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       setPhase("error");
       timeoutRef.current = window.setTimeout(() => {
         timeoutRef.current = null;
-        if (mountedRef.current) onSkipRef.current();
+        if (mountedRef.current) continueWithoutReward();
       }, 5000);
     }
   };
@@ -249,9 +269,16 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
   if (isPremium) return null;
   const continueWithoutReward = () => {
+    // The parent must durably clear the game checkpoint before this overlay
+    // forgets the request ID. Keep the confirmation available if it cannot.
+    const skipped = onSkipRef.current();
+    if (skipped === false) {
+      setErrorDetail("No se pudo guardar que has descartado la recompensa. La partida sigue protegida; inténtalo de nuevo.");
+      setPhase("error");
+      return;
+    }
     clearStoredPendingReward();
     setRetryRequestId(null);
-    onSkipRef.current();
   };
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : phase === "pending" ? "Confirmación pendiente" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={continueWithoutReward} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar o confirmar el anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={continueWithoutReward} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}
