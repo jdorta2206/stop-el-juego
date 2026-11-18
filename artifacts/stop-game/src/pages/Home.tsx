@@ -29,12 +29,28 @@ import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHallowee
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
 import { getLastPlayGamesStatus, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
-import { trackClientError } from "@/lib/analyticsClient";
+import { trackClientError, trackAnalyticsEvent } from "@/lib/analyticsClient";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
 
 export default function Home() {
+  useEffect(() => {
+    const startedAt = performance.now();
+    trackAnalyticsEvent("lobby_view", { metadata: { phase: "home_mount" } });
+    const frame = window.requestAnimationFrame(() => {
+      trackAnalyticsEvent("lobby_ready", {
+        metadata: { phase: "home_first_frame", durationMs: Math.max(0, Math.round(performance.now() - startedAt)) },
+      });
+    });
+    const onPageHide = () => trackAnalyticsEvent("lobby_page_exit", { metadata: { phase: "home_pagehide" } });
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, []);
+
   const { player } = usePlayer();
   const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
   const adsBlocked = isPremium || premiumLoading || !!premiumError;
@@ -156,12 +172,18 @@ export default function Home() {
       credentials: "include",
       signal: controller.signal,
     })
-      .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
+      .then(r => {
+        if (r.ok) return r.json();
+        const error = new Error("daily-status") as Error & { status?: number };
+        error.status = r.status;
+        throw error;
+      })
       .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
       .catch((error) => {
         if (controller.signal.aborted) return;
         setDailyDone(null);
-        trackClientError(error);
+        const status = error && typeof error === "object" && "status" in error ? Number((error as { status?: unknown }).status) : null;
+        trackClientError(error, null, { endpoint: "/api/daily/status", method: "GET", phase: "lobby_daily_status", status });
       });
     return () => controller.abort();
   }, [player?.id, player?.loginMethod, lang]);
