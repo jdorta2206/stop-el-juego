@@ -43,9 +43,7 @@ La Z es una letra normal en español, pero **no se usa antes de E o I** (excepto
 
 ## Colores con Z
 
-- **Zafiro** (azul intenso)
-
-Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
+No hay un ejemplo de color de uso general y claramente asentado que convenga recomendar aquí. «Zafiro» nombra principalmente una gema; decir «azul zafiro» describe un tono, pero no convierte automáticamente «zafiro» en una respuesta indiscutible para la categoría «color». Acordad si aceptáis nombres de tonos derivados de minerales.
 
 ## Países con Z
 
@@ -57,7 +55,7 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 ## Ciudades con Z
 
 - **Zaragoza** (España)
-- **Zurich** (Suiza)
+- **Zúrich** (Suiza; forma española)
 - **Zamora** (España o Ecuador)
 - **Zonguldak** (Turquía)
 - **Zacatecas** (México)
@@ -80,16 +78,18 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 - **Zócalo**
 - **Zapallo** (en cocina)
 
-## Deportes con Z
+## Deportes y actividades con Z
 
-- **Zumba** (clase deportiva muy popular)
-- **Zen** (meditación, no exactamente deporte)
+- **Zumba** (actividad dirigida de baile y ejercicio; aceptadla solo si vuestra categoría incluye actividades físicas, no únicamente deportes reglados).
+
+«Zen» no es un deporte: se refiere a una tradición o práctica relacionada con la meditación.
 
 ## Profesiones con Z
 
-- **Zapatero** (la apuesta segura)
-- **Zoólogo** (científico de animales)
-- **Zumbador** (poco usado)
+- **Zapatero** (persona que fabrica o repara calzado)
+- **Zoólogo** (especialista en zoología)
+
+«Zumbador» no es una profesión: no lo uses como respuesta de esta categoría.
 
 ## Marcas con Z
 
@@ -126,12 +126,12 @@ Estos son nombres comerciales; incluidlos solo si las reglas de vuestra partida 
 |---|---|
 | Nombre | Zoé |
 | Animal | Zorro |
-| Color | Zafiro |
+| Color | (sin ejemplo inequívoco) |
 | País | Zimbabue |
 | Ciudad | Zaragoza |
 | Comida | Zanahoria |
 | Objeto | Zapato |
-| Deporte | Zumba |
+| Actividad física (si se admite) | Zumba |
 | Marca (si se admiten marcas) | Zara |
 | Famoso | Zinedine Zidane |
 
