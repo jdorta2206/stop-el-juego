@@ -284,7 +284,8 @@ export default function Room() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const roomQueryKey = getGetRoomQueryKey(roomCode || "");
-  const roomLoadTelemetryRef = useRef<string>("");
+  const roomLoadedTelemetryRef = useRef<string>("");
+  const roomFailedTelemetryRef = useRef<string>("");
   const { data: room, error } = useGetRoom(roomCode || "", {
     query: {
       refetchInterval: pollingInterval,
@@ -535,14 +536,15 @@ export default function Room() {
 
   useEffect(() => {
     if (!roomCode) return;
-    roomLoadTelemetryRef.current = "";
+    roomLoadedTelemetryRef.current = "";
+    roomFailedTelemetryRef.current = "";
     trackAnalyticsEvent("lobby_room_load_started", { mode: "multiplayer", metadata: { phase: "room_fetch_started" } });
   }, [roomCode]);
   useEffect(() => {
     if (!roomCode || !room) return;
     const key = `${roomCode}:loaded`;
-    if (roomLoadTelemetryRef.current === key) return;
-    roomLoadTelemetryRef.current = key;
+    if (roomLoadedTelemetryRef.current === key) return;
+    roomLoadedTelemetryRef.current = key;
     trackAnalyticsEvent("lobby_room_loaded", { mode: "multiplayer", metadata: {
       phase: "room_data_received",
       roomStatus: String((room as any)?.status ?? "unknown").slice(0, 32),
@@ -553,8 +555,8 @@ export default function Room() {
     if (!roomCode || !error) return;
     const detail = error as any;
     const signature = `${roomCode}:error:${String(detail?.status ?? detail?.statusCode ?? detail?.message ?? "unknown").slice(0, 80)}`;
-    if (roomLoadTelemetryRef.current === signature) return;
-    roomLoadTelemetryRef.current = signature;
+    if (roomFailedTelemetryRef.current === signature) return;
+    roomFailedTelemetryRef.current = signature;
     trackAnalyticsEvent("lobby_room_load_failed", { mode: "multiplayer", metadata: {
       phase: "room_fetch_failed",
       status: Number.isFinite(Number(detail?.status ?? detail?.statusCode)) ? Number(detail?.status ?? detail?.statusCode) : null,
