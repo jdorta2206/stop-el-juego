@@ -28,7 +28,7 @@ Casi inexistentes:
 
 En esta categoría es difícil encontrar nombres propios asentados. «Ñoño» es un apodo o nombre de personaje en algunas obras, no un ejemplo general de nombre de pila. «Ñato/ñata» es un adjetivo o apodo regional, no un nombre propio.
 
-> ⚠️ Si dices que "Ñoño" es nombre, tu grupo te mirará raro. Pero técnicamente es un nombre de personaje famoso.
+> «Ñoño» puede funcionar como nombre de personaje si vuestra partida admite personajes ficticios; no es un nombre de pila habitual.
 
 ## Apellidos con Ñ
 
@@ -36,7 +36,7 @@ No conviene afirmar que no existe ningún apellido que empiece por Ñ sin una fu
 
 Algunos apellidos conocidos contienen Ñ, pero no sirven para una ronda estricta con Ñ inicial:
 
-- **Núñez, Peñalosa, Iñaki, Muñoz, Ibañez**
+- **Núñez, Peñalosa, Muñoz, Ibáñez** (contienen Ñ, pero no empiezan por ella)
 
 ## Animales con Ñ
 
@@ -53,11 +53,11 @@ Algunos apellidos conocidos contienen Ñ, pero no sirven para una ronda estricta
 
 ## Objetos / cosas con Ñ
 
-- **Ñudo** (variante antigua de "nudo", aceptada por la RAE)
+- **Ñudo** (variante poco usada de «nudo»; comprueba su aceptación en el diccionario y en las reglas de la partida)
 
-## Países, ciudades, marcas con Ñ
+## Países, ciudades y marcas con Ñ
 
-**Ninguno reconocido empieza por Ñ.** Mejor dejarlo en blanco.
+No hay países soberanos cuyo nombre habitual en español empiece por Ñ. En cambio, sí existen topónimos como **Ñemby**, ciudad de Paraguay. Para marcas, utiliza solo nombres comerciales cuya existencia puedas comprobar y que estén permitidos por las reglas del grupo.
 
 ## Famosos con Ñ
 
@@ -87,7 +87,7 @@ Con estas respuestas tienes algunos ejemplos para practicar; no hay datos que pe
 
 ## ¿Por qué la Ñ es tan pobre?
 
-La letra Ñ es **única del español** (y de algunas lenguas relacionadas como gallego, asturiano, vasco…). Pero curiosamente, **no hay raíces latinas que empiecen por Ñ**. La Ñ moderna nació de la abreviatura medieval de "nn" (annus → año). Por eso casi todas las palabras españolas con Ñ tienen la Ñ **en medio** (año, niño, español, mañana…), no al principio.
+La letra Ñ forma parte del alfabeto español y también se utiliza en otras lenguas, como el gallego y el asturiano. Su forma procede de una abreviatura medieval de la doble ene (nn), visible en la evolución de voces como *annus* a *año*. Aunque muchas palabras frecuentes llevan Ñ en medio, también existen voces que empiezan por esta letra, entre ellas préstamos y regionalismos.
 
 Entre las voces que empiezan por Ñ hay palabras patrimoniales y préstamos de lenguas indígenas, además de regionalismos. Por eso no es correcto reducirlas a extranjerismos u onomatopeyas.
 
