@@ -55,11 +55,15 @@ async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () 
   try {
     const headers: Record<string, string> = {};
     let token: string | null = null;
-    try { token = localStorage.getItem(SESSION_TOKEN_KEY); if (token) headers["x-stop-token"] = token; } catch {}
+    try {
+      token = localStorage.getItem(SESSION_TOKEN_KEY) || sessionStorage.getItem(SESSION_TOKEN_KEY);
+      if (token) headers["x-stop-token"] = token;
+    } catch {}
     const canCommitCurrentSession = () => {
       if (!shouldCommit()) return false;
       try {
-        if (localStorage.getItem(SESSION_TOKEN_KEY) !== token) return false;
+        const currentToken = localStorage.getItem(SESSION_TOKEN_KEY) || sessionStorage.getItem(SESSION_TOKEN_KEY);
+        if (currentToken !== token) return false;
         const raw = localStorage.getItem(STORAGE_KEY);
         const current = raw ? JSON.parse(raw) : null;
         return (typeof current?.id === "string" ? current.id : null) === expectedPlayerId;
@@ -75,11 +79,21 @@ async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () 
     if (!res.ok) return null;
 
     const data = await res.json();
-    if (!data?.id || !data.name) return null;
+    if (typeof data?.id !== "string" || !data.id.trim()) return null;
+    if (expectedPlayerId && data.id !== expectedPlayerId) return null;
     if (!canCommitCurrentSession()) return null;
-    if (data.token) { try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {} }
 
-    return { id: data.id, name: String(data.name).trim().slice(0, 14), avatarColor: data.avatarColor || AVATAR_COLORS[0], loginMethod: data.loginMethod ?? null, picture: data.picture ?? null, fbAccessToken: null };
+    // /auth/me can confirm a valid OAuth session before a player_scores row
+    // exists. Persist the refreshed credential even when there is no complete
+    // profile yet; otherwise the next guarded request would still use an
+    // expired token and receive 403.
+    if (typeof data.token === "string" && data.token.trim()) {
+      try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {}
+    }
+
+    if (typeof data.name !== "string" || !data.name.trim()) return null;
+
+    return { id: data.id, name: data.name.trim().slice(0, 14), avatarColor: data.avatarColor || AVATAR_COLORS[0], loginMethod: data.loginMethod ?? null, picture: data.picture ?? null, fbAccessToken: null };
   } catch { return null; }
 }
 
