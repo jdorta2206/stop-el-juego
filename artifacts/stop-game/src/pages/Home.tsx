@@ -174,8 +174,9 @@ export default function Home() {
     })
       .then(r => {
         if (r.ok) return r.json();
-        const error = new Error("daily-status") as Error & { status?: number };
+        const error = new Error("daily-status") as Error & { status?: number; requestId?: string };
         error.status = r.status;
+        error.requestId = r.headers.get("X-Request-Id") || undefined;
         throw error;
       })
       .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
@@ -183,7 +184,10 @@ export default function Home() {
         if (controller.signal.aborted) return;
         setDailyDone(null);
         const status = error && typeof error === "object" && "status" in error ? Number((error as { status?: unknown }).status) : null;
-        trackClientError(error, null, { endpoint: "/api/daily/status", method: "GET", phase: "lobby_daily_status", status });
+        const requestId = error && typeof error === "object" && "requestId" in error ? String((error as { requestId?: unknown }).requestId ?? "") : "";
+        trackClientError(error, null, { endpoint: "/api/daily/status", method: "GET", phase: "lobby_daily_status", status, requestId: requestId || null });
+        if (status === 408 || status === 504) trackAnalyticsEvent("lobby_api_timeout", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null } });
+        if (status === 401 || status === 403) trackAnalyticsEvent("lobby_auth_failed", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null } });
       });
     return () => controller.abort();
   }, [player?.id, player?.loginMethod, lang]);
