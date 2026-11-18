@@ -9,6 +9,12 @@ const router: IRouter = Router();
 const PLATFORMS = new Set(["web", "android", "ios"]);
 const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set([
   "game_lobby_view",
+  "lobby_view",
+  "lobby_ready",
+  "lobby_api_timeout",
+  "lobby_auth_failed",
+  "lobby_page_exit",
+  "rewarded_ad_pending",
   "game_complete",
   "rewarded_ad_requested",
   "rewarded_ad_completed",
