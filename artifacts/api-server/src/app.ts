@@ -98,6 +98,7 @@ app.use(cors({
     return cb(null, false);
   },
   credentials: true,
+  exposedHeaders: ["X-Request-Id"],
 }));
 app.use(cookieParser());
 app.use(express.json({ limit: "256kb" }));
