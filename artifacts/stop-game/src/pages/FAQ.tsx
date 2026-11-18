@@ -1,105 +1,84 @@
 import { Layout } from "@/components/Layout";
 
-export default function FAQ() {
-  const faqs = [
-    {
-      q: "¿Es gratis jugar a STOP?",
-      a: "Sí, STOP es completamente gratuito. Puedes jugar todas las partidas que quieras sin pagar nada. Ofrecemos packs opcionales (Premium y Mundial) para quienes quieran apoyar el desarrollo y obtener cosméticos exclusivos.",
-    },
-    {
-      q: "¿Cómo puedo registrarme?",
-      a: "Puedes registrarte con tu cuenta de Google, Facebook, Instagram, TikTok o como invitado. El registro es rápido y solo requiere un nombre de usuario y un correo electrónico.",
-    },
-    {
-      q: "¿Qué necesito para jugar?",
-      a: "Solo necesitas un navegador web moderno (Chrome, Firefox, Safari, Edge) y conexión a Internet. También puedes instalar la app como PWA en tu dispositivo móvil para una experiencia más nativa.",
-    },
-    {
-      q: "¿Cómo funcionan las monedas?",
-      a: "Ganas monedas al final de cada partida en función de tu puntuación. También puedes obtener monedas con el Pack Premium o participando en eventos especiales. Las monedas se gastan en la tienda para comprar cosméticos.",
-    },
-    {
-      q: "¿Qué son los cosméticos?",
-      a: "Los cosméticos son elementos decorativos que personalizan tu perfil: avatares, marcos, fondos y títulos. No afectan a la jugabilidad, pero te permiten destacar y mostrar tu estilo.",
-    },
-    {
-      q: "¿Cómo funciona el sistema de experiencia y niveles?",
-      a: "Ganas experiencia (XP) en cada partida. Al acumular suficiente XP, subes de nivel. Cada nivel desbloquea nuevas recompensas y cosméticos. Los niveles también influyen en tu posición en el ranking.",
-    },
-    {
-      q: "¿Qué es el Pack Mundial?",
-      a: "El Pack Mundial es un pack de pago único que incluye 27 cosméticos exclusivos relacionados con el fútbol y el Mundial (avatares de banderas, balones, marcos, fondos). Es la manera más rápida de tener una colección completa y apoyar el juego.",
-    },
-    {
-      q: "¿Puedo jugar con amigos?",
-      a: "Sí, puedes crear salas privadas y compartir el código con tus amigos. También puedes seguir a otros jugadores y ver su actividad en el ranking de amigos.",
-    },
-    {
-      q: "¿Hay límite de jugadores por sala?",
-      a: "Las salas multijugador tienen un límite de 8 jugadores. Esto asegura partidas dinámicas y sin esperas excesivas.",
-    },
-    {
-      q: "¿Cómo puedo contactar con soporte?",
-      a: "Puedes utilizar el formulario de contacto o escribir a dorynex@stopjuegodepalabras.com.",
-    },
-    {
-      q: "¿Puedo jugar sin conexión?",
-      a: "No, STOP requiere conexión a Internet para funcionar. Las partidas se sincronizan en tiempo real con el servidor para garantizar una experiencia justa y sin trampas.",
-    },
-    {
-      q: "¿Cómo se puntúa en STOP?",
-      a: "Cada respuesta válida y original suma 10 puntos. Si usas el poder de STOP, obtienes +5 puntos. El espía cuesta 10 puntos. En multijugador, las puntuaciones se multiplican por 1.5 al finalizar la partida.",
-    },
-    {
-      q: "¿Qué son los modos de juego?",
-      a: "STOP tiene varios modos: Solo (contra IA), Multijugador (en tiempo real), Reto Diario (un desafío único cada día) y Blitz (partidas rápidas de 30 segundos).",
-    },
-    {
-      q: "¿Qué es el Pack Premium?",
-      a: "Es una suscripción mensual que elimina anuncios, duplica las monedas ganadas, otorga un 10% extra de experiencia y desbloquea cosméticos exclusivos. Cuesta 1,99 € al mes.",
-    },
-    {
-      q: "¿Puedo jugar en inglés?",
-      a: "Sí, STOP está disponible en español, inglés, portugués y francés. Puedes cambiar el idioma en el selector de idioma del menú.",
-    },
-    {
-      q: "¿Qué pasa si pierdo mi progreso?",
-      a: "Tu progreso está asociado a tu cuenta. Si inicias sesión en otro dispositivo, tu ranking, monedas y cosméticos estarán disponibles.",
-    },
-    {
-      q: "¿Cómo puedo mejorar mi vocabulario con STOP?",
-      a: "Jugando regularmente, prestando atención a las palabras de otros jugadores, y practicando con letras difíciles. También puedes leer nuestros artículos del blog para aprender nuevas palabras.",
-    },
-    {
-      q: "¿STOP tiene trampas?",
-      a: "No. Todas las partidas son validadas por el servidor. Las palabras se verifican automáticamente y las respuestas repetidas no suman puntos.",
-    },
-    {
-      q: "¿Cómo funcionan los torneos?",
-      a: "Próximamente. Los torneos serán eventos especiales con inscripción previa y partidas eliminatorias. Los ganadores recibirán premios exclusivos.",
-    },
-    {
-      q: "¿Puedo cambiar mi nombre de usuario?",
-      a: "Sí, puedes cambiar tu nombre en el perfil. Solo tienes que ir a tu perfil, editar el nombre y guardar.",
-    },
-  ];
+const faqs = [
+  {
+    q: "¿Qué es STOP El Juego?",
+    a: "Es un juego de palabras por categorías. En cada ronda recibes una letra y debes escribir respuestas que empiecen por ella y encajen en las categorías que aparecen en pantalla.",
+  },
+  {
+    q: "¿Cómo empiezo una partida?",
+    a: "Abre el juego, elige una modalidad disponible y sigue las indicaciones de la pantalla. Antes de escribir, comprueba la letra de la ronda y las categorías que debes completar.",
+  },
+  {
+    q: "¿Cuánto dura una ronda?",
+    a: "El tiempo depende de la modalidad y de la configuración de la partida. El contador visible durante la ronda es la referencia válida; no todas las modalidades utilizan la misma duración.",
+  },
+  {
+    q: "¿Qué ocurre cuando pulso STOP?",
+    a: "En las modalidades que permiten detener la ronda, el control STOP cierra el tiempo de respuesta. Si nadie la termina antes, la ronda se cierra cuando llega a cero. Sigue siempre el comportamiento que indique el modo elegido.",
+  },
+  {
+    q: "¿Qué hace que una respuesta sea válida?",
+    a: "Debe empezar por la letra de la ronda y corresponder a la categoría solicitada. Si una palabra es dudosa, consulta las reglas de la partida y los criterios que se muestran en el resultado.",
+  },
+  {
+    q: "¿Las respuestas repetidas puntúan igual?",
+    a: "La coincidencia con las respuestas de otros participantes puede afectar a la puntuación. El cálculo concreto depende de la modalidad, por lo que el resultado de la partida es la referencia para esa ronda.",
+  },
+  {
+    q: "¿Puedo jugar sin otras personas?",
+    a: "Sí. El modo individual permite jugar por tu cuenta contra la inteligencia artificial. También puedes elegir una modalidad multijugador cuando quieras compartir la partida.",
+  },
+  {
+    q: "¿Cómo invito a mis amigos?",
+    a: "Entra en el modo multijugador, crea una sala y comparte el código que se muestra. Tus amigos podrán utilizarlo para entrar en esa partida.",
+  },
+  {
+    q: "¿Necesito conexión a Internet?",
+    a: "Sí. STOP es un juego online: necesita conexión para cargar la plataforma y utilizar las funciones de partida y sincronización.",
+  },
+  {
+    q: "¿Tengo que crear una cuenta?",
+    a: "Puedes acceder como invitado cuando esa opción esté disponible. Iniciar sesión permite utilizar las funciones vinculadas a una cuenta, como conservar el progreso asociado a ella.",
+  },
+  {
+    q: "¿Se puede jugar desde un móvil?",
+    a: "Sí. Puedes abrir STOP desde el navegador de un móvil, una tablet o un ordenador. La presentación se adapta al dispositivo.",
+  },
+  {
+    q: "¿Dónde puedo consultar reglas y estrategias?",
+    a: "Consulta la guía de cómo jugar para conocer la dinámica de una ronda y visita el blog para leer artículos sobre vocabulario, letras y estrategias.",
+  },
+  {
+    q: "¿Cómo contacto con el equipo?",
+    a: "Puedes utilizar el formulario de contacto o escribir a dorynex@stopjuegodepalabras.com. Describe el problema e indica el dispositivo y el navegador; nunca envíes contraseñas ni datos de pago.",
+  },
+];
 
+export default function FAQ() {
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto px-4 py-12">
-        <h1 className="text-4xl font-black text-white mb-6">Preguntas frecuentes (FAQ)</h1>
-        <p className="text-white/70 mb-8">
-          Encuentra respuestas a las preguntas más comunes sobre STOP. Si no encuentras lo que buscas, contáctanos.
+      <main className="max-w-3xl mx-auto px-4 py-12">
+        <h1 className="text-4xl font-black text-white mb-4">Preguntas frecuentes sobre STOP El Juego</h1>
+        <p className="text-white/75 leading-relaxed mb-8">
+          Respuestas prácticas sobre las rondas, las modalidades, las respuestas, las cuentas y el uso de STOP desde distintos dispositivos.
+          Si una función cambia según el modo, sigue las instrucciones que aparecen dentro de la partida.
         </p>
         <div className="space-y-4">
-          {faqs.map((item, index) => (
-            <div key={index} className="bg-white/5 rounded-2xl p-5 border border-white/10">
-              <h3 className="text-white font-bold text-lg mb-2">{item.q}</h3>
-              <p className="text-white/70">{item.a}</p>
-            </div>
+          {faqs.map((item) => (
+            <section key={item.q} className="bg-white/5 rounded-2xl p-5 border border-white/10">
+              <h2 className="text-white font-bold text-lg mb-2">{item.q}</h2>
+              <p className="text-white/75 leading-relaxed">{item.a}</p>
+            </section>
           ))}
         </div>
-      </div>
+        <nav aria-label="Más información" className="mt-10 flex flex-wrap gap-4 text-secondary">
+          <a href="/como-jugar" className="hover:underline">Cómo jugar</a>
+          <a href="/como-funciona" className="hover:underline">Cómo funciona</a>
+          <a href="/blog" className="hover:underline">Blog</a>
+          <a href="/contacto" className="hover:underline">Contacto</a>
+        </nav>
+      </main>
     </Layout>
   );
 }
