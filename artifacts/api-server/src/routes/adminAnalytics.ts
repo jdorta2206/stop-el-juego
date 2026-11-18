@@ -3,8 +3,18 @@ import { timingSafeEqual } from "crypto";
 import { db, indexesReady } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { authLimiter } from "../middlewares/rateLimit";
+import { ensureAnalyticsReady } from "./analytics";
 
 const router: IRouter = Router();
+
+router.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+  next();
+});
 
 router.use((_req, res, next) => {
   if (!indexesReady()) {
@@ -28,24 +38,46 @@ function basicAuth(req: Request, res: Response, next: NextFunction) {
   const user = process.env["ADMIN_PANEL_USER"];
   const pass = process.env["ADMIN_PANEL_PASSWORD"];
   if (!user || !pass) return res.status(503).send("Panel no configurado");
-  const [scheme, encoded] = String(req.headers.authorization ?? "").split(" ");
-  if (scheme === "Basic" && encoded) {
+  const header = String(req.headers.authorization ?? "");
+  const match = /^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(header);
+  const encoded = match?.[1];
+  if (encoded && Buffer.from(encoded, "base64").toString("base64") === encoded) {
     const decoded = Buffer.from(encoded, "base64").toString("utf8");
-    const i = decoded.indexOf(":");
-    const okUser = safeEqual(decoded.slice(0, i), user);
-    const okPass = safeEqual(decoded.slice(i + 1), pass);
-    if (okUser && okPass) return next();
+    const separator = decoded.indexOf(":");
+    if (separator > 0) {
+      const okUser = safeEqual(decoded.slice(0, separator), user);
+      const okPass = safeEqual(decoded.slice(separator + 1), pass);
+      if (okUser && okPass) {
+        next();
+        return;
+      }
+    }
   }
   res.set("WWW-Authenticate", 'Basic realm="STOP Analytics", charset="UTF-8"').status(401).send("Acceso restringido");
 }
 
 function n(value: unknown): number { return Number(value ?? 0); }
+function latencyValue(value: unknown): string { return value == null || !Number.isFinite(Number(value)) ? "Sin datos" : `${Math.round(Number(value))} ms`; }
+function safeDiagnosticText(value: unknown, max = 700): string {
+  return String(value ?? "")
+    .slice(0, max)
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [redactado]")
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[token redactado]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email redactado]")
+    .replace(/([?&](?:token|access_token|refresh_token|authorization|key|api_key|code)=)[^&#\s]*/gi, "$1[redactado]")
+    .replace(/(token|password|cookie|secret|authorization|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=[redactado]")
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[ip redactada]")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[id redactado]");
+}
 function esc(value: unknown): string {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-router.get("/", authLimiter, basicAuth, async (_req, res) => {
+router.get("/", authLimiter, basicAuth, async (req, res) => {
   try {
+    // STOP Analytics has its own idempotent schema bootstrap, separate from ensureIndexes().
+    // Wait for it explicitly so the admin panel cannot query analytics tables too early.
+    await ensureAnalyticsReady();
     const online = await db.execute(sql`
       SELECT platform, COUNT(*)::int AS active
       FROM public.analytics_sessions
@@ -54,10 +86,10 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
       ORDER BY platform
     `);
 
-    // "game_start" no es directamente una partida: Multiplayer puede emitirlo
-    // por participante y por ronda. Para STOP Control lo normalizamos a una
-    // unidad comparable con game_complete: una partida-jugador.
-    // Solo contamos una vez cada jugador y sala para los starts de servidor.
+    // "game_start" no identifica una partida única: no incluye un gameId
+    // ni un roomId correlacionable. Este KPI cuenta jugadores/sesiones distintos
+    // por plataforma y día, no partidas iniciadas; repetir partidas en el día
+    // no incrementa el contador. Los finales siguen siendo eventos registrados.
     const today = await db.execute(sql`
       WITH day_events AS (
         SELECT *
@@ -136,7 +168,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
     const activeSessions = await db.execute(sql`
       SELECT
         s.player_id,
-        COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE s.player_id END) AS player_name,
+        COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE 'Cuenta registrada' END) AS player_name,
         s.platform,
         s.app_version,
         s.language,
@@ -160,7 +192,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
 
     const adViewers = await db.execute(sql`
       SELECT
-        COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE e.player_id END) AS player_name,
+        COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE 'Cuenta registrada' END) AS player_name,
         e.platform,
         e.event_name,
         MAX(e.created_at) AS last_seen,
@@ -186,6 +218,232 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
         AND created_at >= NOW() - INTERVAL '7 days'
         AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
     `);
+
+    // Read-only diagnostics for solo-vs-AI play. game_start stores its mode in
+    // the mode column; game_complete stores it in metadata_json.mode. The
+    // client/server session identifiers are not guaranteed to match, so we
+    // deliberately report separate totals instead of fabricating abandoned
+    // games or claiming a per-game join.
+    const queryText = (value: unknown, max: number) =>
+      typeof value === "string" ? value.trim().slice(0, max) : "";
+    const requestedDays = Number.parseInt(queryText(req.query.days, 2), 10);
+    const diagnosticDays = Number.isFinite(requestedDays) ? Math.min(30, Math.max(1, requestedDays)) : 7;
+    const requestedPlatform = queryText(req.query.platform, 12);
+    const diagnosticPlatform = ["web", "android", "ios"].includes(requestedPlatform) ? requestedPlatform : "all";
+    const diagnosticVersion = queryText(req.query.version, 32);
+    const diagnosticLanguage = queryText(req.query.language, 16);
+    const requestedMode = queryText(req.query.mode, 16);
+    const diagnosticMode = ["solo", "multiplayer"].includes(requestedMode) ? requestedMode : "all";
+
+    const soloDiagnostics = await db.execute(sql`
+      WITH normalized AS (
+        SELECT event_name, player_id, session_id, platform, app_version, language,
+               CASE
+                 WHEN event_name = 'game_start' THEN NULLIF(mode, '')
+                 ELSE NULLIF(metadata_json::jsonb ->> 'mode', '')
+               END AS game_mode
+        FROM public.analytics_events
+        WHERE trusted = TRUE
+          AND event_name IN ('game_start', 'game_complete')
+          AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+          AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+          AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+          AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      )
+      SELECT platform, app_version, language, COALESCE(game_mode, '(sin modo)') AS game_mode,
+             COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
+             COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completions,
+             COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS starters,
+             COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completers
+      FROM normalized
+      WHERE (
+        ${diagnosticMode} = 'all'
+        OR (${diagnosticMode} = 'solo' AND game_mode IN ('normal', 'quick', 'chaos', 'random', 'daily'))
+        OR (${diagnosticMode} = 'multiplayer' AND COALESCE(game_mode, '') NOT IN ('', 'normal', 'quick', 'chaos', 'random', 'daily'))
+      )
+      GROUP BY platform, app_version, language, game_mode
+      ORDER BY starts DESC, completions DESC
+      LIMIT 150
+    `);
+
+    const diagnosticErrors = await db.execute(sql`
+      SELECT event_name, platform, app_version, language, created_at,
+             LEFT(COALESCE(metadata_json::jsonb ->> 'message', metadata_json), 600) AS details
+      FROM public.analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('client_error', 'api_error')
+        AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+        AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+        AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+        AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      ORDER BY created_at DESC
+      LIMIT 100
+    `);
+
+    const diagnosticRows = (soloDiagnostics.rows as any[]).map((row) => {
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      return `<tr><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td>${esc(row.game_mode)}</td><td>${n(row.starts)}</td><td>${n(row.completions)}</td><td>${n(row.starters)}</td><td>${n(row.completers)}</td></tr>`;
+    }).join("");
+
+    const diagnosticErrorRows = (diagnosticErrors.rows as any[]).map((row) => {
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      const when = row.created_at ? new Date(String(row.created_at)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
+      return `<tr><td>${when}</td><td>${esc(row.event_name)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(safeDiagnosticText(row.details || "Sin detalle", 600))}</code></td></tr>`;
+    }).join("");
+
+    const rootCauseEvents = await db.execute(sql`
+      SELECT event_name, platform, app_version, language, created_at,
+             LEFT(metadata_json, 700) AS details
+      FROM public.analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('api_error','client_error','lobby_view','lobby_ready','lobby_auth_resolved','lobby_daily_status_started','lobby_daily_status_succeeded','lobby_daily_status_failed','lobby_room_load_started','lobby_room_loaded','lobby_room_load_failed','lobby_api_timeout','lobby_auth_failed','lobby_page_exit','rewarded_ad_pending','rewarded_ad_failed','solo_round_validation')
+        AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+        AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+        AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+        AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      ORDER BY created_at DESC
+      LIMIT 150
+    `);
+
+    const lobbyLatency = await db.execute(sql`
+      WITH samples AS (
+        SELECT CASE
+          WHEN (metadata_json::jsonb ->> 'durationMs') ~ '^[0-9]+$'
+          THEN (metadata_json::jsonb ->> 'durationMs')::double precision
+          ELSE NULL
+        END AS duration_ms
+        FROM public.analytics_events
+        WHERE trusted = TRUE
+          AND event_name = 'lobby_ready'
+          AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+          AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+          AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+          AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      )
+      SELECT COUNT(duration_ms)::int AS samples,
+             percentile_cont(0.50) WITHIN GROUP (ORDER BY duration_ms) AS p50,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY duration_ms) AS p75,
+             percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95
+      FROM samples
+    `);
+
+    const lobbyStageLatency = await db.execute(sql`
+      SELECT event_name,
+             COUNT(CASE WHEN (metadata_json::jsonb ->> 'durationMs') ~ '^[0-9]+$' THEN 1 END)::int AS samples,
+             percentile_cont(0.50) WITHIN GROUP (ORDER BY CASE WHEN (metadata_json::jsonb ->> 'durationMs') ~ '^[0-9]+$' THEN (metadata_json::jsonb ->> 'durationMs')::double precision ELSE NULL END) AS p50,
+             percentile_cont(0.95) WITHIN GROUP (ORDER BY CASE WHEN (metadata_json::jsonb ->> 'durationMs') ~ '^[0-9]+$' THEN (metadata_json::jsonb ->> 'durationMs')::double precision ELSE NULL END) AS p95
+      FROM public.analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('lobby_auth_resolved','lobby_daily_status_succeeded','lobby_daily_status_failed')
+        AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+        AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+        AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+        AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      GROUP BY event_name
+      ORDER BY event_name
+    `);
+
+    const lobbyStageLatencyRows = (lobbyStageLatency.rows as any[]).map((row) => {
+      const labels: Record<string, string> = {
+        lobby_auth_resolved: "Restauración de sesión",
+        lobby_daily_status_succeeded: "Respuesta estado diario OK",
+        lobby_daily_status_failed: "Respuesta estado diario fallida",
+      };
+      return `<tr><td>${labels[String(row.event_name)] ?? esc(row.event_name)}</td><td>${n(row.samples)}</td><td>${latencyValue(row.p50)}</td><td>${latencyValue(row.p95)}</td></tr>`;
+    }).join("");
+
+
+    const soloRoundLatency = await db.execute(sql`
+      WITH samples AS (
+        SELECT
+          CASE WHEN (metadata_json::jsonb ->> 'durationMs') ~ '^[0-9]+$' THEN (metadata_json::jsonb ->> 'durationMs')::double precision ELSE NULL END AS duration_ms,
+          CASE WHEN (metadata_json::jsonb ->> 'validationDurationMs') ~ '^[0-9]+$' THEN (metadata_json::jsonb ->> 'validationDurationMs')::double precision ELSE NULL END AS validation_duration_ms,
+          CASE WHEN (metadata_json::jsonb ->> 'p95WordValidationMs') ~ '^[0-9]+$' THEN (metadata_json::jsonb ->> 'p95WordValidationMs')::double precision ELSE NULL END AS p95_word_ms,
+          CASE WHEN (metadata_json::jsonb ->> 'slowWordValidationCount') ~ '^[0-9]+$' THEN (metadata_json::jsonb ->> 'slowWordValidationCount')::int ELSE 0 END AS slow_words,
+          CASE WHEN (metadata_json::jsonb ->> 'wordValidationCount') ~ '^[0-9]+$' THEN (metadata_json::jsonb ->> 'wordValidationCount')::int ELSE 0 END AS word_count
+        FROM public.analytics_events
+        WHERE trusted = TRUE AND event_name = 'solo_round_validation'
+          AND (${diagnosticMode} = 'all' OR (${diagnosticMode} = 'solo' AND mode IN ('solo', 'daily')))
+          AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+          AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+          AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+          AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      )
+      SELECT COUNT(duration_ms)::int AS samples,
+        percentile_cont(0.50) WITHIN GROUP (ORDER BY duration_ms) AS p50_round,
+        percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_round,
+        percentile_cont(0.50) WITHIN GROUP (ORDER BY validation_duration_ms) AS p50_validation,
+        percentile_cont(0.95) WITHIN GROUP (ORDER BY validation_duration_ms) AS p95_validation,
+        percentile_cont(0.95) WITHIN GROUP (ORDER BY p95_word_ms) AS p95_slowest_word,
+        COALESCE(SUM(slow_words), 0)::int AS slow_word_validations,
+        COALESCE(SUM(word_count), 0)::int AS words_checked
+      FROM samples
+    `);
+    const soloRoundLatencyRows = diagnosticMode === "multiplayer"
+      ? '<tr><td colspan="7">No aplica: este indicador mide exclusivamente validaciones de partidas individuales.</td></tr>'
+      : (soloRoundLatency.rows as any[]).map((row) =>
+          `<tr><td>${n(row.samples)}</td><td>${latencyValue(row.p50_round)}</td><td>${latencyValue(row.p95_round)}</td><td>${latencyValue(row.p50_validation)}</td><td>${latencyValue(row.p95_validation)}</td><td>${latencyValue(row.p95_slowest_word)}</td><td>${n(row.slow_word_validations)} / ${n(row.words_checked)}</td></tr>`
+        ).join("");
+
+    const adFlow = await db.execute(sql`
+      SELECT event_name, platform, COUNT(*)::int AS total
+      FROM public.analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('rewarded_ad_requested','rewarded_ad_request_created','rewarded_ad_pending','rewarded_ad_completed','rewarded_ad_failed')
+        AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+        AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+        AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+        AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      GROUP BY event_name, platform
+      ORDER BY event_name, platform
+    `);
+
+    const adAttempts = await db.execute(sql`
+      SELECT metadata_json::jsonb ->> 'requestId' AS request_id,
+             COALESCE(MAX(metadata_json::jsonb ->> 'placement'), '—') AS placement,
+             ARRAY_AGG(DISTINCT event_name ORDER BY event_name) AS observed_events,
+             MIN(created_at) AS first_seen,
+             MAX(created_at) AS last_seen
+      FROM public.analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('rewarded_ad_request_created','rewarded_ad_pending','rewarded_ad_completed','rewarded_ad_failed')
+        AND NULLIF(metadata_json::jsonb ->> 'requestId', '') IS NOT NULL
+        AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+        AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+        AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+        AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      GROUP BY metadata_json::jsonb ->> 'requestId'
+      ORDER BY MAX(created_at) DESC
+      LIMIT 100
+    `);
+
+    const adAttemptRows = (adAttempts.rows as any[]).map((row) => {
+      const events = Array.isArray(row.observed_events) ? row.observed_events.map(String) : [];
+      const state = events.includes("rewarded_ad_completed") ? "Completado"
+        : events.includes("rewarded_ad_failed") ? "Fallido"
+        : events.includes("rewarded_ad_pending") ? "Pendiente SSV"
+        : "Sin desenlace registrado";
+      const when = row.last_seen ? new Date(String(row.last_seen)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
+      return `<tr><td><code>${esc(String(row.request_id ?? "").slice(0, 8))}</code></td><td>${esc(row.placement)}</td><td>${state}</td><td>${when}</td></tr>`;
+    }).join("");
+
+    const rootCauseRows = (rootCauseEvents.rows as any[]).map((row) => {
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      const when = row.created_at ? new Date(String(row.created_at)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
+      return `<tr><td>${when}</td><td>${esc(row.event_name)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(safeDiagnosticText(row.details || "{}", 700))}</code></td></tr>`;
+    }).join("");
+    const adFlowRows = (adFlow.rows as any[]).map((row) => {
+      const labels: Record<string, string> = {
+        rewarded_ad_requested: "Solicitados",
+        rewarded_ad_request_created: "Solicitud nativa creada",
+        rewarded_ad_pending: "Pendientes de confirmación SSV",
+        rewarded_ad_completed: "Completados",
+        rewarded_ad_failed: "Fallidos",
+      };
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      return `<tr><td>${labels[String(row.event_name)] ?? esc(row.event_name)}</td><td>${platform}</td><td>${n(row.total)}</td></tr>`;
+    }).join("");
+    const latencyRow = (lobbyLatency.rows as any[])[0] as any;
 
     const halloweenSummary = await db.execute(sql`
       SELECT event_name, platform, COUNT(*)::int AS total,
@@ -247,7 +505,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
     }).join("");
     const halloweenFailureRows = (halloweenFailures.rows as any[]).map((row) => {
       let metadata = "{}";
-      try { metadata = JSON.stringify(JSON.parse(String(row.metadata_json ?? "{}"))); } catch { metadata = String(row.metadata_json ?? "{}"); }
+      try { metadata = safeDiagnosticText(JSON.stringify(JSON.parse(String(row.metadata_json ?? "{}"))), 700); } catch { metadata = safeDiagnosticText(String(row.metadata_json ?? "{}"), 700); }
       const when = row.created_at ? new Date(String(row.created_at)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
       const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
       return `<tr><td>${when}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(metadata)}</code></td></tr>`;
@@ -342,6 +600,44 @@ a{color:#4ade80;text-decoration:none}
       <h3>Desglose por plataforma</h3><table><thead><tr><th>Señal</th><th>Plataforma</th><th>Eventos</th><th>Jugadores/sesiones</th></tr></thead><tbody>${halloweenSummaryRows || '<tr><td colspan="4">Aún no hay telemetría de Halloween. Los eventos nuevos empezarán a registrarse cuando se publique este cambio.</td></tr>'}</tbody></table>
       <h3>Últimos fallos de registro</h3><table><thead><tr><th>Fecha (Madrid)</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Diagnóstico</th></tr></thead><tbody>${halloweenFailureRows || '<tr><td colspan="5">No hay fallos registrados en las últimas 24 horas.</td></tr>'}</tbody></table>
     </div>
+    <div class="card"><h2>🔎 Investigación de partidas individuales y modos</h2>
+      <p class="sub">Consulta de solo lectura. Filtra por periodo, plataforma, versión e idioma. “Individual / IA” usa exactamente los modos registrados por SoloGame: normal, quick, chaos, random y daily. “Multijugador” agrupa los demás modos con valor.</p>
+      <form method="get" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:12px 0 18px">
+        <label>Periodo<br><select name="days"><option value="1" ${diagnosticDays === 1 ? "selected" : ""}>24 horas</option><option value="7" ${diagnosticDays === 7 ? "selected" : ""}>7 días</option><option value="14" ${diagnosticDays === 14 ? "selected" : ""}>14 días</option><option value="30" ${diagnosticDays === 30 ? "selected" : ""}>30 días</option></select></label>
+        <label>Modo<br><select name="mode"><option value="all" ${diagnosticMode === "all" ? "selected" : ""}>Todos</option><option value="solo" ${diagnosticMode === "solo" ? "selected" : ""}>Individual / IA</option><option value="multiplayer" ${diagnosticMode === "multiplayer" ? "selected" : ""}>Multijugador</option></select></label>
+        <label>Plataforma<br><select name="platform"><option value="all" ${diagnosticPlatform === "all" ? "selected" : ""}>Todas</option><option value="android" ${diagnosticPlatform === "android" ? "selected" : ""}>Android</option><option value="web" ${diagnosticPlatform === "web" ? "selected" : ""}>Web</option><option value="ios" ${diagnosticPlatform === "ios" ? "selected" : ""}>iOS</option></select></label>
+        <label>Versión<br><input name="version" maxlength="32" value="${esc(diagnosticVersion)}" placeholder="p. ej. 1.3.6.9"></label>
+        <label>Idioma<br><input name="language" maxlength="16" value="${esc(diagnosticLanguage)}" placeholder="p. ej. pt"></label>
+        <button type="submit">Aplicar filtros</button>
+        <a href="/test/analytics">Limpiar</a>
+      </form>
+      <h3>Inicios y partidas terminadas por modo</h3>
+      <p class="sub">“Inicios” y “Finales” son recuentos de eventos registrados durante el periodo; pueden incluir varias partidas del mismo jugador. Las columnas de jugadores/sesiones distintos cuentan los actores únicos por plataforma, versión, idioma y modo. No se calcula “abandono”: no existe un identificador de partida fiable para unir ambos.</p>
+      <table><thead><tr><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Modo registrado</th><th>Inicios</th><th>Finales</th><th>Jugadores/sesiones inicio</th><th>Jugadores/sesiones fin</th></tr></thead><tbody>${diagnosticRows || '<tr><td colspan="8">No hay partidas registradas con estos filtros.</td></tr>'}</tbody></table>
+      <h3>Validación de partidas individuales (solo)</h3>
+      <p class="sub">Tiempos de validación del servidor; no se guardan palabras ni categorías. Una demora no identifica por sí sola su origen.</p>
+      <table><thead><tr><th>Muestras</th><th>Ronda P50</th><th>Ronda P95</th><th>Validación P50</th><th>Validación P95</th><th>P95 de P95 por ronda</th><th>Validaciones ≥1 s / total</th></tr></thead><tbody>${soloRoundLatencyRows || '<tr><td colspan="7">Sin muestras todavía</td></tr>'}</tbody></table>
+      <h3>Latencia del Lobby (primer render útil)</h3>
+      <p class="sub">Medición cliente desde el montaje de Home hasta el primer frame. No representa el tiempo completo de autenticación ni garantiza que todas las llamadas API hayan terminado. Muestra solo muestras instrumentadas.</p>
+      <div class="grid">
+        <div class="kpiBox"><div class="label">Muestras</div><div class="kpi">${n(latencyRow?.samples)}</div></div>
+        <div class="kpiBox"><div class="label">P50</div><div class="kpi">${latencyValue(latencyRow?.p50)}</div></div>
+        <div class="kpiBox"><div class="label">P75</div><div class="kpi">${latencyValue(latencyRow?.p75)}</div></div>
+        <div class="kpiBox"><div class="label">P95</div><div class="kpi">${latencyValue(latencyRow?.p95)}</div></div>
+      </div>
+      <h3>Flujo de anuncios rewarded</h3>
+      <p class="sub">Solicitudes, pendientes SSV, completados y fallidos por plataforma. Son recuentos de eventos, no una conciliación por solicitud única: los reintentos pueden generar más de un evento.</p>
+      <table><thead><tr><th>Estado</th><th>Plataforma</th><th>Eventos</th></tr></thead><tbody>${adFlowRows || '<tr><td colspan="3">Sin eventos con estos filtros.</td></tr>'}</tbody></table>
+      <h3>Seguimiento por solicitud nativa</h3>
+      <p class="sub">Agrupa eventos por requestId de AdMob para ver si una solicitud nativa terminó, quedó pendiente de SSV o no registró desenlace. Los fallos anteriores a la creación del requestId aparecen en el diagnóstico general.</p>
+      <table><thead><tr><th>Request ID</th><th>Ubicación</th><th>Estado observado</th><th>Última señal</th></tr></thead><tbody>${adAttemptRows || '<tr><td colspan="4">No hay solicitudes nativas correlacionables todavía.</td></tr>'}</tbody></table>
+      <h3>Errores del mismo periodo y filtros</h3>
+      <p class="sub">Estos errores coinciden en periodo, plataforma, versión e idioma; la instrumentación actual no permite asegurar que pertenezcan a una partida concreta.</p>
+      <table><thead><tr><th>Fecha (Madrid)</th><th>Tipo</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Detalle</th></tr></thead><tbody>${diagnosticErrorRows || '<tr><td colspan="6">No hay errores registrados con estos filtros.</td></tr>'}</tbody></table>
+      <h3>Eventos de diagnóstico y causa raíz</h3>
+      <p class="sub">Incluye etapas del Lobby, errores API/cliente y resultados de anuncios. Los motivos solo aparecen cuando el cliente o servidor los registra explícitamente; una salida sin señal no se etiqueta como abandono voluntario.</p>
+      <table><thead><tr><th>Fecha (Madrid)</th><th>Evento</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Contexto técnico</th></tr></thead><tbody>${rootCauseRows || '<tr><td colspan="6">No hay eventos instrumentados con estos filtros.</td></tr>'}</tbody></table>
+    </div>
     <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Jugadores que iniciaron</th><th>Resultados terminados</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
     <div class="card"><h2>Conexiones por método · hoy</h2><table><thead><tr><th>Método</th><th>Ahora</th><th>Sesiones</th></tr></thead><tbody>${loginRows || '<tr><td colspan="3">Todavía no hay conexiones identificadas.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>Uso del juego y publicidad · últimos 7 días</h2><table><thead><tr><th>Métrica</th><th>Total</th></tr></thead><tbody>${powerupRows || '<tr><td colspan="2">Todavía no hay datos.</td></tr>'}</tbody></table></div>
@@ -349,8 +645,8 @@ a{color:#4ade80;text-decoration:none}
     <p><a href="/test">← Volver al panel principal</a></p></body></html>`;
     return res.type("html").send(html);
   } catch (err) {
-    console.error("[admin analytics] error:", err);
-    return res.status(500).type("html").send("<h1>Analytics no disponible</h1><p>Las tablas de analítica todavía no están inicializadas.</p>");
+    console.error("[admin analytics] request failed; details withheld.");
+    return res.status(503).type("html").send("<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><title>STOP Analytics no disponible</title><body><h1>No se han podido cargar las estadísticas</h1><p>La base de datos o alguna consulta de Analytics no está disponible temporalmente. Inténtalo de nuevo dentro de unos segundos.</p><p>No se muestran cifras parciales para evitar presentar datos incompletos como si fueran correctos.</p><p><a href=\"/test\">Volver al panel principal</a></p></body></html>");
   }
 });
 

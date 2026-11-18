@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { ValidateRoundBody, ValidateRoundResponse } from "@workspace/api-zod";
 import { validateWordWithAi } from "../lib/aiWordValidator";
 import { issueScoreToken } from "../lib/scoreToken";
@@ -1564,16 +1566,25 @@ router.post("/validate", async (req, res) => {
   let aiTotalScore = 0;
   const validatedCollectionWords: Array<{ word: string; category: string }> = [];
 
-  // Validate independent categories concurrently so a slow AI fallback in one
-  // category cannot serialize the entire round.
+  // Measure server-side validation without persisting submitted words or categories.
+  const roundValidationStartedAt = Date.now();
+  const wordValidationDurations: number[] = [];
   const validatedRounds = await Promise.all(playerResponses.map(async (pr) => {
     const playerWord = pr.word?.trim() || "";
     const aiWord = getAiWord(letter, pr.category, language);
     const normPlayerWord = normalizeWord(playerWord);
+    const wordValidationStartedAt = Date.now();
     const isPlayerWordValid = await isWordValidAsync(playerWord, letter, pr.category, language, playerId);
+    wordValidationDurations.push(Date.now() - wordValidationStartedAt);
     const isAiWordValid = aiWord.length > 0 && isWordValid(aiWord, letter, pr.category, language);
     return { pr, playerWord, aiWord, normPlayerWord, isPlayerWordValid, isAiWordValid };
   }));
+  const roundValidationDurationMs = Date.now() - roundValidationStartedAt;
+  const sortedWordValidationDurations = [...wordValidationDurations].sort((a, b) => a - b);
+  const p95WordValidationMs = sortedWordValidationDurations.length
+    ? sortedWordValidationDurations[Math.min(sortedWordValidationDurations.length - 1, Math.ceil(sortedWordValidationDurations.length * 0.95) - 1)]
+    : 0;
+  const slowWordValidationCount = wordValidationDurations.filter((duration) => duration >= 1000).length;
 
   for (const { pr, playerWord, aiWord, normPlayerWord, isPlayerWordValid, isAiWordValid } of validatedRounds) {
     // "Repetida" only means the player and the AI wrote the exact same word in the same category
@@ -1629,6 +1640,32 @@ router.post("/validate", async (req, res) => {
     ...(scoreToken ? { scoreToken } : {}),
     ...(rankingScoreToken ? { rankingScoreToken } : {}),
   });
+
+  // Aggregate diagnostics only; never include answer text, categories or identity.
+  if (requestedGameMode === "solo" || requestedGameMode === "daily") {
+    void db.execute(sql`
+      INSERT INTO public.analytics_events
+        (event_name, platform, app_version, language, mode, metadata_json, trusted)
+      VALUES (
+        'solo_round_validation',
+        ${req.header("x-client-twa") === "1" || req.header("x-client-platform") === "android" ? "android" : req.header("x-client-platform") === "ios" ? "ios" : "web"},
+        ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null},
+        ${language},
+        ${requestedGameMode},
+        ${JSON.stringify({
+          durationMs: Date.now() - roundValidationStartedAt,
+          validationDurationMs: roundValidationDurationMs,
+          wordValidationCount: wordValidationDurations.length,
+          slowWordValidationCount,
+          maxWordValidationMs: sortedWordValidationDurations.at(-1) ?? 0,
+          p95WordValidationMs,
+          botAnswersGeneratedCount: validatedRounds.filter((round) => round.aiWord.length > 0).length,
+          botAnswersMissingCount: validatedRounds.filter((round) => round.aiWord.length === 0).length,
+        })},
+        TRUE
+      )
+    `).catch(() => console.error("[game] solo validation telemetry failed; details withheld."));
+  }
 
   res.json(response);
 });

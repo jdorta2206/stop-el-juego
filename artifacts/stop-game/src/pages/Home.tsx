@@ -29,13 +29,39 @@ import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHallowee
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
 import { getLastPlayGamesStatus, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
-import { trackClientError } from "@/lib/analyticsClient";
+import { trackClientError, trackAnalyticsEvent } from "@/lib/analyticsClient";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
 
 export default function Home() {
-  const { player } = usePlayer();
+  useEffect(() => {
+    const startedAt = performance.now();
+    trackAnalyticsEvent("lobby_view", { metadata: { phase: "home_mount" } });
+    const frame = window.requestAnimationFrame(() => {
+      trackAnalyticsEvent("lobby_ready", {
+        metadata: { phase: "home_first_frame", durationMs: Math.max(0, Math.round(performance.now() - startedAt)) },
+      });
+    });
+    const onPageHide = () => trackAnalyticsEvent("lobby_page_exit", { metadata: { phase: "home_pagehide" } });
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, []);
+
+  const { player, isLoaded } = usePlayer();
+  const lobbyAuthStartedAtRef = useRef(performance.now());
+  const lobbyAuthTelemetryRef = useRef<string>("");
+  useEffect(() => {
+    if (!isLoaded) return;
+    const result = !player ? "anonymous" : player.loginMethod === "guest" ? "guest" : "authenticated";
+    const key = `${result}:${player?.loginMethod ?? "none"}`;
+    if (lobbyAuthTelemetryRef.current === key) return;
+    lobbyAuthTelemetryRef.current = key;
+    trackAnalyticsEvent("lobby_auth_resolved", { metadata: { phase: "auth_restore_complete", result, loginMethod: player?.loginMethod ?? null, durationMs: Math.max(0, Math.round(performance.now() - lobbyAuthStartedAtRef.current)) } });
+  }, [isLoaded, player?.id, player?.loginMethod]);
   const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
   const adsBlocked = isPremium || premiumLoading || !!premiumError;
   const { friends } = useFollows(player?.id);
@@ -151,17 +177,34 @@ export default function Home() {
       return;
     }
 
+    const dailyStatusStartedAt = performance.now();
+    trackAnalyticsEvent("lobby_daily_status_started", { metadata: { endpoint: "/api/daily/status", method: "GET", phase: "daily_status_request" } });
     fetch(`${getApiUrl()}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
       headers: { ...authHeaders() },
       credentials: "include",
       signal: controller.signal,
     })
-      .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
-      .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
+      .then(r => {
+        if (r.ok) return r.json();
+        const error = new Error("daily-status") as Error & { status?: number; requestId?: string };
+        error.status = r.status;
+        error.requestId = r.headers.get("X-Request-Id") || undefined;
+        throw error;
+      })
+      .then(d => {
+        if (controller.signal.aborted) return;
+        setDailyDone(!!d.played);
+        trackAnalyticsEvent("lobby_daily_status_succeeded", { metadata: { endpoint: "/api/daily/status", durationMs: Math.max(0, Math.round(performance.now() - dailyStatusStartedAt)), phase: "daily_status_response" } });
+      })
       .catch((error) => {
         if (controller.signal.aborted) return;
         setDailyDone(null);
-        trackClientError(error);
+        const status = error && typeof error === "object" && "status" in error ? Number((error as { status?: unknown }).status) : null;
+        const requestId = error && typeof error === "object" && "requestId" in error ? String((error as { requestId?: unknown }).requestId ?? "") : "";
+        trackClientError(error, null, { endpoint: "/api/daily/status", method: "GET", phase: "lobby_daily_status", status, requestId: requestId || null });
+        trackAnalyticsEvent("lobby_daily_status_failed", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null, durationMs: Math.max(0, Math.round(performance.now() - dailyStatusStartedAt)), phase: "daily_status_response" } });
+        if (status === 408 || status === 504) trackAnalyticsEvent("lobby_api_timeout", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null } });
+        if (status === 401 || status === 403) trackAnalyticsEvent("lobby_auth_failed", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null } });
       });
     return () => controller.abort();
   }, [player?.id, player?.loginMethod, lang]);

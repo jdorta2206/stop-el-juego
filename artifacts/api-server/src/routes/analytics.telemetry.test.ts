@@ -8,6 +8,10 @@ const analyticsRouteSource = readFileSync(
   resolve(currentDir, "analytics.ts"),
   "utf8",
 );
+const adminAnalyticsRouteSource = readFileSync(
+  resolve(currentDir, "adminAnalytics.ts"),
+  "utf8",
+);
 const allowlistMatch = analyticsRouteSource.match(
   /const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set\(([\s\S]*?)\);/,
 );
@@ -24,14 +28,49 @@ describe("STOP gameplay telemetry allowlist", () => {
       "rewarded_ad_completed",
       "rewarded_ad_failed",
       "powerup_used",
+      "lobby_view",
+      "lobby_ready",
+      "lobby_auth_resolved",
+      "lobby_daily_status_started",
+      "lobby_daily_status_succeeded",
+      "lobby_daily_status_failed",
+      "lobby_room_load_started",
+      "lobby_room_loaded",
+      "lobby_room_load_failed",
+      "lobby_api_timeout",
+      "lobby_auth_failed",
+      "lobby_page_exit",
+      "rewarded_ad_pending",
+      "rewarded_ad_request_created",
     ]) {
       expect(allowlist).toContain(`"${eventName}"`);
     }
   });
 
   it("keeps telemetry trust classification separate from the reward-granting SSV flow", () => {
+    expect(analyticsRouteSource).not.toContain('  "solo_round_validation",');
     expect(analyticsRouteSource).toContain("const trusted = TRUSTED_CLIENT_TELEMETRY_EVENTS.has(eventName)");
     expect(analyticsRouteSource).toContain('router.post("/event"');
     expect(analyticsRouteSource).toContain('router.post("/game-start"');
   });
+
+  it("redacts secret-like key/value diagnostics before rendering STOP Analytics", () => {
+    expect(adminAnalyticsRouteSource).toContain(
+      "/(token|password|cookie|secret|authorization|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+/gi",
+    );
+    expect(adminAnalyticsRouteSource).toContain("[redactado]");
+  });
+
+  it("sanitizes metadata before every analytics event persistence path", () => {
+    expect(analyticsRouteSource).toContain(
+      "JSON.stringify(sanitizeClientMetadata(input.metadata ?? {}))",
+    );
+    expect(analyticsRouteSource).toContain(
+      "JSON.stringify(sanitizeClientMetadata(metadata))",
+    );
+    expect(analyticsRouteSource).toContain(
+      "/password|token|secret|authorization|cookie|api[_-]?key/i",
+    );
+  });
+
 });

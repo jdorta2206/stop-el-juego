@@ -24,7 +24,7 @@ class PgRateLimitStore implements RateLimitStore {
         DELETE FROM api_rate_limits
         WHERE bucket_key LIKE ${this.prefix + ":%"}
           AND window_start < NOW() - (${this.windowMs}::double precision * interval '1 millisecond')
-      `).catch((err) => console.error("[rate-limit] cleanup failed:", err));
+      `).catch(() => console.error("[rate-limit] cleanup failed; database details withheld."));
     }, Math.max(windowMs, 60_000));
     this.cleanupTimer.unref?.();
   }
@@ -90,9 +90,10 @@ const baseOpts = {
   message: { error: "Too many requests, slow down a bit ⏳" },
 };
 
-function limiter(prefix: string, windowMs: number, limit: number, keyGenerator: (req: Request) => string) {
+function limiter(prefix: string, windowMs: number, limit: number, keyGenerator: (req: Request) => string, options: { skipSuccessfulRequests?: boolean } = {}) {
   return rateLimit({
     ...baseOpts,
+    ...options,
     windowMs,
     limit,
     keyGenerator,
@@ -104,7 +105,9 @@ export const generalLimiter = limiter("general", 60_000, 240, playerKey);
 export const writeLimiter = limiter("write", 60_000, 120, playerKey);
 export const halloweenScareLimiter = limiter("halloween-scare", 60_000, 60, (req) => ipKeyGenerator(req.ip ?? ""));
 export const presenceLimiter = limiter("presence", 60_000, 90, playerKey);
-export const authLimiter = limiter("auth", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""));
+export const authLimiter = limiter("auth", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""), { skipSuccessfulRequests: true });
+// Mass-push actions need a much tighter limit than ordinary panel login attempts.
+export const adminBroadcastLimiter = limiter("admin-broadcast", 10 * 60_000, 1, (req) => ipKeyGenerator(req.ip ?? ""));
 export const scoreLimiter = limiter("score", 5 * 60_000, 30, playerKey);
 export const inviteLimiter = limiter("invite", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""));
 export const contactLimiter = limiter("contact", 10 * 60_000, 5, (req) => ipKeyGenerator(req.ip ?? ""));

@@ -1,4 +1,5 @@
 import path from "path";
+import { randomUUID } from "crypto";
 import { existsSync } from "fs";
 import express, { type Express } from "express";
 import cors from "cors";
@@ -17,6 +18,14 @@ import { sql } from "drizzle-orm";
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+app.use((req, res, next) => {
+  // Always mint a server-owned correlation ID; never persist or echo an untrusted client header.
+  const requestId = randomUUID();
+  (req as express.Request & { stopRequestId?: string }).stopRequestId = requestId;
+  res.setHeader("X-Request-Id", requestId);
+  next();
+});
 
 // Baseline response hardening. Keep CSP out of this middleware because the
 // frontend uses third-party OAuth, AdMob/TWA bridges and runtime assets whose
@@ -64,7 +73,9 @@ app.post(
       await WebhookHandlers.processWebhook(req.body as Buffer, sig);
       return res.status(200).json({ received: true });
     } catch (error: any) {
-      console.error("Webhook error:", error.message);
+      console.error("[stripe webhook] processing failed", JSON.stringify({
+        requestId: (req as express.Request & { stopRequestId?: string }).stopRequestId ?? "unknown",
+      }));
       return res.status(400).json({ error: "Webhook processing error" });
     }
   }
@@ -90,6 +101,7 @@ app.use(cors({
     return cb(null, false);
   },
   credentials: true,
+  exposedHeaders: ["X-Request-Id"],
 }));
 app.use(cookieParser());
 app.use(express.json({ limit: "256kb" }));
@@ -238,16 +250,46 @@ if (process.env["SERVE_CLIENT"] === "1") {
   });
 }
 
+function safeServerDiagnosticText(value: unknown, max = 500): string {
+  return String(value ?? "")
+    .slice(0, max)
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [redactado]")
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[token redactado]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email redactado]")
+    .replace(/([?&](?:token|access_token|refresh_token|authorization|key|api_key|code)=)[^&#\s]*/gi, "$1[redactado]")
+    .replace(/(token|password|authorization|cookie|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=[redactado]")
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[ip redactada]")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[id redactado]");
+}
+
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error("[API ERROR]", err?.message ?? err, err?.stack);
+  const requestId = (req as express.Request & { stopRequestId?: string }).stopRequestId ?? "unknown";
+  const rawCode = String(err?.code ?? "");
+  const safeCode = /^[A-Z0-9_]{1,40}$/i.test(rawCode) ? rawCode : "INTERNAL";
+  console.error("[API ERROR]", JSON.stringify({
+    requestId,
+    method: req.method,
+    path: req.path.slice(0, 160),
+    status: Number(err?.statusCode ?? err?.status ?? 500),
+    code: safeCode,
+  }));
+  const explicitPlatform = String(req.headers["x-client-platform"] ?? "").toLowerCase();
+  const platform = String(req.headers["x-client-twa"] ?? "") === "1"
+    ? "android"
+    : ["web", "android", "ios"].includes(explicitPlatform) ? explicitPlatform : "web";
+  const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
+  const language = String(req.headers["accept-language"] ?? "").split(",")[0].slice(0, 16) || null;
+  const metadata = JSON.stringify({
+    requestId: (req as express.Request & { stopRequestId?: string }).stopRequestId ?? null,
+    method: req.method,
+    path: req.path.slice(0, 300),
+    status: Number(err?.statusCode ?? err?.status ?? 500),
+    message: safeServerDiagnosticText(err?.message ?? err),
+    code: safeCode,
+  }).slice(0, 4000);
   void db.execute(sql`
-    INSERT INTO analytics_events (event_name, platform, metadata_json, trusted)
-    VALUES ('api_error', 'web', ${JSON.stringify({
-      method: req.method,
-      path: req.path.slice(0, 300),
-      status: 500,
-      message: String(err?.message ?? err).slice(0, 500),
-    }).slice(0, 4000)}, TRUE)
+    INSERT INTO analytics_events (event_name, platform, app_version, language, metadata_json, trusted)
+    VALUES ('api_error', ${platform}, ${appVersion}, ${language}, ${metadata}, TRUE)
   `).catch(() => {});
   if (res.headersSent) return;
   res.status(500).json({ error: "Internal server error" });
