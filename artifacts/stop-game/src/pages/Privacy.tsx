@@ -36,7 +36,9 @@ export default function Privacy() {
           <h2 className="text-2xl font-bold text-white mt-6">5. Tus derechos y eliminación de cuenta</h2>
           <p>Puedes solicitar el acceso, rectificación o eliminación de tus datos escribiendo a <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-secondary hover:underline">dorynex@stopjuegodepalabras.com</a>. También puedes consultar la página de <a href="/eliminar-cuenta" className="text-secondary hover:underline">eliminación de cuenta</a> para enviar una solicitud específica.</p>
 
-          <p className="mt-4 text-sm text-white/40">Si tienes dudas, contáctanos en <a href="/contacto" className="text-secondary hover:underline">nuestra página de contacto</a>.</p>
+          <h2 className="text-2xl font-bold text-white mt-6">6. Contacto para cuestiones de privacidad</h2>
+          <p>Para cualquier consulta sobre esta política o sobre el tratamiento de datos personales, puedes contactar con el responsable del proyecto STOP en <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-secondary hover:underline">dorynex@stopjuegodepalabras.com</a>.</p>
+          <p className="mt-4 text-sm text-white/40">También puedes escribirnos a través de <a href="/contacto" className="text-secondary hover:underline">nuestra página de contacto</a>.</p>
         </div>
       </div>
     </Layout>
