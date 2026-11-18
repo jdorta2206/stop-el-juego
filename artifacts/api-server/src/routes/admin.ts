@@ -120,7 +120,7 @@ async function executePanelQuery(query: SQL): Promise<{ rows: Record<string, unk
       // Never turn a failed metric into a plausible zero: that would misreport
       // player activity. Reject this refresh so the route keeps the last
       // complete cached dashboard (or returns an explicit error on first load).
-      console.warn("[admin panel] query failed; preserving last complete panel:", error instanceof Error ? error.message : error);
+      console.warn("[admin panel] query failed; preserving last complete panel.");
       throw error;
     }
   });
@@ -926,7 +926,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     cachedAdminPanelAt = Date.now();
     if (!res.headersSent) res.status(200).type("html").send(html);
   } catch (err: any) {
-    console.error("[admin panel] error:", err?.message ?? err);
+    console.error("[admin panel] refresh failed; details withheld.");
     if (!res.headersSent) res.status(500).type("html").send("<h1>Error</h1><p>No se pudieron cargar las estadísticas.</p><p><a href='/test'>Volver a intentar</a></p>");
   } finally {
     adminPanelBuildInFlight = false;
@@ -1022,7 +1022,7 @@ router.post("/notify-mundial", authLimiter, basicAuth, requireSameOrigin, adminB
       outcome: "failed",
       requestId,
     }));
-    console.error("[admin notify-mundial] error:", err?.message ?? err);
+    console.error("[admin notify-mundial] operation failed; details withheld.", JSON.stringify({ requestId }));
     res.status(500).type("html").send('<h1>Error</h1><p>No se pudo enviar la notificación.</p><a href="/test">← Volver</a>');
   }
 });
