@@ -93,6 +93,7 @@ function markOAuthHandoffFailed(): void {
       "",
       `${window.location.pathname}?${params.toString()}${window.location.hash}`,
     );
+    window.dispatchEvent(new CustomEvent("stop:oauth-error"));
   } catch {}
 }
 
