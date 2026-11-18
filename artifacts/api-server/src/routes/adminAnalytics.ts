@@ -44,7 +44,7 @@ function esc(value: unknown): string {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-router.get("/", authLimiter, basicAuth, async (_req, res) => {
+router.get("/", authLimiter, basicAuth, async (req, res) => {
   try {
     const online = await db.execute(sql`
       SELECT platform, COUNT(*)::int AS active
@@ -186,6 +186,78 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
         AND created_at >= NOW() - INTERVAL '7 days'
         AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
     `);
+
+    // Read-only diagnostics for solo-vs-AI play. game_start stores its mode in
+    // the mode column; game_complete stores it in metadata_json.mode. The
+    // client/server session identifiers are not guaranteed to match, so we
+    // deliberately report separate totals instead of fabricating abandoned
+    // games or claiming a per-game join.
+    const queryText = (value: unknown, max: number) =>
+      typeof value === "string" ? value.trim().slice(0, max) : "";
+    const requestedDays = Number.parseInt(queryText(req.query.days, 2), 10);
+    const diagnosticDays = Number.isFinite(requestedDays) ? Math.min(30, Math.max(1, requestedDays)) : 7;
+    const requestedPlatform = queryText(req.query.platform, 12);
+    const diagnosticPlatform = ["web", "android", "ios"].includes(requestedPlatform) ? requestedPlatform : "all";
+    const diagnosticVersion = queryText(req.query.version, 32);
+    const diagnosticLanguage = queryText(req.query.language, 16);
+    const requestedMode = queryText(req.query.mode, 16);
+    const diagnosticMode = ["solo", "multiplayer"].includes(requestedMode) ? requestedMode : "all";
+
+    const soloDiagnostics = await db.execute(sql`
+      WITH normalized AS (
+        SELECT event_name, player_id, session_id, platform, app_version, language,
+               CASE
+                 WHEN event_name = 'game_start' THEN NULLIF(mode, '')
+                 ELSE NULLIF(metadata_json::jsonb ->> 'mode', '')
+               END AS game_mode
+        FROM public.analytics_events
+        WHERE trusted = TRUE
+          AND event_name IN ('game_start', 'game_complete')
+          AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+          AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+          AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+          AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      )
+      SELECT platform, app_version, language, COALESCE(game_mode, '(sin modo)') AS game_mode,
+             COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
+             COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completions,
+             COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS starters,
+             COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completers
+      FROM normalized
+      WHERE (
+        ${diagnosticMode} = 'all'
+        OR (${diagnosticMode} = 'solo' AND COALESCE(game_mode, '') NOT IN ('multiplayer', 'room', 'tournament'))
+        OR (${diagnosticMode} = 'multiplayer' AND COALESCE(game_mode, '') IN ('multiplayer', 'room', 'tournament'))
+      )
+      GROUP BY platform, app_version, language, game_mode
+      ORDER BY starts DESC, completions DESC
+      LIMIT 150
+    `);
+
+    const diagnosticErrors = await db.execute(sql`
+      SELECT event_name, platform, app_version, language, created_at,
+             LEFT(COALESCE(metadata_json::jsonb ->> 'message', metadata_json), 600) AS details
+      FROM public.analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('client_error', 'api_error')
+        AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+        AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+        AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+        AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      ORDER BY created_at DESC
+      LIMIT 100
+    `);
+
+    const diagnosticRows = (soloDiagnostics.rows as any[]).map((row) => {
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      return `<tr><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td>${esc(row.game_mode)}</td><td>${n(row.starts)}</td><td>${n(row.completions)}</td><td>${n(row.starters)}</td><td>${n(row.completers)}</td></tr>`;
+    }).join("");
+
+    const diagnosticErrorRows = (diagnosticErrors.rows as any[]).map((row) => {
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      const when = row.created_at ? new Date(String(row.created_at)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
+      return `<tr><td>${when}</td><td>${esc(row.event_name)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(row.details || "Sin detalle")}</code></td></tr>`;
+    }).join("");
 
     const halloweenSummary = await db.execute(sql`
       SELECT event_name, platform, COUNT(*)::int AS total,
@@ -341,6 +413,24 @@ a{color:#4ade80;text-decoration:none}
       <table><thead><tr><th>Entrada (Madrid)</th><th>Jugador / sesión</th><th>Plataforma</th><th>Versión</th><th>Detectados</th><th>Guardados</th><th>Fallidos</th></tr></thead><tbody>${halloweenEntrantRows || '<tr><td colspan="7">No hay entradas instrumentadas todavía. Se empezarán a ver tras publicar este cambio y entrar en una partida con Halloween activo.</td></tr>'}</tbody></table>
       <h3>Desglose por plataforma</h3><table><thead><tr><th>Señal</th><th>Plataforma</th><th>Eventos</th><th>Jugadores/sesiones</th></tr></thead><tbody>${halloweenSummaryRows || '<tr><td colspan="4">Aún no hay telemetría de Halloween. Los eventos nuevos empezarán a registrarse cuando se publique este cambio.</td></tr>'}</tbody></table>
       <h3>Últimos fallos de registro</h3><table><thead><tr><th>Fecha (Madrid)</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Diagnóstico</th></tr></thead><tbody>${halloweenFailureRows || '<tr><td colspan="5">No hay fallos registrados en las últimas 24 horas.</td></tr>'}</tbody></table>
+    </div>
+    <div class="card"><h2>🔎 Investigación de partidas individuales y modos</h2>
+      <p class="sub">Consulta de solo lectura. Filtra por periodo, plataforma, versión e idioma. “Individual” excluye los modos multiplayer/room/tournament; los modos concretos se muestran por separado.</p>
+      <form method="get" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:12px 0 18px">
+        <label>Periodo<br><select name="days"><option value="1" ${diagnosticDays === 1 ? "selected" : ""}>24 horas</option><option value="7" ${diagnosticDays === 7 ? "selected" : ""}>7 días</option><option value="14" ${diagnosticDays === 14 ? "selected" : ""}>14 días</option><option value="30" ${diagnosticDays === 30 ? "selected" : ""}>30 días</option></select></label>
+        <label>Modo<br><select name="mode"><option value="all" ${diagnosticMode === "all" ? "selected" : ""}>Todos</option><option value="solo" ${diagnosticMode === "solo" ? "selected" : ""}>Individual / IA</option><option value="multiplayer" ${diagnosticMode === "multiplayer" ? "selected" : ""}>Multijugador</option></select></label>
+        <label>Plataforma<br><select name="platform"><option value="all" ${diagnosticPlatform === "all" ? "selected" : ""}>Todas</option><option value="android" ${diagnosticPlatform === "android" ? "selected" : ""}>Android</option><option value="web" ${diagnosticPlatform === "web" ? "selected" : ""}>Web</option><option value="ios" ${diagnosticPlatform === "ios" ? "selected" : ""}>iOS</option></select></label>
+        <label>Versión<br><input name="version" maxlength="32" value="${esc(diagnosticVersion)}" placeholder="p. ej. 1.3.6.9"></label>
+        <label>Idioma<br><input name="language" maxlength="16" value="${esc(diagnosticLanguage)}" placeholder="p. ej. pt"></label>
+        <button type="submit">Aplicar filtros</button>
+        <a href="/api/admin/analytics">Limpiar</a>
+      </form>
+      <h3>Inicios y partidas terminadas por modo</h3>
+      <p class="sub">Los inicios y finales se cuentan por separado. No se calcula “abandono” porque el game_start usa una sesión de servidor y el game_complete puede usar otra sesión de cliente; no existe una unión fiable entre ambos.</p>
+      <table><thead><tr><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Modo registrado</th><th>Inicios</th><th>Finales</th><th>Jugadores/sesiones inicio</th><th>Jugadores/sesiones fin</th></tr></thead><tbody>${diagnosticRows || '<tr><td colspan="8">No hay partidas registradas con estos filtros.</td></tr>'}</tbody></table>
+      <h3>Errores del mismo periodo y filtros</h3>
+      <p class="sub">Estos errores coinciden en periodo, plataforma, versión e idioma; la instrumentación actual no permite asegurar que pertenezcan a una partida concreta.</p>
+      <table><thead><tr><th>Fecha (Madrid)</th><th>Tipo</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Detalle</th></tr></thead><tbody>${diagnosticErrorRows || '<tr><td colspan="6">No hay errores registrados con estos filtros.</td></tr>'}</tbody></table>
     </div>
     <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Jugadores que iniciaron</th><th>Resultados terminados</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
     <div class="card"><h2>Conexiones por método · hoy</h2><table><thead><tr><th>Método</th><th>Ahora</th><th>Sesiones</th></tr></thead><tbody>${loginRows || '<tr><td colspan="3">Todavía no hay conexiones identificadas.</td></tr>'}</tbody></table></div>
