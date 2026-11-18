@@ -8,6 +8,10 @@ const analyticsRouteSource = readFileSync(
   resolve(currentDir, "analytics.ts"),
   "utf8",
 );
+const adminAnalyticsRouteSource = readFileSync(
+  resolve(currentDir, "adminAnalytics.ts"),
+  "utf8",
+);
 const allowlistMatch = analyticsRouteSource.match(
   /const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set\(([\s\S]*?)\);/,
 );
@@ -48,6 +52,13 @@ describe("STOP gameplay telemetry allowlist", () => {
     expect(analyticsRouteSource).toContain("const trusted = TRUSTED_CLIENT_TELEMETRY_EVENTS.has(eventName)");
     expect(analyticsRouteSource).toContain('router.post("/event"');
     expect(analyticsRouteSource).toContain('router.post("/game-start"');
+  });
+
+  it("redacts secret-like key/value diagnostics before rendering STOP Analytics", () => {
+    expect(adminAnalyticsRouteSource).toContain(
+      "/(password|cookie|secret|authorization|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+/gi",
+    );
+    expect(adminAnalyticsRouteSource).toContain("[redactado]");
   });
 
   it("sanitizes metadata before every analytics event persistence path", () => {
