@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Practica ejemplos con X por categorías y comprueba cuáles encajan con las normas de tu partida de STOP.",
   keywords: ["palabras con X", "palabras con X para STOP", "nombres con X", "animales con X", "comidas con X", "objetos con X", "marcas con X"],
   publishedAt: "2026-05-19",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 6,
