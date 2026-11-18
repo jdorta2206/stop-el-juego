@@ -24,7 +24,7 @@ class PgRateLimitStore implements RateLimitStore {
         DELETE FROM api_rate_limits
         WHERE bucket_key LIKE ${this.prefix + ":%"}
           AND window_start < NOW() - (${this.windowMs}::double precision * interval '1 millisecond')
-      `).catch((err) => console.error("[rate-limit] cleanup failed:", err));
+      `).catch(() => console.error("[rate-limit] cleanup failed; database details withheld."));
     }, Math.max(windowMs, 60_000));
     this.cleanupTimer.unref?.();
   }
