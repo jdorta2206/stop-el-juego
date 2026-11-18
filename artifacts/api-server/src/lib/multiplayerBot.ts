@@ -455,20 +455,25 @@ async function performBotSubmit(
     // 🔒 Use the exact same authoritative validator as human /results.
     // Bots must never score from a weaker "starts with letter" rule because
     // their score participates in the winner calculation.
+    const validatedBotWords = await Promise.all(sampleCats.map(async (category) => {
+      const word = answers[category];
+      if (typeof word !== "string" || !word.trim()) return { word: "", valid: false };
+      const valid = await isWordValidAsync(
+        word, letter, category, room.language ?? "es", botPlayerId,
+      );
+      return { word, valid };
+    }));
+    // Preserve the original category order and duplicate-word rule while
+    // validating in parallel. A slow AI fallback in one category no longer
+    // serializes every remaining bot answer.
     const seen = new Set<string>();
     let validBotWords = 0;
-    for (const category of sampleCats) {
-      const w = answers[category];
-      if (typeof w !== "string" || !w.trim()) continue;
-      const norm = w.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    for (const { word, valid } of validatedBotWords) {
+      if (!valid || !word) continue;
+      const norm = word.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       if (seen.has(norm)) continue;
-      const valid = await isWordValidAsync(
-        w, letter, category, room.language ?? "es", botPlayerId,
-      );
-      if (valid) {
-        seen.add(norm);
-        validBotWords++;
-      }
+      seen.add(norm);
+      validBotWords++;
     }
     let roundScore = validBotWords * 10;
     // Keep bot scoring aligned with the server-authoritative human STOP bonus:
@@ -611,7 +616,7 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
           if (scheduledBots.has(bot.playerId)) continue;
           const delay = isStopped
             ? Math.max(0, 1_500 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 2_500) - elapsed)
-            : Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
+            : Math.max(0, 40_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 15_000) - elapsed);
           const timer = setTimeout(() => {
             untrackTimer(room.roomCode, timer, bot.playerId, Number(room.id));
             performBotSubmit(room.roomCode, room.id, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
@@ -666,7 +671,7 @@ export function scheduleBotsForRound(opts: {
       .catch(() => {});
   }
   for (const b of opts.bots) {
-    const delay = 25_000 + Math.random() * 25_000; // 25-50s
+    const delay = 40_000 + Math.random() * 15_000; // 40-55s: leave the human most of the 60s round
     const t = setTimeout(() => {
       untrackTimer(opts.roomCode, t, b.playerId, opts.roomId);
       performBotSubmit(opts.roomCode, opts.roomId, b.playerId, opts.deps, { triggerStop: true });
