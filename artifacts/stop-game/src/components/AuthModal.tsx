@@ -58,16 +58,21 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
   }, []);
 
   useEffect(() => {
-    try {
-      const oauthUser = checkOAuthReturn();
-      if (oauthUser) {
-        const storedFbToken = consumeFacebookAccessToken();
-        if (storedFbToken) setFbToken(storedFbToken);
-        handleOAuthSuccess(oauthUser, storedFbToken);
+    const consumeReturn = () => {
+      try {
+        const oauthUser = checkOAuthReturn();
+        if (oauthUser) {
+          const storedFbToken = consumeFacebookAccessToken();
+          if (storedFbToken) setFbToken(storedFbToken);
+          handleOAuthSuccess(oauthUser, storedFbToken);
+        }
+      } catch (e: any) {
+        setError(e.message || "Error.");
       }
-    } catch (e: any) {
-      setError(e.message || "Error.");
-    }
+    };
+    consumeReturn();
+    window.addEventListener("stop:oauth-error", consumeReturn);
+    return () => window.removeEventListener("stop:oauth-error", consumeReturn);
   }, []);
 
   const handleOAuthSuccess = (oauthUser: OAuthUser, fbAccessToken: string | null = null) => {

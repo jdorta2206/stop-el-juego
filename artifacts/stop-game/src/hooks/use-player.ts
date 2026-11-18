@@ -7,6 +7,11 @@ const STORAGE_KEY = "stop_player_v2";
 const OAUTH_ID_PREFIXES = ["google_", "fb_", "ig_", "apple_", "tt_"];
 const PLAYER_EVENT = "stop:player-changed";
 
+function hasPendingOAuthError(): boolean {
+  try { return new URLSearchParams(window.location.search).has("auth_error"); }
+  catch { return false; }
+}
+
 export interface PlayerProfile {
   id: string;
   name: string;
@@ -121,7 +126,7 @@ export function usePlayer() {
   const [initialStored] = useState<PlayerProfile | null>(() => readStoredPlayer());
   const [player, setPlayer] = useState<PlayerProfile | null>(initialStored);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [needsAuth, setNeedsAuth] = useState(!initialStored);
+  const [needsAuth, setNeedsAuth] = useState(!initialStored || hasPendingOAuthError());
 
   useEffect(() => {
     let cancelled = false;
@@ -136,7 +141,7 @@ export function usePlayer() {
     const stored = readStoredPlayer();
 
     if (stored) {
-      setPlayer(stored); setNeedsAuth(false); setIsLoaded(true);
+      setPlayer(stored); setNeedsAuth(hasPendingOAuthError()); setIsLoaded(true);
       if (isLoggedInId(stored.id)) {
         void (async () => {
           const generation = identityGeneration;
@@ -158,9 +163,11 @@ export function usePlayer() {
     }
 
     const handler = () => refresh();
+    const handleOAuthError = () => setNeedsAuth(true);
     window.addEventListener(PLAYER_EVENT, handler);
     window.addEventListener("storage", handler);
-    return () => { cancelled = true; window.removeEventListener(PLAYER_EVENT, handler); window.removeEventListener("storage", handler); };
+    window.addEventListener("stop:oauth-error", handleOAuthError);
+    return () => { cancelled = true; window.removeEventListener(PLAYER_EVENT, handler); window.removeEventListener("storage", handler); window.removeEventListener("stop:oauth-error", handleOAuthError); };
   }, []);
 
   const savePlayer = (profile: PlayerProfile) => {
