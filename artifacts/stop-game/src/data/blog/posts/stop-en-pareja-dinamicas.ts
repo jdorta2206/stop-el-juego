@@ -39,12 +39,8 @@ Categorías "ñoñas" pero divertidas:
 
 Para trayectos largos. **Oral, sin papel**:
 
-- Uno conduce y dicta la letra.
-- El otro responde 5 categorías mentalmente.
-- A los 60 segundos, el copiloto dice las que tenga.
-- Luego cambian.
-
-Mantiene la mente activa y evita el aburrimiento.
+- Si viajáis en coche, jugad únicamente cuando el vehículo esté estacionado. No leáis, escribáis ni participéis en una ronda mientras conducís.
+- Una persona puede preparar la letra y las categorías antes de iniciar el trayecto; el conductor debe concentrarse exclusivamente en la conducción.
 
 ## 4. STOP "compitiendo a ciegas"
 
@@ -145,7 +141,7 @@ A diferencia de muchos juegos de mesa (Monopoly, Catan, Risk) que son **brutales
 
 ¿Estáis lejos? [STOP online](/) tiene **salas privadas con código**. Creas una, le pasas el link a tu pareja, y jugáis en tiempo real desde cualquier ciudad o país. Funciona en cualquier móvil sin descargas.
 
-Si compartís a distancia muchos juegos así, también está nuestro **Reto Diario** que cada día propone una letra distinta para que ambos jugar la misma con el resto del mundo. Buena forma de "compartir un momento" aunque no podáis estar físicamente juntos.
+Si jugáis a distancia, podéis comparar vuestras respuestas del día cuando el modo disponible lo permita; revisad las instrucciones actuales del reto diario dentro del juego. Buena forma de "compartir un momento" aunque no podáis estar físicamente juntos.
 
 ---
 
