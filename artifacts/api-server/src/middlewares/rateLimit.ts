@@ -105,6 +105,8 @@ export const writeLimiter = limiter("write", 60_000, 120, playerKey);
 export const halloweenScareLimiter = limiter("halloween-scare", 60_000, 60, (req) => ipKeyGenerator(req.ip ?? ""));
 export const presenceLimiter = limiter("presence", 60_000, 90, playerKey);
 export const authLimiter = limiter("auth", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""));
+// Mass-push actions need a much tighter limit than ordinary panel login attempts.
+export const adminBroadcastLimiter = limiter("admin-broadcast", 10 * 60_000, 1, (req) => ipKeyGenerator(req.ip ?? ""));
 export const scoreLimiter = limiter("score", 5 * 60_000, 30, playerKey);
 export const inviteLimiter = limiter("invite", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""));
 export const contactLimiter = limiter("contact", 10 * 60_000, 5, (req) => ipKeyGenerator(req.ip ?? ""));
