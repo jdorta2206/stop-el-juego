@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { timingSafeEqual } from "crypto";
 import { db, indexesReady } from "@workspace/db";
 import { sql, type SQL } from "drizzle-orm";
-import { authLimiter } from "../middlewares/rateLimit";
+import { adminBroadcastLimiter, authLimiter } from "../middlewares/rateLimit";
 import { sendLocalizedBroadcast, type PushPayload } from "../lib/pushHelper";
 
 const router: IRouter = Router();
@@ -967,7 +967,7 @@ function sameOrigin(req: Request): boolean {
 // traducido al idioma de cada suscripción (es por defecto). No se envía nada de
 // forma automática: solo al pulsar el botón del panel (protegido por Basic Auth
 // + comprobación de mismo origen contra CSRF).
-router.post("/notify-mundial", authLimiter, basicAuth, async (req: Request, res: Response) => {
+router.post("/notify-mundial", authLimiter, basicAuth, adminBroadcastLimiter, async (req: Request, res: Response) => {
   if (!sameOrigin(req)) {
     res.status(403).type("html").send('<h1>Solicitud bloqueada</h1><p>Origen no válido.</p><a href="/test">← Volver</a>');
     return;
