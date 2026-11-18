@@ -264,7 +264,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
              LEFT(metadata_json, 700) AS details
       FROM public.analytics_events
       WHERE trusted = TRUE
-        AND event_name IN ('api_error','client_error','lobby_view','lobby_ready','lobby_auth_resolved','lobby_daily_status_started','lobby_daily_status_succeeded','lobby_daily_status_failed','lobby_api_timeout','lobby_auth_failed','lobby_page_exit','rewarded_ad_pending','rewarded_ad_failed')
+        AND event_name IN ('api_error','client_error','lobby_view','lobby_ready','lobby_auth_resolved','lobby_daily_status_started','lobby_daily_status_succeeded','lobby_daily_status_failed','lobby_room_load_started','lobby_room_loaded','lobby_room_load_failed','lobby_api_timeout','lobby_auth_failed','lobby_page_exit','rewarded_ad_pending','rewarded_ad_failed')
         AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
         AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
         AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
