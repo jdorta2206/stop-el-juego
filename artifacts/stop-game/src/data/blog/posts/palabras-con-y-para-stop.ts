@@ -26,8 +26,8 @@ Veamos ejemplos que empiezan por Y; comprobad su significado y las reglas de ace
 
 ## Nombres de persona con Y
 
-- **Yolanda, Yésica / Jessica, Yamila, Yara, Yasmín** (femeninos)
-- **Yago / Iago, Yannick, Yusuf, Yuri** (masculinos)
+- **Yolanda, Yésica, Yamila, Yara, Yasmín** (femeninos)
+- **Yago, Yannick, Yusuf, Yuri** (masculinos)
 - **Yon, Yeray** (vasco/canario)
 
 > **Ejemplo:** "Yolanda" es un nombre propio; utilizadlo si vuestra partida admite nombres de persona.
@@ -88,14 +88,14 @@ Mejor en blanco.
 ## Deportes con Y
 
 - **Yoga** (actividad física; acordad si encaja en vuestra categoría de deportes)
-- **Yudo** (variante gráfica de *judo*; comprobad qué forma acepta el diccionario o criterio de vuestra partida)
+
 - **Yate** es una embarcación, no un deporte; no lo uses como respuesta para esta categoría.
 
 ## Profesiones con Y
 
 - **Yesero** (el que trabaja con yeso)
 - **Yogui** (practicante de yoga)
-- **Yudoca** (practicante de yudo; comprobad la grafía acordada)
+
 
 ## Marcas con Y
 
