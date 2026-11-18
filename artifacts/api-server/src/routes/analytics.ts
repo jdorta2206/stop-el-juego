@@ -172,7 +172,7 @@ export async function ensureAnalyticsReady(): Promise<void> {
       analyticsTablesReady = null;
       analyticsRetryAfter = Date.now() + 5_000;
       analyticsInitError = err;
-      console.error("[analytics] schema initialization failed; retrying after cooldown:", err);
+      console.error("[analytics] schema initialization failed; retrying after cooldown; details withheld.");
       throw err;
     });
   }
@@ -242,7 +242,7 @@ router.use(async (req, res, next) => {
       ON CONFLICT (session_id) DO UPDATE SET platform = EXCLUDED.platform, last_seen = NOW()
     `);
   } catch (err) {
-    console.error("[analytics] passive heartbeat failed:", err);
+    console.error("[analytics] passive heartbeat failed; details withheld.");
   }
   next();
 });
@@ -283,7 +283,7 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
     });
     return res.json({ ok: true, platform, appVersion });
   } catch (err) {
-    console.error("[analytics] heartbeat failed:", err);
+    console.error("[analytics] heartbeat failed; details withheld.");
     return res.status(500).json({ error: "Analytics unavailable" });
   }
 });
@@ -306,7 +306,7 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
     `);
     return res.json({ ok: true });
   } catch (err) {
-    console.error("[analytics] trusted game-start failed:", err);
+    console.error("[analytics] trusted game-start failed; details withheld.");
     return res.status(500).json({ error: "Analytics unavailable" });
   }
 });
@@ -332,7 +332,7 @@ router.post("/client-error", presenceLimiter, async (req, res) => {
     `);
     return res.json({ ok: true });
   } catch (err) {
-    console.error("[analytics] client-error failed:", err);
+    console.error("[analytics] client-error failed; details withheld.");
     return res.status(500).json({ error: "Analytics unavailable" });
   }
 });
@@ -355,7 +355,7 @@ router.post("/event", presenceLimiter, async (req, res) => {
   `);
     return res.json({ ok: true });
   } catch (err) {
-    console.error("[analytics] event failed:", err);
+    console.error("[analytics] event failed; details withheld.");
     return res.status(500).json({ error: "Analytics unavailable" });
   }
 });
@@ -366,7 +366,7 @@ router.get("/summary", async (_req, res) => {
     const rows = await db.execute(sql`SELECT platform, COUNT(*)::int AS active FROM public.analytics_sessions WHERE last_seen >= NOW() - INTERVAL '90 seconds' GROUP BY platform ORDER BY platform`);
     return res.json({ platforms: rows.rows });
   } catch (err) {
-    console.error("[analytics] summary failed:", err);
+    console.error("[analytics] summary failed; details withheld.");
     return res.status(500).json({ error: "Analytics unavailable" });
   }
 });
