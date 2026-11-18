@@ -65,6 +65,7 @@ function safeDiagnosticText(value: unknown, max = 700): string {
     .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[token redactado]")
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email redactado]")
     .replace(/([?&](?:token|access_token|refresh_token|authorization|key|api_key|code)=)[^&#\s]*/gi, "$1[redactado]")
+    .replace(/(password|cookie|secret|authorization|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=[redactado]")
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[ip redactada]")
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[id redactado]");
 }
