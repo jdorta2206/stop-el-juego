@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Una rutina práctica para preparar categorías, organizar tus respuestas durante la ronda y aprender de las palabras dudosas al terminar.",
   keywords: ["preparar ronda STOP", "estrategias STOP", "categorías STOP", "juego de palabras", "mejorar en STOP"],
   publishedAt: "2026-06-17",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Estrategias",
   readMinutes: 6,
