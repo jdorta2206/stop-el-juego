@@ -55,8 +55,10 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     rollupOptions: { output: {
-      entryFileNames: `assets/[name].[hash].${buildTimestamp}.js`,
-      chunkFileNames: `assets/[name].[hash].${buildTimestamp}.js`,
+      // Content hashes keep unchanged chunks reusable across deployments.
+      // The build timestamp remains in VITE_WEB_BUILD_VERSION for telemetry only.
+      entryFileNames: "assets/[name].[hash].js",
+      chunkFileNames: "assets/[name].[hash].js",
       assetFileNames: "assets/[name].[hash].[ext]",
     } },
   },
