@@ -34,6 +34,18 @@ const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set([
   "halloween_scare_report_saved",
   "halloween_scare_report_failed",
 ]);
+function redactClientDiagnostic(value: unknown, max: number): string | null {
+  if (typeof value !== "string" || !value) return null;
+  return value.slice(0, max)
+    .replace(/\\bBearer\\s+[A-Za-z0-9._~+\\/-]+=*/gi, "Bearer [redacted]")
+    .replace(/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b/g, "[token redacted]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email redacted]")
+    .replace(/([?&](?:token|access_token|refresh_token|authorization|key|api_key|code)=)[^&#\\s]*/gi, "$1[redacted]")
+    .replace(/(token|password|authorization|cookie|secret|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+/gi, "$1=[redacted]")
+    .replace(/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/g, "[ip redacted]")
+    .replace(/\\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\b/gi, "[id redacted]");
+}
+
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
 const CURRENT_TWA_ANALYTICS_VERSION = "1.3.6.9";
 const CURRENT_WEB_ANALYTICS_VERSION = String(process.env.RAILWAY_GIT_COMMIT_SHA ?? "web-dev").slice(0, 12);
@@ -288,9 +300,9 @@ router.post("/client-error", presenceLimiter, async (req, res) => {
   try {
     await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const message = typeof body.message === "string" ? body.message.slice(0, 500) : "Unknown client error";
-    const stack = typeof body.stack === "string" ? body.stack.slice(0, 2500) : null;
-    const componentStack = typeof body.componentStack === "string" ? body.componentStack.slice(0, 2500) : null;
+    const message = redactClientDiagnostic(body.message, 500) ?? "Unknown client error";
+    const stack = redactClientDiagnostic(body.stack, 2500);
+    const componentStack = redactClientDiagnostic(body.componentStack, 2500);
     const sessionId = typeof body.sessionId === "string" ? body.sessionId.slice(0, 128) : null;
     const playerId = readPlayerId(req);
     const platform = platformFromRequest(req);
