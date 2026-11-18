@@ -15,7 +15,7 @@ async function oauthFetch(input: RequestInfo | URL, init?: RequestInit): Promise
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId, isLoggedInId } from "../lib/playerAuth";
+import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { revokePlayerId, markPlayerRevoked, isPlayerRevoked } from "../lib/playerRevocation";
@@ -927,7 +927,23 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
 // session by another year so casual players never get kicked out.
 router.get("/me", async (req: Request, res: Response) => {
   const playerId = readPlayerId(req);
-  if (!playerId || await isPlayerRevoked(playerId)) {
+  if (!playerId) {
+    // Log only a bounded reason code. Never log tokens, player IDs, cookies,
+    // headers, IP addresses, or user-agent values.
+    const cookieToken = req.cookies?.["stop_pt"];
+    const headerToken = req.headers["x-stop-token"];
+    const hasCookieToken = typeof cookieToken === "string" && cookieToken.length > 0;
+    const hasHeaderToken = typeof headerToken === "string" && headerToken.length > 0;
+    const reason = !isAuthConfigured()
+      ? "session_secret_unavailable"
+      : hasCookieToken || hasHeaderToken
+        ? "invalid_or_expired_credentials"
+        : "missing_credentials";
+    console.warn(`[auth/me] rejected reason=${reason}`);
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  if (await isPlayerRevoked(playerId)) {
+    console.warn("[auth/me] rejected reason=revoked_player");
     return res.status(401).json({ error: "Not authenticated" });
   }
 
