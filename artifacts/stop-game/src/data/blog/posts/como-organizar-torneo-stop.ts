@@ -53,7 +53,7 @@ Antes del torneo, **fija las reglas por escrito** y compártelas con los partici
 - **Tiempo por ronda** (recomendado: 60-90 segundos).
 - **Puntuación** (10/5/0 estándar).
 - **Letras excluidas** (Ñ, K, W, X, Y se pueden excluir si quieres torneo rápido — o incluirlas para hacerlo más reñido).
-- **Validación** (un juez, votación, o app que valide automáticamente).
+- **Validación** (una persona moderadora y una fuente de consulta acordada; si usáis una app, comprobad qué valida realmente y cómo resuelve las dudas).
 
 ## Paso 3: Material necesario
 
@@ -83,9 +83,9 @@ Calcula tiempos reales:
 | Pausa entre partidas | 5-10 min |
 | Ceremonia final + premios | 10-15 min |
 
-**Ejemplo torneo de 8 personas, formato liga, 28 partidas:** unas **18-20 horas** (¡demasiado!). Reduce a partidas de 5 rondas o usa eliminación directa.
+**Ejemplo de 8 personas en liga:** hay 28 enfrentamientos si cada pareja juega una vez. Con partidas de 5 rondas, calcula el tiempo multiplicando los enfrentamientos por la duración real de cada partida y añade pausas; no equivale automáticamente a 18-20 horas.
 
-**Ejemplo torneo de 16 personas, eliminación directa, 15 partidas:** unas **9-10 horas**. Sigue siendo mucho. Considera reducir a 6 rondas por partida.
+**Ejemplo de 16 personas en eliminación directa:** hacen falta 15 enfrentamientos. La duración total depende del número de rondas, del tiempo de respuesta y de las pausas; calcula esos factores antes de anunciar un horario.
 
 > 🟨 **Verdad incómoda:** los torneos largos cansan. Para eventos de 2-3 horas, lo realista es 6-12 participantes, partidas de 5 rondas, formato liga corto.
 
@@ -163,7 +163,7 @@ Sigue explorando:
 - [Estrategias avanzadas para ganar](/blog/estrategias-avanzadas-stop)
 - [Cómo jugar al STOP: reglas completas](/blog/como-jugar-stop-reglas-completas)
 
-¿Vas a organizar un torneo? Usa [STOP online](/) con salas privadas para coordinar a tus jugadores y validar palabras automáticamente — te ahorras 2 horas de discusiones.
+¿Vas a organizar un torneo? Puedes usar [STOP online](/) y revisar las funciones disponibles en el propio juego. No presupongas que una modalidad valida automáticamente todas las respuestas o sustituye las reglas del torneo.
 `,
 };
 
