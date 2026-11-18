@@ -56,7 +56,7 @@ describe("STOP gameplay telemetry allowlist", () => {
 
   it("redacts secret-like key/value diagnostics before rendering STOP Analytics", () => {
     expect(adminAnalyticsRouteSource).toContain(
-      "/(password|cookie|secret|authorization|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+/gi",
+      "/(token|password|cookie|secret|authorization|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+/gi",
     );
     expect(adminAnalyticsRouteSource).toContain("[redactado]");
   });
