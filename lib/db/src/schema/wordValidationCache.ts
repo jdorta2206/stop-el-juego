@@ -5,8 +5,8 @@ import { z } from "zod/v4";
 // Cache of AI-resolved word validations. When a player writes a word that is
 // NOT in our static dictionary, we ask an LLM whether the word is a valid
 // member of the requested category in the requested language. The answer is
-// cached here forever so a given (word, category, lang) triple is only ever
-// paid for once across all players for the lifetime of the game.
+// cached permanently; negative decisions expire after seven days so a transient
+// model mistake does not permanently reject a valid word for all players.
 //
 // Cache is intentionally lowercase-normalized and accent-folded on write
 // (callers must normalize before lookup) so "Manzana", "manzana" and
