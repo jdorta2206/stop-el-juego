@@ -495,6 +495,9 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     });
 
         const sessionToken = issuePlayerToken(res, playerId);
+    if (!sessionToken) {
+      throw new Error("Unable to issue OAuth session token");
+    }
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -587,6 +590,9 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     });
 
         const sessionToken = issuePlayerToken(res, playerId);
+    if (!sessionToken) {
+      throw new Error("Unable to issue OAuth session token");
+    }
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ["fb_access_token", tokenData.access_token],
@@ -679,6 +685,9 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     await persistOAuthProfile(playerId, String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", me.profile_picture_url || null, authStartedAt);
 
         const sessionToken = issuePlayerToken(res, playerId);
+    if (!sessionToken) {
+      throw new Error("Unable to issue OAuth session token");
+    }
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -803,6 +812,9 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     });
 
         const sessionToken = issuePlayerToken(res, playerId);
+    if (!sessionToken) {
+      throw new Error("Unable to issue OAuth session token");
+    }
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -908,6 +920,9 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     });
 
         const sessionToken = issuePlayerToken(res, playerId);
+    if (!sessionToken) {
+      throw new Error("Unable to issue OAuth session token");
+    }
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
