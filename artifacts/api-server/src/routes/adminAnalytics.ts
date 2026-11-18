@@ -504,7 +504,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
     }).join("");
     const halloweenFailureRows = (halloweenFailures.rows as any[]).map((row) => {
       let metadata = "{}";
-      try { metadata = JSON.stringify(JSON.parse(String(row.metadata_json ?? "{}"))); } catch { metadata = String(row.metadata_json ?? "{}"); }
+      try { metadata = safeDiagnosticText(JSON.stringify(JSON.parse(String(row.metadata_json ?? "{}"))), 700); } catch { metadata = safeDiagnosticText(String(row.metadata_json ?? "{}"), 700); }
       const when = row.created_at ? new Date(String(row.created_at)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
       const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
       return `<tr><td>${when}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(metadata)}</code></td></tr>`;
