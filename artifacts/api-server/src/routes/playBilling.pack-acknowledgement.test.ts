@@ -55,6 +55,26 @@ describe("Google Play World Cup pack acknowledgement retry", () => {
     expect(restoreBlock).toContain("purchase.purchaseToken");
   });
 
+
+  it("runs purchase restoration for signed-in accounts even when they are not Premium-eligible", () => {
+    const premiumHook = readFileSync(
+      resolve(currentDir, "../../../stop-game/src/lib/usePremium.ts"),
+      "utf8",
+    );
+    expect(premiumHook).toContain("if (!playerId)");
+    expect(premiumHook).toContain("await restorePlayPurchases(playerId)");
+    expect(premiumHook).toContain("if (!premiumEligible) return;");
+  });
+
+  it("continues restoring remaining purchases after finding Premium", () => {
+    const restoreStart = clientSource.indexOf("export async function restorePlayPurchases(");
+    const restoreEnd = clientSource.indexOf("\n}\n", restoreStart);
+    const restoreBlock = clientSource.slice(restoreStart, restoreEnd);
+    expect(restoreBlock).toContain("let hasPremium = false;");
+    expect(restoreBlock).toContain("if (data.isPremium === true) hasPremium = true;");
+    expect(restoreBlock).not.toContain("if (data.isPremium === true) return true;");
+  });
+
   it("does not consume the permanent pack in the client and accepts granted-but-pending responses", () => {
     expect(clientSource).not.toContain("service.consume");
     expect(clientSource).toContain("data.granted !== true");
