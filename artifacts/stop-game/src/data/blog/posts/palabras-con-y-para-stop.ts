@@ -10,143 +10,172 @@ const post: BlogPost = {
   category: "Listas de palabras",
   readMinutes: 6,
   content: `
-La letra **Y** en español es más amigable que la X o la W, pero aun así muchos jugadores se bloquean cuando sale. Razón: la mayoría de palabras con Y son **muy específicas** (Yemen, yate, yoyó…) y no las tenemos en la punta de la lengua.
+La **Y** ofrece bastantes posibilidades para jugar al STOP. Algunas palabras son muy conocidas, como *yate*, *yogur* o *yegua*; otras proceden de nombres geográficos o de distintas lenguas.
 
-Esta guía reúne ejemplos con Y por categoría para ayudarte a practicar y revisar su escritura.
+En esta guía encontrarás ejemplos ordenados por categorías. La idea es ayudarte a practicar sin confundir palabras que empiezan por Y con otras que simplemente contienen esa letra.
 
-## La Y en español: usos comunes
+## Qué debes recordar sobre la Y
 
-En español la Y puede ser:
+La Y tiene distintos usos en español:
 
-1. **Conjunción** (no cuenta en STOP).
-2. **Vocal o consonante** al inicio de palabra: yate, yogur, ya, yegua…
-3. **Final de palabra**: rey, hoy, soy… (no cuentan, deben empezar por Y).
+- Puede funcionar como consonante al principio de palabras como **yate**, **yegua** o **yuca**.
+- Puede aparecer al final de palabras como **rey**, **hoy** o **soy**.
+- También se utiliza como conjunción, por ejemplo en «Ana y Luis».
 
-Veamos ejemplos que empiezan por Y; comprobad su significado y las reglas de aceptación de vuestra partida.
+Para una casilla que exige una palabra que empiece por Y, **rey**, **hoy** y **soy** no sirven: terminan en esa letra, pero empiezan por otra.
 
 ## Nombres de persona con Y
 
-- **Yolanda, Yésica / Jessica, Yamila, Yara, Yasmín** (femeninos)
-- **Yago / Iago, Yannick, Yusuf, Yuri** (masculinos)
-- **Yon, Yeray** (vasco/canario)
+Si vuestra partida admite nombres propios, puedes practicar con:
 
-> **Ejemplo:** "Yolanda" es un nombre propio; utilizadlo si vuestra partida admite nombres de persona.
+- **Yolanda**
+- **Yara**
+- **Yamila**
+- **Yasmín**
+- **Yago**
+- **Yuri**
+- **Yeray**
+- **Yannick**
+
+Comprueba la escritura concreta del nombre. No todas las variantes de un nombre empiezan por la misma letra.
 
 ## Apellidos con Y
 
-- **Yáñez, Yagüe, Yuste, Yebra, Yepes**
-- **Yamamoto, Young, Yates**
+Algunos apellidos que empiezan por Y son:
+
+- **Yáñez**
+- **Yagüe**
+- **Yuste**
+- **Yebra**
+- **Yepes**
+- **Yamamoto**
+- **Young**
+- **Yates**
+
+Son nombres propios y deben utilizarse solo si vuestra partida admite apellidos.
 
 ## Animales con Y
 
-Aquí hay opciones reales:
+Estas son opciones que puedes preparar:
 
-- **Yak** (bóvido del Tíbet)
-- **Yacaré** (caimán sudamericano)
-- **Yegua** (hembra del caballo)
-- **Yorkshire** (raza de perro)
-- **Yaguar** (variante de "jaguar"; comprobad si la aceptáis en vuestro diccionario de referencia)
+- **Yak**: bóvido originario de las regiones montañosas de Asia central.
+- **Yacaré**: reptil de la familia de los caimanes, propio de América del Sur.
+- **Yegua**: hembra del caballo.
+- **Yorkshire terrier**: raza de perro cuyo nombre empieza por Y.
+
+En el caso de *yorkshire terrier*, recuerda que se trata del nombre de una raza. Si vuestra categoría exige nombres comunes de animales y no razas, acordad si se acepta.
 
 ## Colores con Y
 
-Casi nada. Algunos aceptan:
+No recomendamos **yema** como respuesta segura para esta categoría. Es una parte del huevo y también aparece en nombres de alimentos, pero no es un nombre general e inequívoco de color.
 
-- **Yema** (color amarillo yema de huevo) — discutible
-
-Mejor en blanco.
+Si no conoces un color que empiece por Y y puedas justificar, deja la casilla vacía.
 
 ## Países con Y
 
-- **Yemen** (la apuesta segura)
-- **Yibuti** (nombre adaptado al español del país africano)
+- **Yemen**
+- **Yibuti**
+
+Son dos nombres de países utilizados en español. No confundas el país Yibuti con su capital, que también se llama Yibuti.
 
 ## Ciudades con Y
 
-- **Yakarta** (capital de Indonesia)
-- **Yokohama** (Japón)
-- **York** (Inglaterra)
-- **Yibuti** (capital del país homónimo)
-- **Yangon** (ciudad de Myanmar)
+Puedes practicar con estos nombres geográficos:
 
-> 🟩 **Top pick:** "Yakarta" o "Yokohama".
+- **Yakarta**, capital de Indonesia.
+- **Yokohama**, ciudad japonesa.
+- **York**, ciudad de Inglaterra.
+- **Yangon**, ciudad de Myanmar.
+- **Yibuti**, capital del país del mismo nombre.
+
+Si la partida admite ciudades de cualquier país, estos ejemplos amplían las posibilidades de respuesta.
 
 ## Comidas y bebidas con Y
 
-- **Yogur** (alimento lácteo fermentado)
-- **Yema** (yema de huevo, o dulce típico de Ávila)
-- **Yuca** (raíz comestible muy popular en Latinoamérica)
-- **Yakisoba** (fideos japoneses)
-- **Yuzu** (cítrico de origen asiático)
+- **Yogur**: alimento lácteo fermentado.
+- **Yuca**: raíz comestible utilizada en numerosas cocinas.
+- **Yema**: parte central del huevo; también se utiliza en dulces.
+- **Yakisoba**: plato japonés de fideos.
+- **Yuzu**: cítrico utilizado en la cocina de Asia oriental.
 
-## Objetos / cosas con Y
+Algunos nombres proceden de otras lenguas. Si vuestra partida limita los extranjerismos, comprobad las reglas antes de utilizarlos.
 
-- **Yate** (la embarcación)
-- **Yoyó** (el juguete)
-- **Yunque** (la base del herrero)
-- **Yelmo** (casco medieval)
-- **Yeso** (material de construcción)
+## Objetos y cosas con Y
 
-## Deportes con Y
+- **Yate**: embarcación de recreo.
+- **Yoyó**: juguete formado por dos discos unidos por un eje y una cuerda.
+- **Yunque**: bloque de metal utilizado para trabajar metales.
+- **Yelmo**: pieza de armadura que protege la cabeza.
+- **Yeso**: material utilizado en construcción y otras aplicaciones.
 
-- **Yoga** (actividad física; acordad si encaja en vuestra categoría de deportes)
-- **Yudo / Judo** (depende de la escritura)
-- **Yate** es una embarcación, no un deporte; no lo uses como respuesta para esta categoría.
+## Deportes y actividades con Y
+
+- **Yudo**: nombre español de la disciplina también conocida como judo.
+- **Yoga**: actividad física y práctica corporal; su clasificación como deporte depende del criterio de la partida.
+
+Para evitar desacuerdos, distinguid entre deportes competitivos, artes marciales y actividades físicas.
 
 ## Profesiones con Y
 
-- **Yesero** (el que trabaja con yeso)
-- **Yogui** (practicante de yoga)
-- **Yudoka** (practicante de yudo)
+- **Yesero**: persona que trabaja con yeso, especialmente en construcción y acabados.
+
+No es necesario inventar más respuestas. Si no conoces otra profesión que empiece por Y y puedas justificar, es mejor no forzar la categoría.
 
 ## Marcas con Y
 
-- **Yamaha** (motos y música)
-- **Yahoo!** (buscador)
-- **YouTube**
-- **Yves Saint Laurent** (moda)
-- **Yoplait** (yogures)
-- **Yorkie** (chocolate)
+Si vuestra partida permite nombres comerciales, estos son algunos ejemplos:
 
-> 🟩 **Top pick:** "Yamaha" o "YouTube".
+- **Yamaha**: motocicletas, instrumentos musicales y otros productos.
+- **Yahoo!**: servicios de internet.
+- **YouTube**: plataforma de vídeos.
+- **Yoplait**: productos lácteos.
+- **Yves Saint Laurent**: moda y perfumería.
 
-## Famosos con Y
+Las marcas no son palabras comunes. Utilízalas únicamente si las normas admiten nombres comerciales.
 
-- **Yuri** (cantante mexicana)
-- **Yolanda Díaz** (política española)
-- **Yves Saint Laurent** (diseñador)
-- **Yannick Noah** (tenista)
-- **Yoko Ono** (artista, viuda de John Lennon)
-- **Yiruma** (pianista coreano)
+## Personas conocidas con Y
 
-## Trucos para la Y
+Si se admiten nombres de personas famosas, puedes practicar con:
 
-1. Repasa algunos ejemplos del resumen y comprueba su escritura antes de jugar.
-2. **No confundas Y con J en nombres** (Yésica/Jessica, Yago/Iago). Asegúrate de que se escribe con Y.
-3. **Aprovecha la comida y los objetos** — son las categorías más ricas en Y.
+- **Yoko Ono**: artista.
+- **Yannick Noah**: extenista y músico.
+- **Yiruma**: pianista y compositor.
+- **Yuri**: cantante mexicana.
+- **Yolanda Díaz**: política española.
 
-## Tu "kit mínimo STOP letra Y"
+Comprueba que la categoría admite personas reales y que el nombre elegido comienza por Y.
 
-| Categoría | Palabra |
+## Consejos para jugar con la Y
+
+1. Empieza por palabras comunes como *yate*, *yuca*, *yogur* y *yegua*.
+2. Recuerda que una palabra que termina en Y no sirve para una casilla que exige esa inicial.
+3. No confundas variantes de nombres propios.
+4. Distingue los deportes de las actividades físicas.
+5. Evita respuestas dudosas en colores y profesiones.
+
+## Resumen: ejemplos con Y
+
+| Categoría | Ejemplo |
 |---|---|
-| Nombre | Yolanda |
+| Nombre propio | Yolanda |
 | Animal | Yak |
 | País | Yemen |
 | Ciudad | Yakarta |
 | Comida | Yogur |
 | Objeto | Yate |
-| Deporte | Yoga |
-| Marca (si se admiten marcas) | Yamaha |
-| Famoso | Yoko Ono |
+| Deporte o disciplina | Yudo |
+| Profesión | Yesero |
+| Marca (si se admite) | Yamaha |
 
-Esta selección ofrece ejemplos para practicar. No asegura puntos: la puntuación depende del sistema de la partida, de la validez de cada respuesta y de las coincidencias con otros jugadores.
+La lista es una ayuda para practicar. La aceptación de nombres propios, marcas, razas y extranjerismos depende de las reglas que hayáis acordado.
 
-## Por qué la Y es una oportunidad
+## Fuentes para consultar
 
-La Y ofrece más posibilidades que algunas letras poco frecuentes, pero no existe una puntuación media universal. Practica las palabras, revisa su significado y adapta tus respuestas a las categorías y reglas de cada partida.
+- [RAE — Diccionario de la lengua española](https://dle.rae.es/): consulta de grafías y significados.
+- [RAE — Ortografía](https://www.rae.es/diccionario-estudiante/docs/ortografia.pdf): referencia para las explicaciones ortográficas sobre la Y.
+- [FundéuRAE — Nombres de países africanos y sus gentilicios](https://www.fundeu.es/recomendacion/nombres-de-paises-africanos-gentilicios-mapa/): referencia para las formas españolas de nombres como Yibuti.
 
----
-
-Sigue practicando con otras letras difíciles:
+Sigue practicando con otras letras:
 
 - [Palabras con K para STOP](/blog/palabras-con-k-para-stop)
 - [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
@@ -154,7 +183,7 @@ Sigue practicando con otras letras difíciles:
 - [Palabras con Z para STOP](/blog/palabras-con-z-para-stop)
 - [Trucos para pensar palabras rápido bajo presión](/blog/pensar-palabras-rapido-bajo-presion)
 
-¿Quieres comprobar tu vocabulario con Y ahora mismo? [Juega gratis a STOP online](/) y enfréntate al cronómetro.
+¿Quieres probar tus respuestas? Juega gratis a [STOP online](/).
 `,
 };
 
