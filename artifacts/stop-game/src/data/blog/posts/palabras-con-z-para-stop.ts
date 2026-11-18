@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Practica palabras con Z organizadas por categorías y comprueba cuáles encajan con las reglas de tu partida de STOP.",
   keywords: ["palabras con Z", "palabras con Z para STOP", "nombres con Z", "animales con Z", "países con Z", "comidas con Z", "marcas con Z"],
   publishedAt: "2026-05-17",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 6,
