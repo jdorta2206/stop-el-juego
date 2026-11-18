@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Ejemplos de palabras con Y organizados por categorías para practicar y comprobar según las reglas de tu partida de STOP.",
   keywords: ["palabras con Y", "palabras con Y para STOP", "nombres con Y", "animales con Y", "países con Y", "comidas con Y", "marcas con Y"],
   publishedAt: "2026-05-18",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 6,
@@ -26,8 +27,8 @@ Veamos ejemplos que empiezan por Y; comprobad su significado y las reglas de ace
 
 ## Nombres de persona con Y
 
-- **Yolanda, Yésica / Jessica, Yamila, Yara, Yasmín** (femeninos)
-- **Yago / Iago, Yannick, Yusuf, Yuri** (masculinos)
+- **Yolanda, Yésica, Yamila, Yara, Yasmín** (femeninos)
+- **Yago, Yannick, Yusuf, Yuri** (masculinos)
 - **Yon, Yeray** (vasco/canario)
 
 > **Ejemplo:** "Yolanda" es un nombre propio; utilizadlo si vuestra partida admite nombres de persona.
@@ -44,16 +45,13 @@ Aquí hay opciones reales:
 - **Yak** (bóvido del Tíbet)
 - **Yacaré** (caimán sudamericano)
 - **Yegua** (hembra del caballo)
-- **Yorkshire** (raza de perro)
-- **Yaguar** (variante de "jaguar"; comprobad si la aceptáis en vuestro diccionario de referencia)
+- **Yorkshire terrier** (raza de perro; acordad si se aceptan razas como respuestas de animales)
 
 ## Colores con Y
 
-Casi nada. Algunos aceptan:
+No hay un ejemplo de color de uso general y claramente asentado que convenga recomendar para esta letra. «Yema» nombra una parte del huevo o ciertos dulces; «amarillo yema» describe un tono, pero no es una respuesta inequívoca para una categoría estricta de colores.
 
-- **Yema** (color amarillo yema de huevo) — discutible
-
-Mejor en blanco.
+Si no habéis acordado aceptar nombres descriptivos de tonos, es mejor dejar la casilla en blanco.
 
 ## Países con Y
 
@@ -89,14 +87,15 @@ Mejor en blanco.
 ## Deportes con Y
 
 - **Yoga** (actividad física; acordad si encaja en vuestra categoría de deportes)
-- **Yudo / Judo** (depende de la escritura)
+
 - **Yate** es una embarcación, no un deporte; no lo uses como respuesta para esta categoría.
 
 ## Profesiones con Y
 
-- **Yesero** (el que trabaja con yeso)
-- **Yogui** (practicante de yoga)
-- **Yudoka** (practicante de yudo)
+- **Yesero** (persona que trabaja con yeso)
+
+«Yogui» designa a quien practica yoga, pero no necesariamente una profesión; úsalo solo si vuestra categoría admite actividades o roles que no son ocupaciones.
+
 
 ## Marcas con Y
 
@@ -134,7 +133,7 @@ Mejor en blanco.
 | Ciudad | Yakarta |
 | Comida | Yogur |
 | Objeto | Yate |
-| Deporte | Yoga |
+| Actividad física (si se admite) | Yoga |
 | Marca (si se admiten marcas) | Yamaha |
 | Famoso | Yoko Ono |
 

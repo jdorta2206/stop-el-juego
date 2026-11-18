@@ -3,16 +3,17 @@ import type { BlogPost } from "../types";
 const post: BlogPost = {
   slug: "stop-en-pareja-dinamicas",
   title: "STOP en pareja: 15 ideas divertidas para jugar a dos",
-  description: "El STOP no es solo para grupos: en pareja es ideal para citas, viajes, sobremesa o trayectos largos. 15 dinámicas y modos especiales para hacerlo divertido.",
+  description: "El STOP también se puede adaptar a dos personas: descubre 15 variantes para una cita, una sobremesa o una partida a distancia, con reglas sencillas para cada propuesta.",
   keywords: ["STOP en pareja", "jugar a dos Scattergories", "juego pareja palabras", "STOP cita", "STOP viaje"],
   publishedAt: "2026-05-08",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Para todos los públicos",
   readMinutes: 6,
   content: `
-Mucha gente piensa que el STOP **necesita un grupo grande** para ser divertido. **Mentira.** En pareja puede ser igualmente entretenido — y de hecho hay modalidades que **funcionan mejor a dos** que con más gente.
+El STOP no necesita un grupo grande para convertirse en una actividad entretenida. Con dos personas podéis competir, colaborar o cambiar las reglas para adaptar cada ronda a vuestros gustos.
 
-Si tienes a tu pareja delante en una cena, un viaje en coche, una tarde de domingo o simplemente quieres una alternativa al "qué hacemos esta noche", aquí tienes **15 ideas concretas** para jugar al STOP a dos.
+Si queréis jugar durante una cena, una tarde tranquila o a distancia, aquí tienes **15 ideas concretas** para adaptar el STOP a dos personas.
 
 ## 1. STOP express (3 rondas, 5 minutos)
 
@@ -39,12 +40,8 @@ Categorías "ñoñas" pero divertidas:
 
 Para trayectos largos. **Oral, sin papel**:
 
-- Uno conduce y dicta la letra.
-- El otro responde 5 categorías mentalmente.
-- A los 60 segundos, el copiloto dice las que tenga.
-- Luego cambian.
-
-Mantiene la mente activa y evita el aburrimiento.
+- Si viajáis en coche, jugad únicamente cuando el vehículo esté estacionado. No leáis, escribáis ni participéis en una ronda mientras conducís.
+- Una persona puede preparar la letra y las categorías antes de iniciar el trayecto; el conductor debe concentrarse exclusivamente en la conducción.
 
 ## 4. STOP "compitiendo a ciegas"
 
@@ -125,13 +122,13 @@ Una partida muy larga: **20 rondas, 10 categorías, todas las letras**. Solo par
 
 ---
 
-## Por qué el STOP funciona en pareja
+## Por qué puede funcionar el STOP en pareja
 
-A diferencia de muchos juegos de mesa (Monopoly, Catan, Risk) que son **brutales a dos jugadores**, el STOP funciona perfectamente porque:
+Estas variantes permiten adaptar la dinámica a dos personas por varios motivos:
 
 1. **No tiene mecánicas de "atacar al otro"** — cada uno hace lo suyo.
 2. **Las rondas son cortas** — se puede empezar y parar fácil.
-3. **No hay "ganador aplastante"** — el azar de la letra equilibra mucho.
+3. **Podéis ajustar la dificultad** — elegid letras, categorías y tiempos que resulten razonables para ambos.
 4. **Da pie a conversación** — cada palabra es excusa para una anécdota o broma.
 
 ## Errores típicos al jugar en pareja
@@ -143,9 +140,9 @@ A diferencia de muchos juegos de mesa (Monopoly, Catan, Risk) que son **brutales
 
 ## STOP online en pareja a distancia
 
-¿Estáis lejos? [STOP online](/) tiene **salas privadas con código**. Creas una, le pasas el link a tu pareja, y jugáis en tiempo real desde cualquier ciudad o país. Funciona en cualquier móvil sin descargas.
+¿Estáis lejos? Consultad en [STOP online](/) las modalidades disponibles y comprobad si permiten jugar juntos a distancia antes de organizar la partida.
 
-Si compartís a distancia muchos juegos así, también está nuestro **Reto Diario** que cada día propone una letra distinta para que ambos jugar la misma con el resto del mundo. Buena forma de "compartir un momento" aunque no podáis estar físicamente juntos.
+Si jugáis a distancia, podéis comparar vuestras respuestas del día cuando el modo disponible lo permita; revisad las instrucciones actuales del reto diario dentro del juego. Buena forma de "compartir un momento" aunque no podáis estar físicamente juntos.
 
 ---
 
@@ -156,7 +153,7 @@ Más ideas:
 - [Cómo organizar un torneo de STOP](/blog/como-organizar-torneo-stop)
 - [Trucos para pensar palabras rápido](/blog/pensar-palabras-rapido-bajo-presion)
 
-¿Os animáis a una partida ahora mismo? [Crea sala privada en STOP online](/) y compartid el enlace.
+¿Os animáis a una partida? [Entrad en STOP online](/) y consultad las opciones disponibles para jugar en pareja.
 `,
 };
 

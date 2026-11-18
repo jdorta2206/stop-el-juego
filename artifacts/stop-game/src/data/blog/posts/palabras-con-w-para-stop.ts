@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Ideas de palabras con W para jugar al STOP, con notas sobre préstamos, nombres propios y respuestas que conviene acordar antes de la partida.",
   keywords: ["palabras con W", "palabras con W para STOP", "nombres con W", "animales con W", "juego de palabras"],
   publishedAt: "2026-11-12",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 5,
@@ -28,14 +29,12 @@ Los nombres propios suelen admitirse en categorías de nombres, siempre que esa 
 
 - **Wapití**: ciervo norteamericano.
 - **Wombat**: marsupial australiano.
-- **Walabí**: marsupial parecido a un canguro pequeño.
-- **Weimaraner**: raza de perro.
-
-En esta categoría conviene comprobar la grafía y decidir si se aceptan nombres de razas.
+- **Walabí / ualabí**: variantes gráficas usadas para nombrar a ciertos marsupiales; comprobad qué grafía acepta el diccionario elegido y si empieza por W en vuestra partida.
+En esta categoría conviene comprobar la grafía y decidir si se aceptan nombres de razas. **Weimaraner** es una raza canina, no el nombre de una especie; inclúyela solo si vuestra partida admite razas como respuestas de animales.
 
 ## Países y territorios
 
-No hay muchos países soberanos cuyo nombre habitual en español empiece por W. **Wallis y Futuna** es un territorio francés del Pacífico, no un país independiente. Si la categoría es «país», no lo presentes como respuesta equivalente a un Estado soberano.
+No hay países soberanos cuyo nombre habitual en español empiece por W. **Wallis y Futuna** es una colectividad de ultramar francesa del Pacífico, no un Estado soberano independiente. Si la categoría es «país», no la presentes como equivalente a un país.
 
 ## Ciudades
 

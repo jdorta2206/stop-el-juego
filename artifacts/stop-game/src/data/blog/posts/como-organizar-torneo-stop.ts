@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Guía paso a paso para organizar un torneo de STOP de cualquier tamaño: formato, brackets, puntuación, premios, gestión del tiempo y errores que evitar.",
   keywords: ["torneo STOP", "competición STOP", "campeonato Scattergories", "organizar juego STOP grupo", "STOP en clase", "STOP en empresa"],
   publishedAt: "2026-05-10",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Eventos y grupos",
   readMinutes: 8,
@@ -42,7 +43,7 @@ Como el ajedrez competitivo: cada ronda emparejas a jugadores con puntuación si
 - **Contras:** requiere bracket y software (o Excel) para emparejar.
 - **Ideal para:** torneos grandes, eventos formales.
 
-> 💡 **Truco:** para cumpleaños familiares o pequeños eventos, **el formato Liga es siempre el más divertido**. Para algo formal, ve a Suizo.
+> 💡 **Truco:** para cumpleaños familiares o pequeños eventos, una fase de grupos corta puede dar más oportunidades de jugar que una eliminatoria directa. Para grupos grandes, considera un sistema suizo si puedes gestionar los emparejamientos.
 
 ## Paso 2: Definir reglas y categorías
 
@@ -51,9 +52,9 @@ Antes del torneo, **fija las reglas por escrito** y compártelas con los partici
 - **Número de rondas por partida** (recomendado: 10).
 - **Categorías** (recomendado: 8, con 2 "fáciles", 4 "medias", 2 "difíciles" — ver [50 categorías originales](/blog/categorias-originales-stop)).
 - **Tiempo por ronda** (recomendado: 60-90 segundos).
-- **Puntuación** (10/5/0 estándar).
+- **Puntuación** (por ejemplo, 10/5/0 como sistema orientativo; acordadlo antes).
 - **Letras excluidas** (Ñ, K, W, X, Y se pueden excluir si quieres torneo rápido — o incluirlas para hacerlo más reñido).
-- **Validación** (un juez, votación, o app que valide automáticamente).
+- **Validación** (una persona moderadora y una fuente de consulta acordada; si usáis una app, comprobad qué valida realmente y cómo resuelve las dudas).
 
 ## Paso 3: Material necesario
 
@@ -67,7 +68,7 @@ Para un torneo presencial necesitas:
 
 Para torneo online:
 
-- **App de STOP** (recomendamos [STOP online](/) que soporta salas privadas).
+- **Juego o herramienta online** que vayáis a utilizar. Comprobad antes si permite partidas con el número de participantes previsto; no deis por disponible una función de salas privadas sin verificarla.
 - **Chat o videollamada** para coordinar entre rondas.
 - **Spreadsheet compartido** (Google Sheets) para llevar puntuaciones.
 
@@ -83,11 +84,11 @@ Calcula tiempos reales:
 | Pausa entre partidas | 5-10 min |
 | Ceremonia final + premios | 10-15 min |
 
-**Ejemplo torneo de 8 personas, formato liga, 28 partidas:** unas **18-20 horas** (¡demasiado!). Reduce a partidas de 5 rondas o usa eliminación directa.
+**Ejemplo de 8 personas en liga:** si cada pareja se enfrenta una vez, hay 28 enfrentamientos. Es un formato largo; para un evento breve, es preferible dividir al grupo en mesas o reducir el número de enfrentamientos y explicar cómo se clasificará a la final.
 
-**Ejemplo torneo de 16 personas, eliminación directa, 15 partidas:** unas **9-10 horas**. Sigue siendo mucho. Considera reducir a 6 rondas por partida.
+**Ejemplo de 16 personas en eliminación directa:** hacen falta 15 enfrentamientos. La duración total depende del número de rondas, del tiempo de respuesta y de las pausas; calcula esos factores antes de anunciar un horario.
 
-> 🟨 **Verdad incómoda:** los torneos largos cansan. Para eventos de 2-3 horas, lo realista es 6-12 participantes, partidas de 5 rondas, formato liga corto.
+> **Consejo de organización:** no anuncies una duración cerrada hasta definir el número de enfrentamientos, rondas y mesas simultáneas. Prueba una ronda completa y calcula el horario con ese dato.
 
 ## Paso 5: Premios
 
@@ -109,7 +110,7 @@ Las **impugnaciones** son la mayor fuente de problemas en torneos. Protocolo rec
 3. **Decisión rápida (30 segundos máximo)**, sin debate prolongado.
 4. **La decisión del árbitro es definitiva.** No se vuelve sobre ello.
 
-> 💡 **Para evitar el 80% de impugnaciones**, anuncia las reglas al inicio: "vale el DRAE", "no valen siglas", "los plurales sí cuentan", etc.
+> 💡 **Para reducir las impugnaciones**, anuncia las reglas al inicio: "vale el DRAE", "no valen siglas", "los plurales sí cuentan", etc.
 
 ## Paso 7: Crear ambiente
 
@@ -122,37 +123,33 @@ Un torneo es **más que un juego**. Para hacerlo memorable:
 
 ## Errores comunes que matan torneos
 
-1. **Demasiados participantes para el formato elegido.** 32 personas en liga = 8 horas de juego.
+1. **Demasiados participantes para el formato elegido.** Una liga completa con 32 personas, si cada pareja juega una vez, requiere 496 enfrentamientos.
 2. **Categorías muy difíciles** desde la primera ronda. La gente se frustra y se va.
 3. **Sin árbitro claro.** Cada impugnación se convierte en debate de 10 minutos.
 4. **No medir el tiempo.** Sin cronómetro, las rondas se eternizan.
 5. **Letras imposibles seguidas.** Si caen K, W, X en las 3 primeras rondas, el torneo arranca mal.
 
-## Plantilla rápida: torneo de oficina (1 hora)
+## Plantilla rápida: torneo de oficina
 
-Aquí una plantilla concreta para un **torneo express en oficina**:
+- **Participantes:** 6-8.
+- **Formato:** dos mesas simultáneas o una fase inicial por grupos; explica antes cómo se eligen las personas que pasan a la final.
+- **Partidas:** 3-5 rondas por fase.
+- **Categorías:** Nombre, Animal, Comida, Ciudad y Objeto.
+- **Tiempo:** el mismo para todas las personas de una fase.
+- **Letras:** acordadas antes de empezar.
+- **Duración:** calcula el horario después de probar una ronda y contar el tiempo de corrección y puntuación.
+- **Premio:** un detalle simbólico para quien gane.
 
-- **Participantes:** 6-8
-- **Formato:** Liga rápida, todos contra todos (1 partida cada uno contra cada uno)
-- **Partidas:** 5 rondas cada una
-- **Categorías:** Nombre, Animal, Comida, Ciudad, Marca
-- **Tiempo por ronda:** 45 segundos
-- **Letras:** del sorteo, excluyendo Ñ
-- **Duración total:** 50-60 minutos
-- **Premio:** café/desayuno gratis al ganador
+## Plantilla: cumpleaños familiar
 
-Fácil, divertido, sin estrés.
-
-## Plantilla: cumpleaños familiar (2 horas)
-
-- **Participantes:** 8-12 (mezclando edades 8-70 años)
-- **Formato:** Eliminación directa
-- **Partidas:** 6 rondas
-- **Categorías:** Nombre, Animal, Color, Fruta, País, Cosa, Marca, Famoso (8 fáciles)
-- **Tiempo por ronda:** 90 segundos (más generoso para los mayores)
-- **Letras:** todas excepto Ñ, X, W
-- **Duración total:** 2 horas
-- **Premios:** medalla casera + dulce para el ganador
+- **Participantes:** 8-12, con equipos o emparejamientos equilibrados por edades.
+- **Formato:** eliminatoria si el grupo acepta que parte de los participantes juegue menos; si no, utiliza una fase de grupos.
+- **Partidas:** define el número de rondas por fase antes de anunciar el horario.
+- **Categorías:** Nombre, Animal, Color, Fruta, País, Objeto y Comida.
+- **Tiempo:** ajustado a la edad y experiencia del grupo.
+- **Letras:** acordadas de antemano; podéis excluir las menos frecuentes.
+- **Duración:** depende de las fases, rondas y pausas; haz un cálculo con una partida de prueba.
+- **Premios:** medalla casera o un detalle para el equipo ganador.
 
 ---
 
@@ -163,7 +160,7 @@ Sigue explorando:
 - [Estrategias avanzadas para ganar](/blog/estrategias-avanzadas-stop)
 - [Cómo jugar al STOP: reglas completas](/blog/como-jugar-stop-reglas-completas)
 
-¿Vas a organizar un torneo? Usa [STOP online](/) con salas privadas para coordinar a tus jugadores y validar palabras automáticamente — te ahorras 2 horas de discusiones.
+¿Vas a organizar un torneo? Puedes usar [STOP online](/) y revisar las funciones disponibles en el propio juego. No presupongas que una modalidad valida automáticamente todas las respuestas o sustituye las reglas del torneo.
 `,
 };
 

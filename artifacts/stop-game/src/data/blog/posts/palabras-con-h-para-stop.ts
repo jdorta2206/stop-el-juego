@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Practica ejemplos con H por categorías y distingue las palabras que empiezan por esta letra de las que comienzan por vocal.",
   keywords: ["palabras con H", "palabras con H para STOP", "nombres con H", "animales con H", "países con H", "comidas con H", "marcas con H"],
   publishedAt: "2026-05-16",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 6,
@@ -46,7 +47,7 @@ La H en español **no se pronuncia**, pero **sí se escribe**. En STOP solo cuen
 - **Hormiga**
 - **Hámster**
 - **Hurón**
-- **Hipocampo / Caballito de mar**
+- **Hipocampo** (nombre común de ciertos peces marinos; también se conoce como caballito de mar)
 
 ## Colores con H
 
@@ -58,7 +59,6 @@ Pocos colores empiezan por H. Discutibles:
 
 - **Honduras**
 - **Hungría**
-- **Honduras, Hungría, Haití** (ejemplos de países cuyo nombre empieza por H)
 - **Haití**
 
 ## Ciudades con H
@@ -66,7 +66,7 @@ Pocos colores empiezan por H. Discutibles:
 - **Hamburgo** (Alemania)
 - **Helsinki** (Finlandia)
 - **Houston** (Estados Unidos)
-- **Hong Kong** (región administrativa especial de China; comprobad si vuestra categoría admite territorios)
+- **Hong Kong** (región administrativa especial de China; inclúyela solo si la categoría admite territorios o ciudades, no países)
 - **Heredia** (Costa Rica)
 
 ## Comidas y bebidas con H
