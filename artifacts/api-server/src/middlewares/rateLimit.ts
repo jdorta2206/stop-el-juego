@@ -90,9 +90,10 @@ const baseOpts = {
   message: { error: "Too many requests, slow down a bit ⏳" },
 };
 
-function limiter(prefix: string, windowMs: number, limit: number, keyGenerator: (req: Request) => string) {
+function limiter(prefix: string, windowMs: number, limit: number, keyGenerator: (req: Request) => string, options: { skipSuccessfulRequests?: boolean } = {}) {
   return rateLimit({
     ...baseOpts,
+    ...options,
     windowMs,
     limit,
     keyGenerator,
@@ -104,7 +105,7 @@ export const generalLimiter = limiter("general", 60_000, 240, playerKey);
 export const writeLimiter = limiter("write", 60_000, 120, playerKey);
 export const halloweenScareLimiter = limiter("halloween-scare", 60_000, 60, (req) => ipKeyGenerator(req.ip ?? ""));
 export const presenceLimiter = limiter("presence", 60_000, 90, playerKey);
-export const authLimiter = limiter("auth", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""));
+export const authLimiter = limiter("auth", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""), { skipSuccessfulRequests: true });
 // Mass-push actions need a much tighter limit than ordinary panel login attempts.
 export const adminBroadcastLimiter = limiter("admin-broadcast", 10 * 60_000, 1, (req) => ipKeyGenerator(req.ip ?? ""));
 export const scoreLimiter = limiter("score", 5 * 60_000, 30, playerKey);
