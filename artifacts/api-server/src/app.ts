@@ -248,19 +248,23 @@ if (process.env["SERVE_CLIENT"] === "1") {
 
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("[API ERROR]", err?.message ?? err, err?.stack);
+  const explicitPlatform = String(req.headers["x-client-platform"] ?? "").toLowerCase();
+  const platform = String(req.headers["x-client-twa"] ?? "") === "1"
+    ? "android"
+    : ["web", "android", "ios"].includes(explicitPlatform) ? explicitPlatform : "web";
+  const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
+  const language = String(req.headers["accept-language"] ?? "").split(",")[0].slice(0, 16) || null;
+  const metadata = JSON.stringify({
+    requestId: (req as express.Request & { stopRequestId?: string }).stopRequestId ?? null,
+    method: req.method,
+    path: req.path.slice(0, 300),
+    status: Number(err?.statusCode ?? err?.status ?? 500),
+    message: String(err?.message ?? err).slice(0, 500),
+    code: String(err?.code ?? "").slice(0, 80) || null,
+  }).slice(0, 4000);
   void db.execute(sql`
-    INSERT INTO analytics_events (event_name, platform, metadata_json, trusted)
-    VALUES ('api_error', ${String(req.headers["x-client-twa"] ?? "") === "1" ? "android" : String(req.headers["x-client-platform"] ?? "web").slice(0, 16)}, ${JSON.stringify({
-      requestId: (req as express.Request & { stopRequestId?: string }).stopRequestId ?? null,
-      method: req.method,
-      path: req.path.slice(0, 300),
-      status: Number(err?.statusCode ?? err?.status ?? 500),
-      message: String(err?.message ?? err).slice(0, 500),
-      code: String(err?.code ?? "").slice(0, 80) || null,
-      platform: String(req.headers["x-client-twa"] ?? "") === "1" ? "android" : String(req.headers["x-client-platform"] ?? "web").slice(0, 16),
-      appVersion: String(req.headers["x-client-version"] ?? "").slice(0, 32) || null,
-      language: String(req.headers["accept-language"] ?? "").slice(0, 16) || null,
-    }).slice(0, 4000)}, TRUE)
+    INSERT INTO analytics_events (event_name, platform, app_version, language, metadata_json, trusted)
+    VALUES ('api_error', ${platform}, ${appVersion}, ${language}, ${metadata}, TRUE)
   `).catch(() => {});
   if (res.headersSent) return;
   res.status(500).json({ error: "Internal server error" });
