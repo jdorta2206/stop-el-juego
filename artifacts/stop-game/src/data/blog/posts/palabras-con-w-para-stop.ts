@@ -28,7 +28,7 @@ Los nombres propios suelen admitirse en categorías de nombres, siempre que esa 
 
 - **Wapití**: ciervo norteamericano.
 - **Wombat**: marsupial australiano.
-- **Walabí**: marsupial parecido a un canguro pequeño.
+- **Walabí / ualabí**: variantes gráficas usadas para nombrar a ciertos marsupiales; comprobad qué grafía acepta el diccionario elegido y si empieza por W en vuestra partida.
 En esta categoría conviene comprobar la grafía y decidir si se aceptan nombres de razas. **Weimaraner** es una raza canina, no el nombre de una especie; inclúyela solo si vuestra partida admite razas como respuestas de animales.
 
 ## Países y territorios
