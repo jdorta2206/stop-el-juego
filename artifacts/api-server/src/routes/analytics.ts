@@ -170,7 +170,7 @@ export async function recordTrustedAnalyticsEvent(input: {
   mode?: string | null;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
-  await analyticsTablesReady;
+  await ensureAnalyticsReady();
   const resolvedPlatform = input.platform ?? await latestPlatformForPlayer(input.playerId);
   const metadataJson = JSON.stringify(input.metadata ?? {}).slice(0, 4000);
   await db.execute(sql`
@@ -195,7 +195,7 @@ function serverSessionId(req: Request, res: any): string {
 router.use(async (req, res, next) => {
   if (req.path === "/summary" || req.path === "/event" || req.path === "/heartbeat") return next();
   try {
-    await analyticsTablesReady;
+    await ensureAnalyticsReady();
     const sessionId = serverSessionId(req, res);
     const platform = platformFromRequest(req);
     const appVersion = appVersionFromRequest(req);
@@ -212,7 +212,7 @@ router.use(async (req, res, next) => {
 
 router.post("/heartbeat", presenceLimiter, async (req, res) => {
   try {
-    await analyticsTablesReady;
+    await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
     const sessionId = serverSessionId(req, res);
     // OAuth/player identity is always taken from the verified server token.
@@ -253,7 +253,7 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
 
 router.post("/game-start", presenceLimiter, async (req, res) => {
   try {
-    await analyticsTablesReady;
+    await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
     const sessionId = serverSessionId(req, res);
     const playerId = readPlayerId(req);
@@ -276,7 +276,7 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
 
 router.post("/client-error", presenceLimiter, async (req, res) => {
   try {
-    await analyticsTablesReady;
+    await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
     const message = typeof body.message === "string" ? body.message.slice(0, 500) : "Unknown client error";
     const stack = typeof body.stack === "string" ? body.stack.slice(0, 2500) : null;
@@ -302,7 +302,7 @@ router.post("/client-error", presenceLimiter, async (req, res) => {
 
 router.post("/event", presenceLimiter, async (req, res) => {
   try {
-    await analyticsTablesReady;
+    await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
     const eventName = typeof body.eventName === "string" ? body.eventName.trim().slice(0, 80) : "";
     if (!eventName) return res.status(400).json({ error: "eventName required" });
@@ -325,7 +325,7 @@ router.post("/event", presenceLimiter, async (req, res) => {
 
 router.get("/summary", async (_req, res) => {
   try {
-    await analyticsTablesReady;
+    await ensureAnalyticsReady();
     const rows = await db.execute(sql`SELECT platform, COUNT(*)::int AS active FROM public.analytics_sessions WHERE last_seen >= NOW() - INTERVAL '90 seconds' GROUP BY platform ORDER BY platform`);
     return res.json({ platforms: rows.rows });
   } catch (err) {
