@@ -35,20 +35,19 @@ function basicAuth(req: Request, res: Response, next: NextFunction) {
     return;
   }
 
-  const header = req.headers.authorization || "";
-  const [scheme, encoded] = header.split(" ");
-  if (scheme === "Basic" && encoded) {
+  const header = String(req.headers.authorization ?? "");
+  const match = /^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(header);
+  const encoded = match?.[1];
+  if (encoded && Buffer.from(encoded, "base64").toString("base64") === encoded) {
     const decoded = Buffer.from(encoded, "base64").toString("utf8");
-    const idx = decoded.indexOf(":");
-    const gotUser = decoded.slice(0, idx);
-    const gotPass = decoded.slice(idx + 1);
-    // Compute BOTH comparisons unconditionally (no short-circuit) so a failing
-    // username can't be distinguished from a failing password by timing.
-    const okUser = safeEqual(gotUser, user);
-    const okPass = safeEqual(gotPass, pass);
-    if (okUser && okPass) {
-      next();
-      return;
+    const separator = decoded.indexOf(":");
+    if (separator > 0) {
+      const okUser = safeEqual(decoded.slice(0, separator), user);
+      const okPass = safeEqual(decoded.slice(separator + 1), pass);
+      if (okUser && okPass) {
+        next();
+        return;
+      }
     }
   }
 
