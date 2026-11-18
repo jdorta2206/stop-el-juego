@@ -209,7 +209,7 @@ export async function recordTrustedAnalyticsEvent(input: {
 }): Promise<void> {
   await ensureAnalyticsReady();
   const resolvedPlatform = input.platform ?? await latestPlatformForPlayer(input.playerId);
-  const metadataJson = JSON.stringify(input.metadata ?? {}).slice(0, 4000);
+  const metadataJson = JSON.stringify(sanitizeClientMetadata(input.metadata ?? {})).slice(0, 4000);
   await db.execute(sql`
     INSERT INTO public.analytics_events
       (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
