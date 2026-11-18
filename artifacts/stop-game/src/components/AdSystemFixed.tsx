@@ -120,6 +120,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
       if (bridgeReady || knownTwa) {
         const result = await requestRewardedAd(placement, (requestId) => {
+          void trackAnalyticsEvent("rewarded_ad_request_created", { metadata: { placement, requestId, phase: "native_request_created" } });
           try {
             window.localStorage.setItem(PENDING_REWARD_STORAGE_KEY, JSON.stringify({
               requestId,
@@ -134,7 +135,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         if (result.rewarded === true && result.source === "admob") {
           if (!mountedRef.current) return;
           setPhase("done");
-          void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob" } });
+          void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob", requestId: result.requestId ?? null } });
           void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "admob" } });
           timeoutRef.current = window.setTimeout(async () => {
             timeoutRef.current = null;
@@ -176,6 +177,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
             errorCode: result.errorCode ?? null,
             errorDomain: result.errorDomain ?? null,
             errorMessage: (result.errorMessage || detail).slice(0, 300),
+            requestId: result.requestId ?? null,
             error: detail.slice(0, 300),
             phase: "native_result",
           } });
@@ -230,7 +232,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     if (!mountedRef.current) return;
     if (result.rewarded === true && result.source === "admob") {
       setPhase("done");
-      void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement: rewardType, source: "admob", retry: true } });
+      void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement: rewardType, source: "admob", retry: true, requestId: retryRequestId } });
       timeoutRef.current = window.setTimeout(async () => {
         timeoutRef.current = null;
         if (mountedRef.current) {
