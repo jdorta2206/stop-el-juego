@@ -11,7 +11,7 @@ const post: BlogPost = {
   category: "Listas de palabras",
   readMinutes: 5,
   content: `
-La letra **Ñ** es **la pesadilla absoluta del STOP en español**. En la mayoría de grupos se vota por **saltarla** antes de empezar la partida. Pero si juegas con un grupo "duro" que sí la acepta, esta guía te salvará la ronda.
+La letra **Ñ** puede hacer que una ronda de STOP sea especialmente exigente porque hay menos palabras de uso frecuente que empiecen por ella. Algunos grupos prefieren excluirla del sorteo; otros la incluyen como reto adicional.
 
 ## ¿Se incluye la Ñ en STOP?
 
@@ -102,7 +102,7 @@ En STOP online, consulta las letras disponibles en el modo de juego que estés u
 
 Más letras difíciles que sí merecen estudio:
 
-- [Palabras con K](/blog/palabras-con-k-para-stop) (más del doble de opciones)
+- [Palabras con K](/blog/palabras-con-k-para-stop)
 - [Palabras con W](/blog/palabras-con-w-para-stop)
 - [Palabras con X](/blog/palabras-con-x-para-stop)
 - [Palabras con Y](/blog/palabras-con-y-para-stop)
