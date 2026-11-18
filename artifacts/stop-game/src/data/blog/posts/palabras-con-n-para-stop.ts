@@ -3,9 +3,10 @@ import type { BlogPost } from "../types";
 const post: BlogPost = {
   slug: "palabras-con-n-para-stop",
   title: "Palabras con Ñ para STOP: la letra imposible (sí, hay opciones)",
-  description: "La Ñ es la letra más temida de STOP en español. Pero existen palabras válidas: ñu, ñoqui, ñame, Ñoño, Núñez… Te damos la lista definitiva y cómo defenderla.",
+  description: "Practica respuestas que empiezan por Ñ, como ñu, ñandú, ñame y ñoquis, y aprende a distinguir palabras, regionalismos y nombres propios según las reglas de tu partida.",
   keywords: ["palabras con Ñ", "palabras con Ñ para STOP", "nombres con Ñ", "animales con Ñ", "palabras con eñe", "letra Ñ STOP"],
   publishedAt: "2026-05-15",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 5,
@@ -68,7 +69,7 @@ No hay países soberanos cuyo nombre habitual en español empiece por Ñ. En cam
 
 1. **Negocia antes de empezar:** propone excluir la Ñ. La mayoría aceptará.
 2. **Si la juegas, memoriza estas 4 palabras**: Ñu, Ñandú, Ñoquis, Ñame.
-3. **Acepta que vas a perder casillas.** Es normal. El que ponga 2-3 palabras válidas con Ñ ya gana la ronda.
+3. **Acepta que quizá queden casillas vacías.** Unas pocas respuestas válidas pueden ayudar, pero el resultado depende de las respuestas de los demás y del sistema de puntuación.
 4. **No pierdas tiempo en categorías sin opciones** (país, color, profesión).
 
 ## Tu "kit mínimo STOP letra Ñ"
@@ -78,7 +79,7 @@ No hay países soberanos cuyo nombre habitual en español empiece por Ñ. En cam
 | Nombre | (en blanco) |
 | Animal | Ñu |
 | País | (en blanco) |
-| Ciudad | (en blanco) |
+| Ciudad | Ñemby (si se acepta este topónimo) |
 | Comida | Ñoquis |
 | Objeto | Ñudo |
 | Famoso | Ñejo |
