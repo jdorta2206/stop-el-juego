@@ -173,7 +173,7 @@ const staticPages = [
       ["Para qué utilizamos los datos", "Utilizamos la información para gestionar cuentas, sesiones, perfiles, partidas, rankings y progreso; procesar pagos mediante los proveedores correspondientes; enviar notificaciones si las activas; y mejorar la seguridad, el funcionamiento y la experiencia del juego."],
       ["Analítica, publicidad y cookies", "La versión web puede utilizar Google Analytics, Google Tag Manager y Google AdSense. La aplicación Android/TWA puede utilizar servicios de medición y publicidad asociados a Google Play y AdMob. Estos servicios pueden utilizar cookies, identificadores u otras tecnologías según su configuración y sus propias políticas."],
       ["Proveedores externos", "STOP puede utilizar servicios de Google para autenticación, analítica, publicidad, notificaciones y distribución, y Stripe para pagos. Cada proveedor procesa los datos conforme a sus propias condiciones y políticas. STOP no vende datos personales."],
-      ["Tus derechos y eliminación de cuenta", "Puedes solicitar acceso, rectificación o eliminación de tus datos escribiendo a <a href=\\"mailto:dorynex@stopjuegodepalabras.com\\">dorynex@stopjuegodepalabras.com</a>. También puedes consultar la <a href=\\"/eliminar-cuenta\\">página de eliminación de cuenta</a> para conocer cómo enviar una solicitud."]
+      ["Tus derechos y eliminación de cuenta", "Puedes solicitar acceso, rectificación o eliminación de tus datos escribiendo a <a href=\"mailto:dorynex@stopjuegodepalabras.com\">dorynex@stopjuegodepalabras.com</a>. También puedes consultar la <a href=\"/eliminar-cuenta\">página de eliminación de cuenta</a> para conocer cómo enviar una solicitud."]
     ]),
   },
   {
@@ -182,9 +182,9 @@ const staticPages = [
     description: "Consulta cómo solicitar la eliminación de tu cuenta y los datos asociados a STOP El Juego.",
     body: pageBody("Eliminar cuenta y datos", "Puedes solicitar la eliminación de tu cuenta de STOP El Juego y de los datos asociados. Esta página explica cómo enviar la solicitud y qué ocurre al utilizar el formulario.", [
       ["Cómo enviar la solicitud", "Introduce el correo electrónico o nombre de usuario asociado a tu cuenta y, si lo deseas, indica el motivo. Al pulsar el botón, STOP prepara un borrador en tu aplicación de correo. Debes revisar el mensaje y enviarlo para que recibamos la solicitud."],
-      ["Importante: el formulario no envía el correo automáticamente", "Si no se abre una aplicación de correo, escribe directamente a <a href=\\"mailto:dorynex@stopjuegodepalabras.com\\">dorynex@stopjuegodepalabras.com</a>. Incluye el correo electrónico o nombre de usuario de la cuenta que deseas eliminar. No envíes tu contraseña ni datos de pago."],
-      ["Tratamiento de la solicitud", "La eliminación no se ejecuta al pulsar el botón ni al preparar el borrador. El equipo debe recibir y revisar tu solicitud. Puedes consultar la <a href=\\"/privacidad\\">política de privacidad</a> para obtener información sobre los datos tratados y las solicitudes de derechos."],
-      ["¿Necesitas ayuda?", "Si tienes dudas sobre el proceso, visita la <a href=\\"/contacto\\">página de contacto</a>."]
+      ["Importante: el formulario no envía el correo automáticamente", "Si no se abre una aplicación de correo, escribe directamente a <a href=\"mailto:dorynex@stopjuegodepalabras.com\">dorynex@stopjuegodepalabras.com</a>. Incluye el correo electrónico o nombre de usuario de la cuenta que deseas eliminar. No envíes tu contraseña ni datos de pago."],
+      ["Tratamiento de la solicitud", "La eliminación no se ejecuta al pulsar el botón ni al preparar el borrador. El equipo debe recibir y revisar tu solicitud. Puedes consultar la <a href=\"/privacidad\">política de privacidad</a> para obtener información sobre los datos tratados y las solicitudes de derechos."],
+      ["¿Necesitas ayuda?", "Si tienes dudas sobre el proceso, visita la <a href=\"/contacto\">página de contacto</a>."]
     ]),
   },
   {
