@@ -139,7 +139,7 @@ export async function ensureAnalyticsReady(): Promise<void> {
       throw err;
     });
   }
-  await ensureAnalyticsReady();
+  await analyticsTablesReady;
 }
 
 async function latestPlatformForPlayer(playerId: string | null | undefined): Promise<"web" | "android" | "ios" | null> {
