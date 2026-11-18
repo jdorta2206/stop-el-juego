@@ -13,6 +13,7 @@ import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase, ab
 import { applyAuthoritativeSeasonEventsInTransaction } from "./season";
 import { recordHalloweenEvent, isHalloweenPreviewAuthorized } from "./halloween";
 import { calcLevel, calcLevelAfterXp } from "../lib/scoreProgress";
+export { calcLevel } from "../lib/scoreProgress";
 import {
   isHappyHourActiveForTzOffset,
   isHappyHourActiveForTimeZone,
