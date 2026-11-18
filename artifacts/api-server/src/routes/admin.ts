@@ -796,10 +796,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     <div class="card"><div class="label">MAU real · 30 días</div><div class="val">${num(retentionKpis?.mau)}</div></div>
     <div class="card"><div class="label">Cuentas activas · 7 días</div><div class="val">${num(retentionKpis?.account_active_7d)}</div></div>
     <div class="card"><div class="label">Invitados activos · 7 días</div><div class="val">${num(retentionKpis?.guest_active_7d)}</div></div>
-    <div class="card"><div class="label">Inicio → fin · 7 días</div><div class="val">${num(funnel?.game_players) > 0 ? `${Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100}%` : "Sin muestra"}</div></div>
+    <div class="card"><div class="label">Jugadores con resultado / inicio · 7 días</div><div class="val">${num(funnel?.game_players) > 0 ? `${Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100}%` : "Sin muestra"}</div></div>
   </div>
 
-  <h2>🎯 Embudo de jugadores · últimos 7 días</h2>
+  <h2>🎯 Actividad de jugadores · últimos 7 días</h2>
   <table>
     <thead><tr><th>Etapa</th><th>Unidad</th><th>Total</th></tr></thead>
     <tbody>
@@ -814,7 +814,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     </tbody>
   </table>
 
-  <div class="sub">El embudo separa sesiones de jugadores únicos. <b>“Lobby sin iniciar” no se considera abandono confirmado</b>: puede significar salida, navegación a otra pantalla o pérdida de telemetría. “Inicio sin final” compara inicio y resultado dentro de la misma sesión.</div>
+  <div class="sub">Se separan sesiones y jugadores únicos. Los totales de inicio y resultado cuentan actores distintos dentro de la ventana; <b>no siguen una misma cohorte ni permiten calcular una conversión individual</b>. “Lobby sin iniciar” no confirma abandono: puede significar salida, navegación a otra pantalla o pérdida de telemetría. “Inicio sin final” compara eventos dentro de la misma sesión.</div>
 
   <h2>🚪 Por dónde se está yendo la gente</h2>
   <table>
@@ -856,7 +856,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
   <h2>📅 Actividad real · últimos 14 días</h2>
   <table>
-    <thead><tr><th>Día</th><th>Sesiones activas</th><th>Jugadores que inician</th><th>Jugadores que terminan</th><th>Conversión</th></tr></thead>
+    <thead><tr><th>Día</th><th>Sesiones activas</th><th>Jugadores que inician</th><th>Jugadores que terminan</th><th>Resultado / inicio · actores distintos</th></tr></thead>
     <tbody>${activityRows || '<tr><td colspan="5">Sin eventos de actividad.</td></tr>'}</tbody>
   </table>
 
