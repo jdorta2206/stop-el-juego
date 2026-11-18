@@ -323,6 +323,7 @@ async function waitForValidationCache(word: string, category: string, lang: stri
             model = EXCLUDED.model,
             created_at = NOW()
         WHERE word_validation_cache.is_valid = false
+          AND word_validation_cache.source = 'ai'
           AND word_validation_cache.created_at < NOW() - INTERVAL '7 days'
       `);
 
