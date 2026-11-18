@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Practica ejemplos con H por categorías y distingue las palabras que empiezan por esta letra de las que comienzan por vocal.",
   keywords: ["palabras con H", "palabras con H para STOP", "nombres con H", "animales con H", "países con H", "comidas con H", "marcas con H"],
   publishedAt: "2026-05-16",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 6,
