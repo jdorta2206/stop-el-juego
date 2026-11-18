@@ -1,4 +1,4 @@
-import { pgTable, text, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -16,3 +16,13 @@ export const guestStatsTable = pgTable("guest_stats", {
 export const insertGuestStatsSchema = createInsertSchema(guestStatsTable);
 export type InsertGuestStats = z.infer<typeof insertGuestStatsSchema>;
 export type GuestStats = typeof guestStatsTable.$inferSelect;
+
+
+// Short-lived event ledger makes anonymous aggregate counters safe against
+// duplicate delivery of the same client event without retaining player data.
+export const guestStatsEventsTable = pgTable("guest_stats_events", {
+  eventId: text("event_id").primaryKey(),
+  day: text("day").notNull(),
+  kind: text("kind").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
