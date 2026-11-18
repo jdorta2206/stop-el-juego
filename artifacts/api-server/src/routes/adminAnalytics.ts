@@ -8,6 +8,15 @@ import { ensureAnalyticsReady } from "./analytics";
 const router: IRouter = Router();
 
 router.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+  next();
+});
+
+router.use((_req, res, next) => {
   if (!indexesReady()) {
     res.setHeader("Retry-After", "2");
     return res.status(503).json({ error: "Server warming up", ready: false });
@@ -42,6 +51,16 @@ function basicAuth(req: Request, res: Response, next: NextFunction) {
 
 function n(value: unknown): number { return Number(value ?? 0); }
 function latencyValue(value: unknown): string { return value == null || !Number.isFinite(Number(value)) ? "Sin datos" : `${Math.round(Number(value))} ms`; }
+function safeDiagnosticText(value: unknown, max = 700): string {
+  return String(value ?? "")
+    .slice(0, max)
+    .replace(/\\bBearer\\s+[A-Za-z0-9._~+\\/-]+=*/gi, "Bearer [redactado]")
+    .replace(/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b/g, "[token redactado]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email redactado]")
+    .replace(/([?&](?:token|access_token|refresh_token|authorization|key|api_key|code)=)[^&#\\s]*/gi, "$1[redactado]")
+    .replace(/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/g, "[ip redactada]")
+    .replace(/\\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\b/gi, "[id redactado]");
+}
 function esc(value: unknown): string {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -141,7 +160,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
     const activeSessions = await db.execute(sql`
       SELECT
         s.player_id,
-        COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE s.player_id END) AS player_name,
+        COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE 'Cuenta registrada' END) AS player_name,
         s.platform,
         s.app_version,
         s.language,
@@ -165,7 +184,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
 
     const adViewers = await db.execute(sql`
       SELECT
-        COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE e.player_id END) AS player_name,
+        COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE 'Cuenta registrada' END) AS player_name,
         e.platform,
         e.event_name,
         MAX(e.created_at) AS last_seen,
@@ -261,7 +280,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
     const diagnosticErrorRows = (diagnosticErrors.rows as any[]).map((row) => {
       const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
       const when = row.created_at ? new Date(String(row.created_at)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
-      return `<tr><td>${when}</td><td>${esc(row.event_name)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(row.details || "Sin detalle")}</code></td></tr>`;
+      return `<tr><td>${when}</td><td>${esc(row.event_name)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(safeDiagnosticText(row.details || "Sin detalle", 600))}</code></td></tr>`;
     }).join("");
 
     const rootCauseEvents = await db.execute(sql`
@@ -397,13 +416,13 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
         : events.includes("rewarded_ad_pending") ? "Pendiente SSV"
         : "Sin desenlace registrado";
       const when = row.last_seen ? new Date(String(row.last_seen)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
-      return `<tr><td><code>${esc(row.request_id)}</code></td><td>${esc(row.placement)}</td><td>${state}</td><td>${when}</td></tr>`;
+      return `<tr><td><code>${esc(String(row.request_id ?? "").slice(0, 8))}</code></td><td>${esc(row.placement)}</td><td>${state}</td><td>${when}</td></tr>`;
     }).join("");
 
     const rootCauseRows = (rootCauseEvents.rows as any[]).map((row) => {
       const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
       const when = row.created_at ? new Date(String(row.created_at)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
-      return `<tr><td>${when}</td><td>${esc(row.event_name)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(row.details || "{}")}</code></td></tr>`;
+      return `<tr><td>${when}</td><td>${esc(row.event_name)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(safeDiagnosticText(row.details || "{}", 700))}</code></td></tr>`;
     }).join("");
     const adFlowRows = (adFlow.rows as any[]).map((row) => {
       const labels: Record<string, string> = {
