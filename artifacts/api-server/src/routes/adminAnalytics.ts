@@ -617,7 +617,7 @@ a{color:#4ade80;text-decoration:none}
     return res.type("html").send(html);
   } catch (err) {
     console.error("[admin analytics] error:", err);
-    return res.status(500).type("html").send("<h1>Analytics no disponible</h1><p>Las tablas de analítica todavía no están inicializadas.</p>");
+    return res.status(503).type("html").send("<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><title>STOP Analytics no disponible</title><body><h1>No se han podido cargar las estadísticas</h1><p>La base de datos o alguna consulta de Analytics no está disponible temporalmente. Inténtalo de nuevo dentro de unos segundos.</p><p>No se muestran cifras parciales para evitar presentar datos incompletos como si fueran correctos.</p><p><a href=\"/test\">Volver al panel principal</a></p></body></html>");
   }
 });
 
