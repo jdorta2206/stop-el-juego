@@ -3,9 +3,9 @@ import { db } from "@workspace/db";
 import { guestStatsTable, guestStatsEventsTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { writeLimiter } from "../middlewares/rateLimit";
+import { isGuestStatsEventId } from "../lib/guestStatsEvent";
 
 const router: IRouter = Router();
-const EVENT_ID_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
 
 function playerTimeZone(req: { headers: Record<string, unknown> }): string {
   const raw = req.headers["x-stop-timezone"];
@@ -30,7 +30,7 @@ function todayForPlayer(req: { headers: Record<string, unknown> }): string {
 function readEventId(body: unknown): string | undefined | null {
   if (!body || typeof body !== "object" || !("eventId" in body)) return undefined;
   const value = (body as { eventId?: unknown }).eventId;
-  return typeof value === "string" && EVENT_ID_PATTERN.test(value) ? value : null;
+  return isGuestStatsEventId(value) ? value : null;
 }
 
 // Older app versions omit eventId and retain the legacy aggregate behavior.
@@ -41,23 +41,20 @@ async function bump(
   eventId?: string,
 ) {
   const day = todayForPlayer(req);
-  const values = {
-    day,
-    games: column === "games" ? 1 : 0,
-    conversions: column === "conversions" ? 1 : 0,
-  };
-  const upsert = (executor: any) => executor
-    .insert(guestStatsTable)
-    .values(values)
-    .onConflictDoUpdate({
-      target: guestStatsTable.day,
-      set: column === "games"
-        ? { games: sql`${guestStatsTable.games} + 1` }
-        : { conversions: sql`${guestStatsTable.conversions} + 1` },
-    });
-
   if (!eventId) {
-    await upsert(db);
+    await db
+      .insert(guestStatsTable)
+      .values({
+        day,
+        games: column === "games" ? 1 : 0,
+        conversions: column === "conversions" ? 1 : 0,
+      })
+      .onConflictDoUpdate({
+        target: guestStatsTable.day,
+        set: column === "games"
+          ? { games: sql`${guestStatsTable.games} + 1` }
+          : { conversions: sql`${guestStatsTable.conversions} + 1` },
+      });
     return;
   }
 
@@ -69,7 +66,19 @@ async function bump(
       .returning({ eventId: guestStatsEventsTable.eventId });
     if (!claimed) return;
 
-    await upsert(tx);
+    await tx
+      .insert(guestStatsTable)
+      .values({
+        day,
+        games: column === "games" ? 1 : 0,
+        conversions: column === "conversions" ? 1 : 0,
+      })
+      .onConflictDoUpdate({
+        target: guestStatsTable.day,
+        set: column === "games"
+          ? { games: sql`${guestStatsTable.games} + 1` }
+          : { conversions: sql`${guestStatsTable.conversions} + 1` },
+      });
 
     // Keep the deduplication ledger bounded; seven days exceeds normal retry windows.
     await tx.delete(guestStatsEventsTable)
