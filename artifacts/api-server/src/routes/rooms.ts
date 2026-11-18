@@ -723,7 +723,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
           })
           .where(eq(playerScoresTable.playerId, p.playerId));
       } else {
-        await tx.insert(playerScoresTable).values({
+        const [settledPlayer] = await tx.insert(playerScoresTable).values({
           playerId: p.playerId,
           playerName: p.playerName,
           avatarColor: p.avatarColor ?? "#e53e3e",
@@ -750,7 +750,12 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
             wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
             updatedAt: new Date(),
           },
-        });
+        }).returning({ xp: playerScoresTable.xp });
+        if (settledPlayer) {
+          await tx.update(playerScoresTable)
+            .set({ level: calcLevel(settledPlayer.xp) })
+            .where(eq(playerScoresTable.playerId, p.playerId));
+        }
       }
 
       await tx.insert(gameHistoryTable).values({
