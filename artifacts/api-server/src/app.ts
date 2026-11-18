@@ -246,14 +246,14 @@ if (process.env["SERVE_CLIENT"] === "1") {
     "/contacto", "/contact",
   ]);
   const isKnownClientRoute = (pathname: string) => {
-    const normalized = pathname.replace(/\\/+$/, "") || "/";
+    const normalized = pathname.replace(/\/+$/, "") || "/";
     return knownClientPaths.has(normalized) ||
-      /^\\/(?:room|live|overlay|player|torneo)\\/[^/]+$/.test(normalized);
+      /^\/(?:room|live|overlay|player|torneo)\/[^/]+$/.test(normalized);
   };
 
-  app.get(/^\\/(?!api(?:\\/|$)).*/, (req, res, next) => {
+  app.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
     const pathname = req.path;
-    if (/\\.(?:js|mjs|css|map|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|wasm|webmanifest)$/i.test(pathname)) {
+    if (/\.(?:js|mjs|css|map|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|wasm|webmanifest)$/i.test(pathname)) {
       res.status(404).end();
       return;
     }
