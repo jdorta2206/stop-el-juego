@@ -87,7 +87,7 @@ Calcula tiempos reales:
 
 **Ejemplo de 16 personas en eliminación directa:** hacen falta 15 enfrentamientos. La duración total depende del número de rondas, del tiempo de respuesta y de las pausas; calcula esos factores antes de anunciar un horario.
 
-> 🟨 **Verdad incómoda:** los torneos largos cansan. Para eventos de 2-3 horas, lo realista es 6-12 participantes, partidas de 5 rondas, formato liga corto.
+> **Consejo de organización:** no anuncies una duración cerrada hasta definir el número de enfrentamientos, rondas y mesas simultáneas. Prueba una ronda completa y calcula el horario con ese dato.
 
 ## Paso 5: Premios
 
