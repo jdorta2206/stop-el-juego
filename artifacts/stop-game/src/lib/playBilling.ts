@@ -65,8 +65,17 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
   try {
     const res = await fetch("/api/billing/play/verify-pack", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...authHeadersSafe() }, body: JSON.stringify({ playerId, productId: WORLD_CUP_SKU, purchaseToken }) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.granted !== true) throw new Error(data.error || "Error al verificar el Pack Mundial");
-    try { if (typeof service.consume === "function") await service.consume(purchaseToken); } catch {}
+    // The server may return 503 after granting the pack when Google's
+    // acknowledgement is temporarily unavailable. The grant is already
+    // persisted and idempotent, so do not report a failed purchase: consume()
+    // also acknowledges the one-time purchase when the Digital Goods API
+    // supports it. A retry of /verify-pack remains safe if needed.
+    if (data.granted !== true) throw new Error(data.error || "Error al verificar el Pack Mundial");
+    try {
+      if (typeof service.consume === "function") await service.consume(purchaseToken);
+    } catch (consumeError) {
+      console.warn("[playBilling] Pack granted, but Play consume/acknowledgement is pending:", consumeError);
+    }
     try { await response.complete("success"); } catch {}
     return { granted: true };
   } catch (e) { try { await response.complete("fail"); } catch {} throw e; }
