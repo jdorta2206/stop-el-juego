@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Guía paso a paso para organizar un torneo de STOP de cualquier tamaño: formato, brackets, puntuación, premios, gestión del tiempo y errores que evitar.",
   keywords: ["torneo STOP", "competición STOP", "campeonato Scattergories", "organizar juego STOP grupo", "STOP en clase", "STOP en empresa"],
   publishedAt: "2026-05-10",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Eventos y grupos",
   readMinutes: 8,
