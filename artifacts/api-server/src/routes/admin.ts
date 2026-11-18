@@ -974,6 +974,15 @@ router.post("/notify-mundial", authLimiter, basicAuth, adminBroadcastLimiter, as
   }
   try {
     const { sent, failed, removed } = await sendLocalizedBroadcast(MUNDIAL_PUSH, "es");
+    const requestId = String(req.headers["x-request-id"] ?? "").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || null;
+    console.info("[admin-audit]", JSON.stringify({
+      action: "notify-mundial",
+      outcome: "completed",
+      requestId,
+      sent,
+      failed,
+      removed,
+    }));
 
     const html = `<!doctype html>
 <html lang="es"><head>
@@ -1003,6 +1012,12 @@ router.post("/notify-mundial", authLimiter, basicAuth, adminBroadcastLimiter, as
 </body></html>`;
     res.status(200).type("html").send(html);
   } catch (err: any) {
+    const requestId = String(req.headers["x-request-id"] ?? "").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || null;
+    console.warn("[admin-audit]", JSON.stringify({
+      action: "notify-mundial",
+      outcome: "failed",
+      requestId,
+    }));
     console.error("[admin notify-mundial] error:", err?.message ?? err);
     res.status(500).type("html").send('<h1>Error</h1><p>No se pudo enviar la notificación.</p><a href="/test">← Volver</a>');
   }
