@@ -352,9 +352,11 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
         COALESCE(SUM(word_count), 0)::int AS words_checked
       FROM samples
     `);
-    const soloRoundLatencyRows = (soloRoundLatency.rows as any[]).map((row) =>
-      `<tr><td>${n(row.samples)}</td><td>${latencyValue(row.p50_round)}</td><td>${latencyValue(row.p95_round)}</td><td>${latencyValue(row.p50_validation)}</td><td>${latencyValue(row.p95_validation)}</td><td>${latencyValue(row.p95_slowest_word)}</td><td>${n(row.slow_word_validations)} / ${n(row.words_checked)}</td></tr>`
-    ).join("");
+    const soloRoundLatencyRows = diagnosticMode === "multiplayer"
+      ? '<tr><td colspan="7">No aplica: este indicador mide exclusivamente validaciones de partidas individuales.</td></tr>'
+      : (soloRoundLatency.rows as any[]).map((row) =>
+          `<tr><td>${n(row.samples)}</td><td>${latencyValue(row.p50_round)}</td><td>${latencyValue(row.p95_round)}</td><td>${latencyValue(row.p50_validation)}</td><td>${latencyValue(row.p95_validation)}</td><td>${latencyValue(row.p95_slowest_word)}</td><td>${n(row.slow_word_validations)} / ${n(row.words_checked)}</td></tr>`
+        ).join("");
 
     const adFlow = await db.execute(sql`
       SELECT event_name, platform, COUNT(*)::int AS total
