@@ -20,7 +20,8 @@ const app: Express = express();
 app.set("trust proxy", 1);
 
 app.use((req, res, next) => {
-  const requestId = String(req.headers["x-request-id"] ?? randomUUID()).slice(0, 128);
+  // Always mint a server-owned correlation ID; never persist or echo an untrusted client header.
+  const requestId = randomUUID();
   (req as express.Request & { stopRequestId?: string }).stopRequestId = requestId;
   res.setHeader("X-Request-Id", requestId);
   next();
