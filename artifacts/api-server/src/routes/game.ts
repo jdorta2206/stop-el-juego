@@ -5,7 +5,6 @@ import { issueScoreToken } from "../lib/scoreToken";
 import { normalizeWord, isSafeInput } from "../lib/wordRules";
 import { readPlayerId } from "../lib/playerAuth";
 import { getDailyChallenge } from "./daily";
-import { recordTrustedAnalyticsEvent } from "./analytics";
 
 const router: IRouter = Router();
 
@@ -1642,25 +1641,25 @@ router.post("/validate", async (req, res) => {
 
   // Aggregate diagnostics only; never include answer text, categories or identity.
   if (requestedGameMode === "solo") {
-    void recordTrustedAnalyticsEvent({
-      eventName: "solo_round_validation",
-      platform: req.header("x-client-twa") === "1" || req.header("x-client-platform") === "android" ? "android" : req.header("x-client-platform") === "ios" ? "ios" : "web",
-      appVersion: String(req.headers["x-client-version"] ?? "").slice(0, 32) || null,
-      language,
-      mode: "solo",
-      metadata: {
-        durationMs: Date.now() - roundValidationStartedAt,
-        validationDurationMs: roundValidationDurationMs,
-        wordValidationCount: wordValidationDurations.length,
-        slowWordValidationCount,
-        maxWordValidationMs: sortedWordValidationDurations.at(-1) ?? 0,
-        p95WordValidationMs,
-        botAnswersGeneratedCount: validatedRounds.filter((round) => round.aiWord.length > 0).length,
-        botAnswersMissingCount: validatedRounds.filter((round) => round.aiWord.length === 0).length,
-      },
-    }).catch((err) => console.error("[game] solo validation telemetry failed:", err));
-  }
-  res.json(response);
-});
-
-export default router;
+    void db.execute(sql`
+      INSERT INTO public.analytics_events
+        (event_name, platform, app_version, language, mode, metadata_json, trusted)
+      VALUES (
+        'solo_round_validation',
+        ${req.header("x-client-twa") === "1" || req.header("x-client-platform") === "android" ? "android" : req.header("x-client-platform") === "ios" ? "ios" : "web"},
+        ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null},
+        ${language},
+        'solo',
+        ${JSON.stringify({
+          durationMs: Date.now() - roundValidationStartedAt,
+          validationDurationMs: roundValidationDurationMs,
+          wordValidationCount: wordValidationDurations.length,
+          slowWordValidationCount,
+          maxWordValidationMs: sortedWordValidationDurations.at(-1) ?? 0,
+          p95WordValidationMs,
+          botAnswersGeneratedCount: validatedRounds.filter((round) => round.aiWord.length > 0).length,
+          botAnswersMissingCount: validatedRounds.filter((round) => round.aiWord.length === 0).length,
+        })},
+        TRUE
+      )
+    `).catch((err) => console.error("[game] solo validation telemetry failed:", err));
