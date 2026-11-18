@@ -259,6 +259,73 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
       return `<tr><td>${when}</td><td>${esc(row.event_name)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(row.details || "Sin detalle")}</code></td></tr>`;
     }).join("");
 
+    const rootCauseEvents = await db.execute(sql`
+      SELECT event_name, platform, app_version, language, created_at,
+             LEFT(metadata_json, 700) AS details
+      FROM public.analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('api_error','client_error','lobby_view','lobby_ready','lobby_api_timeout','lobby_auth_failed','lobby_page_exit','rewarded_ad_pending','rewarded_ad_failed')
+        AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+        AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+        AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+        AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      ORDER BY created_at DESC
+      LIMIT 150
+    `);
+
+    const lobbyLatency = await db.execute(sql`
+      WITH samples AS (
+        SELECT CASE
+          WHEN (metadata_json::jsonb ->> 'durationMs') ~ '^[0-9]+$'
+          THEN (metadata_json::jsonb ->> 'durationMs')::double precision
+          ELSE NULL
+        END AS duration_ms
+        FROM public.analytics_events
+        WHERE trusted = TRUE
+          AND event_name = 'lobby_ready'
+          AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+          AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+          AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+          AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      )
+      SELECT COUNT(duration_ms)::int AS samples,
+             percentile_cont(0.50) WITHIN GROUP (ORDER BY duration_ms) AS p50,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY duration_ms) AS p75,
+             percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95
+      FROM samples
+    `);
+
+    const adFlow = await db.execute(sql`
+      SELECT event_name, platform, COUNT(*)::int AS total
+      FROM public.analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('rewarded_ad_requested','rewarded_ad_pending','rewarded_ad_completed','rewarded_ad_failed')
+        AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+        AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+        AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+        AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      GROUP BY event_name, platform
+      ORDER BY event_name, platform
+    `);
+
+    const rootCauseRows = (rootCauseEvents.rows as any[]).map((row) => {
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      const when = row.created_at ? new Date(String(row.created_at)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
+      return `<tr><td>${when}</td><td>${esc(row.event_name)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(row.details || "{}")}</code></td></tr>`;
+    }).join("");
+    const adFlowRows = (adFlow.rows as any[]).map((row) => {
+      const labels: Record<string, string> = {
+        rewarded_ad_requested: "Solicitados",
+        rewarded_ad_pending: "Pendientes de confirmación SSV",
+        rewarded_ad_completed: "Completados",
+        rewarded_ad_failed: "Fallidos",
+      };
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      return `<tr><td>${labels[String(row.event_name)] ?? esc(row.event_name)}</td><td>${platform}</td><td>${n(row.total)}</td></tr>`;
+    }).join("");
+    const latencyRow = (lobbyLatency.rows as any[])[0] as any;
+    const latencyValue = (value: unknown) => value == null || !Number.isFinite(Number(value)) ? "Sin datos" : `${Math.round(Number(value))} ms`;
+
     const halloweenSummary = await db.execute(sql`
       SELECT event_name, platform, COUNT(*)::int AS total,
              COUNT(DISTINCT COALESCE(player_id, session_id))::int AS players
@@ -428,9 +495,23 @@ a{color:#4ade80;text-decoration:none}
       <h3>Inicios y partidas terminadas por modo</h3>
       <p class="sub">Los inicios y finales se cuentan por separado. No se calcula “abandono” porque el game_start usa una sesión de servidor y el game_complete puede usar otra sesión de cliente; no existe una unión fiable entre ambos.</p>
       <table><thead><tr><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Modo registrado</th><th>Inicios</th><th>Finales</th><th>Jugadores/sesiones inicio</th><th>Jugadores/sesiones fin</th></tr></thead><tbody>${diagnosticRows || '<tr><td colspan="8">No hay partidas registradas con estos filtros.</td></tr>'}</tbody></table>
+      <h3>Latencia del Lobby (primer render útil)</h3>
+      <p class="sub">Medición cliente desde el montaje de Home hasta el primer frame. No representa el tiempo completo de autenticación ni garantiza que todas las llamadas API hayan terminado. Muestra solo muestras instrumentadas.</p>
+      <div class="grid">
+        <div class="kpiBox"><div class="label">Muestras</div><div class="kpi">${n(latencyRow?.samples)}</div></div>
+        <div class="kpiBox"><div class="label">P50</div><div class="kpi">${latencyValue(latencyRow?.p50)}</div></div>
+        <div class="kpiBox"><div class="label">P75</div><div class="kpi">${latencyValue(latencyRow?.p75)}</div></div>
+        <div class="kpiBox"><div class="label">P95</div><div class="kpi">${latencyValue(latencyRow?.p95)}</div></div>
+      </div>
+      <h3>Flujo de anuncios rewarded</h3>
+      <p class="sub">Solicitudes, pendientes SSV, completados y fallidos por plataforma. Son recuentos de eventos, no una conciliación por solicitud única: los reintentos pueden generar más de un evento.</p>
+      <table><thead><tr><th>Estado</th><th>Plataforma</th><th>Eventos</th></tr></thead><tbody>${adFlowRows || '<tr><td colspan="3">Sin eventos con estos filtros.</td></tr>'}</tbody></table>
       <h3>Errores del mismo periodo y filtros</h3>
       <p class="sub">Estos errores coinciden en periodo, plataforma, versión e idioma; la instrumentación actual no permite asegurar que pertenezcan a una partida concreta.</p>
       <table><thead><tr><th>Fecha (Madrid)</th><th>Tipo</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Detalle</th></tr></thead><tbody>${diagnosticErrorRows || '<tr><td colspan="6">No hay errores registrados con estos filtros.</td></tr>'}</tbody></table>
+      <h3>Eventos de diagnóstico y causa raíz</h3>
+      <p class="sub">Incluye etapas del Lobby, errores API/cliente y resultados de anuncios. Los motivos solo aparecen cuando el cliente o servidor los registra explícitamente; una salida sin señal no se etiqueta como abandono voluntario.</p>
+      <table><thead><tr><th>Fecha (Madrid)</th><th>Evento</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Contexto técnico</th></tr></thead><tbody>${rootCauseRows || '<tr><td colspan="6">No hay eventos instrumentados con estos filtros.</td></tr>'}</tbody></table>
     </div>
     <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Jugadores que iniciaron</th><th>Resultados terminados</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
     <div class="card"><h2>Conexiones por método · hoy</h2><table><thead><tr><th>Método</th><th>Ahora</th><th>Sesiones</th></tr></thead><tbody>${loginRows || '<tr><td colspan="3">Todavía no hay conexiones identificadas.</td></tr>'}</tbody></table></div>
