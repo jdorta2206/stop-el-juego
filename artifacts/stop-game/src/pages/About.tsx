@@ -24,6 +24,7 @@ export default function About() {
           <p>
             Para enviar sugerencias, hacer una consulta o comunicar una incidencia, puedes escribir a <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-secondary hover:underline">dorynex@stopjuegodepalabras.com</a> o utilizar el <a href="/contacto" className="text-secondary hover:underline">formulario de contacto</a>.
           </p>
+          <h2 className="text-2xl font-bold text-white mt-6">Independencia</h2>
           <p className="text-sm text-white/40 mt-8">
             STOP El Juego es un proyecto independiente y no está afiliado a los titulares de las marcas de terceros que puedan mencionarse en sus contenidos.
           </p>
