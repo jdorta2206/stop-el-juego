@@ -73,7 +73,7 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
   } catch {}
 }
 
-export function trackClientError(error: unknown, componentStack?: string | null): void {
+export function trackClientError(error: unknown, componentStack?: string | null, context?: Record<string, unknown>): void {
   if (typeof window === "undefined") return;
   try {
     const appVersion = getAnalyticsClientVersion();
@@ -94,6 +94,7 @@ export function trackClientError(error: unknown, componentStack?: string | null)
         componentStack: componentStack?.slice(0, 2500) ?? null,
         sessionId: sessionId(),
         language: document.documentElement.lang || null,
+        context: context ? Object.fromEntries(Object.entries(context).filter(([key]) => /^[a-zA-Z0-9_]{1,40}$/.test(key)).slice(0, 12)) : null,
       }),
       keepalive: true,
     }).catch(() => {});
