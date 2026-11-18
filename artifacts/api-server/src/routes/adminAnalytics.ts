@@ -299,7 +299,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
       SELECT event_name, platform, COUNT(*)::int AS total
       FROM public.analytics_events
       WHERE trusted = TRUE
-        AND event_name IN ('rewarded_ad_requested','rewarded_ad_pending','rewarded_ad_completed','rewarded_ad_failed')
+        AND event_name IN ('rewarded_ad_requested','rewarded_ad_request_created','rewarded_ad_pending','rewarded_ad_completed','rewarded_ad_failed')
         AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
         AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
         AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
@@ -307,6 +307,35 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
       GROUP BY event_name, platform
       ORDER BY event_name, platform
     `);
+
+    const adAttempts = await db.execute(sql`
+      SELECT metadata_json::jsonb ->> 'requestId' AS request_id,
+             COALESCE(MAX(metadata_json::jsonb ->> 'placement'), '—') AS placement,
+             ARRAY_AGG(DISTINCT event_name ORDER BY event_name) AS observed_events,
+             MIN(created_at) AS first_seen,
+             MAX(created_at) AS last_seen
+      FROM public.analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('rewarded_ad_request_created','rewarded_ad_pending','rewarded_ad_completed','rewarded_ad_failed')
+        AND NULLIF(metadata_json::jsonb ->> 'requestId', '') IS NOT NULL
+        AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
+        AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
+        AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
+        AND (${diagnosticLanguage} = '' OR COALESCE(language, '') = ${diagnosticLanguage})
+      GROUP BY metadata_json::jsonb ->> 'requestId'
+      ORDER BY MAX(created_at) DESC
+      LIMIT 100
+    `);
+
+    const adAttemptRows = (adAttempts.rows as any[]).map((row) => {
+      const events = Array.isArray(row.observed_events) ? row.observed_events.map(String) : [];
+      const state = events.includes("rewarded_ad_completed") ? "Completado"
+        : events.includes("rewarded_ad_failed") ? "Fallido"
+        : events.includes("rewarded_ad_pending") ? "Pendiente SSV"
+        : "Sin desenlace registrado";
+      const when = row.last_seen ? new Date(String(row.last_seen)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
+      return `<tr><td><code>${esc(row.request_id)}</code></td><td>${esc(row.placement)}</td><td>${state}</td><td>${when}</td></tr>`;
+    }).join("");
 
     const rootCauseRows = (rootCauseEvents.rows as any[]).map((row) => {
       const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
@@ -316,6 +345,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
     const adFlowRows = (adFlow.rows as any[]).map((row) => {
       const labels: Record<string, string> = {
         rewarded_ad_requested: "Solicitados",
+        rewarded_ad_request_created: "Solicitud nativa creada",
         rewarded_ad_pending: "Pendientes de confirmación SSV",
         rewarded_ad_completed: "Completados",
         rewarded_ad_failed: "Fallidos",
@@ -506,6 +536,9 @@ a{color:#4ade80;text-decoration:none}
       <h3>Flujo de anuncios rewarded</h3>
       <p class="sub">Solicitudes, pendientes SSV, completados y fallidos por plataforma. Son recuentos de eventos, no una conciliación por solicitud única: los reintentos pueden generar más de un evento.</p>
       <table><thead><tr><th>Estado</th><th>Plataforma</th><th>Eventos</th></tr></thead><tbody>${adFlowRows || '<tr><td colspan="3">Sin eventos con estos filtros.</td></tr>'}</tbody></table>
+      <h3>Seguimiento por solicitud nativa</h3>
+      <p class="sub">Agrupa eventos por requestId de AdMob para ver si una solicitud nativa terminó, quedó pendiente de SSV o no registró desenlace. Los fallos anteriores a la creación del requestId aparecen en el diagnóstico general.</p>
+      <table><thead><tr><th>Request ID</th><th>Ubicación</th><th>Estado observado</th><th>Última señal</th></tr></thead><tbody>${adAttemptRows || '<tr><td colspan="4">No hay solicitudes nativas correlacionables todavía.</td></tr>'}</tbody></table>
       <h3>Errores del mismo periodo y filtros</h3>
       <p class="sub">Estos errores coinciden en periodo, plataforma, versión e idioma; la instrumentación actual no permite asegurar que pertenezcan a una partida concreta.</p>
       <table><thead><tr><th>Fecha (Madrid)</th><th>Tipo</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Detalle</th></tr></thead><tbody>${diagnosticErrorRows || '<tr><td colspan="6">No hay errores registrados con estos filtros.</td></tr>'}</tbody></table>
