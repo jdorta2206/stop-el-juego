@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { db, indexesReady } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { authLimiter } from "../middlewares/rateLimit";
+import { ensureAnalyticsReady } from "./analytics";
 
 const router: IRouter = Router();
 
@@ -47,6 +48,9 @@ function esc(value: unknown): string {
 
 router.get("/", authLimiter, basicAuth, async (req, res) => {
   try {
+    // STOP Analytics has its own idempotent schema bootstrap, separate from ensureIndexes().
+    // Wait for it explicitly so the admin panel cannot query analytics tables too early.
+    await ensureAnalyticsReady();
     const online = await db.execute(sql`
       SELECT platform, COUNT(*)::int AS active
       FROM public.analytics_sessions
