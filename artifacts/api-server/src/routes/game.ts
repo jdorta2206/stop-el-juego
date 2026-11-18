@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { ValidateRoundBody, ValidateRoundResponse } from "@workspace/api-zod";
 import { validateWordWithAi } from "../lib/aiWordValidator";
 import { issueScoreToken } from "../lib/scoreToken";
