@@ -44,6 +44,17 @@ describe("Google Play World Cup pack acknowledgement retry", () => {
     expect(acknowledgeBlock).toContain("return true;");
   });
 
+
+  it("retries a pending pack verification during the existing purchase-restore flow", () => {
+    const restoreStart = clientSource.indexOf("export async function restorePlayPurchases(");
+    const restoreEnd = clientSource.indexOf("\n}\n", restoreStart);
+    const restoreBlock = clientSource.slice(restoreStart, restoreEnd);
+
+    expect(restoreBlock).toContain("if (itemId === WORLD_CUP_SKU)");
+    expect(restoreBlock).toContain('fetch("/api/billing/play/verify-pack"');
+    expect(restoreBlock).toContain("purchase.purchaseToken");
+  });
+
   it("does not consume the permanent pack in the client and accepts granted-but-pending responses", () => {
     expect(clientSource).not.toContain("service.consume");
     expect(clientSource).toContain("data.granted !== true");
