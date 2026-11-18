@@ -12,6 +12,7 @@ import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { applyAuthoritativeSeasonEventsInTransaction } from "./season";
 import { recordHalloweenEvent, isHalloweenPreviewAuthorized } from "./halloween";
+import { calcLevel, calcLevelAfterXp } from "../lib/scoreProgress";
 import {
   isHappyHourActiveForTzOffset,
   isHappyHourActiveForTimeZone,
@@ -56,20 +57,6 @@ export async function lookupPlayerTzOffset(playerId: string): Promise<number | n
 }
 
 const router: IRouter = Router();
-
-const LEVEL_THRESHOLDS = [
-  0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200,
-  4000, 5000, 6200, 7600, 9200, 11000, 13000, 15500, 18500, 22000,
-];
-
-export function calcLevel(xp: number): number {
-  let level = 1;
-  for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
-    if (xp >= LEVEL_THRESHOLDS[i]) level = i + 1;
-    else break;
-  }
-  return level;
-}
 
 export function calcXpGain(score: number, won: boolean, mode: string): number {
   const base = Math.max(0, Math.floor(score / 5));
@@ -632,9 +619,6 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const xpGain = baseXpGain * xpMultiplier;
   const coinGain = baseCoinGain * coinMultiplier;
-  const newXp = (existing[0]?.xp ?? 0) + xpGain;
-  const newLevel = calcLevel(newXp);
-
   let player;
   let duplicateSubmission = false;
   if (isBonus) {
@@ -674,15 +658,22 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         });
       if (!claimed || rawScore <= 0 || rawScore > claimed.maxScore) return null;
 
-      if (existing.length > 0) {
+      const lockedBonusRows = await tx
+        .select()
+        .from(playerScoresTable)
+        .where(eq(playerScoresTable.playerId, playerId))
+        .for("update");
+      const lockedBonusPlayer = lockedBonusRows[0];
+
+      if (lockedBonusPlayer) {
         const [updated] = await tx
           .update(playerScoresTable)
           .set({
             playerName,
-            avatarColor: avatarColor ?? existing[0].avatarColor,
+            avatarColor: avatarColor ?? lockedBonusPlayer.avatarColor,
             totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
             xp: sql`${playerScoresTable.xp} + ${xpGain}`,
-            level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
+            level: sql`GREATEST(${playerScoresTable.level}, ${calcLevelAfterXp(lockedBonusPlayer.xp, xpGain)})`,
             updatedAt: new Date(),
           })
           .where(eq(playerScoresTable.playerId, playerId))
@@ -825,12 +816,12 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       }
 
       let txPlayer;
-      if (existing.length > 0) {
+      if (lockedExisting) {
     const [updated] = await tx
       .update(playerScoresTable)
       .set({
         playerName,
-        avatarColor: avatarColor ?? existing[0].avatarColor,
+        avatarColor: avatarColor ?? lockedExisting.avatarColor,
         totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
         ...(isBonus ? {} : {
           gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
@@ -840,7 +831,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         // Concurrency hardening: another simultaneous score submission may have
         // advanced XP/level after the snapshot above. Never allow this request
         // to overwrite a newer, higher level with a stale lower one.
-        level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
+        level: sql`GREATEST(${playerScoresTable.level}, ${calcLevelAfterXp(lockedExisting.xp, xpGain)})`,
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
         ...(!isBonus && lockedUpdatedToday ? {
           currentStreak: lockedStreak,
