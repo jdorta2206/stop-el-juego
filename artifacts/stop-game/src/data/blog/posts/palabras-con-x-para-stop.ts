@@ -18,7 +18,7 @@ Aquí tienes ejemplos con X agrupados por categorías. Revisa cada respuesta seg
 
 En español la X puede aparecer en dos lugares:
 
-1. **Al principio de palabra** (poco común): xilófono, xerox, xenofobia…
+1. **Al principio de palabra** (poco común): xilófono, xenofobia, xerocopia…
 2. **En medio o al final** (más común): taxi, examen, exilio, máximo…
 
 En las partidas de STOP, la respuesta debe comenzar por la letra de la ronda. Por eso, para una ronda con X no sirven palabras que solo contienen esa letra en medio o al final.
@@ -42,7 +42,7 @@ En las partidas de STOP, la respuesta debe comenzar por la letra de la ronda. Po
 Hay pocos ejemplos conocidos para esta categoría. Estos términos pueden servir para investigar, pero comprobad su significado y si encajan en las reglas:
 
 - **Xoloitzcuintle** (raza de perro mexicano sin pelo)
-- **Xenarthra** (grupo taxonómico que incluye armadillos y perezosos; al ser un taxón, su aceptación como respuesta depende de las reglas)
+- **Xoloitzcuintle** (raza mexicana de perro; acordad si se aceptan razas en lugar de especies o nombres comunes de animales)
 
 Si no te las sabes, **deja en blanco**. No hay vergüenza.
 
@@ -58,7 +58,7 @@ Mejor saltarla y centrarte en otras categorías.
 
 Aquí hay algunas opciones reales:
 
-- **Xátiva / Játiva** (Valencia, España)
+- **Xàtiva** (Valencia, España; forma oficial en valenciano). En español también se usa **Játiva**.
 - **Xian / Xi'an** (China — famosa por los guerreros de terracota)
 - **Xalapa** (capital de Veracruz, México)
 - **Xela / Quetzaltenango** (Guatemala)
@@ -71,7 +71,7 @@ Casi inexistentes en español, pero:
 
 - **Xocolata** (chocolate en catalán) — aceptado si se permite catalán
 - **Xató** (plato catalán de bacalao y verduras)
-- **Ximena** (un tipo de cóctel) — muy local
+
 
 ## Objetos / cosas con X
 
@@ -88,7 +88,11 @@ Otra categoría difícil. Mejor en blanco.
 
 ## Profesiones con X
 
-Esta es **literalmente imposible**. Saltar.
+Hay pocas opciones conocidas, pero no es una categoría imposible:
+
+- **Xilógrafo / xilógrafa**: persona que realiza trabajos de xilografía.
+
+Comprueba que el grupo admite términos profesionales poco frecuentes.
 
 ## Marcas con X
 
@@ -97,7 +101,7 @@ Aquí sorprendentemente hay opciones:
 - **Xerox** (fotocopias e impresoras)
 - **Xiaomi** (móviles)
 - **Xbox** (consola de Microsoft)
-- **XL** (Línea aérea británica)
+
 
 > 🟩 **Top pick:** **"Xiaomi"** o **"Xbox"** son las más conocidas hoy.
 
@@ -120,8 +124,8 @@ Aquí sorprendentemente hay opciones:
 | Categoría | Palabra |
 |---|---|
 | Nombre | Xavier |
-| Animal | Xolo |
-| Ciudad | Xátiva |
+| Animal | Xoloitzcuintle (si se admiten razas) |
+| Ciudad | Xàtiva (nombre oficial) |
 | Objeto | Xilófono |
 | Marca | Xiaomi |
 | Famoso | Xavi Hernández |
