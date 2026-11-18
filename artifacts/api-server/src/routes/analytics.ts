@@ -93,7 +93,6 @@ async function ensureAnalyticsTables(): Promise<void> {
         created_at timestamp NOT NULL DEFAULT NOW()
       )`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS session_id text`,
-      `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS session_id text`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}'`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE`,
       `CREATE INDEX IF NOT EXISTS analytics_events_created_at_idx ON analytics_events (created_at)`,
@@ -128,13 +127,19 @@ async function ensureAnalyticsTables(): Promise<void> {
   }
 }
 
-const analyticsTablesReady = ensureAnalyticsTables().catch((err) => {
-  console.error("[analytics] schema initialization failed:", err);
-  throw err;
-});
+// Share one initialization attempt between concurrent requests. A failed attempt
+// is discarded so a later request can retry after a transient database outage.
+let analyticsTablesReady: Promise<void> | null = null;
 
 export async function ensureAnalyticsReady(): Promise<void> {
-  await analyticsTablesReady;
+  if (!analyticsTablesReady) {
+    analyticsTablesReady = ensureAnalyticsTables().catch((err) => {
+      analyticsTablesReady = null;
+      console.error("[analytics] schema initialization failed; a later request will retry:", err);
+      throw err;
+    });
+  }
+  await ensureAnalyticsReady();
 }
 
 async function latestPlatformForPlayer(playerId: string | null | undefined): Promise<"web" | "android" | "ios" | null> {
