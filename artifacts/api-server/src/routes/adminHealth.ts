@@ -16,7 +16,17 @@ router.use((_req, res, next) => {
   next();
 });
 function safeEqual(a:string,b:string){const aa=Buffer.from(a,"utf8"),bb=Buffer.from(b,"utf8");if(aa.length!==bb.length){timingSafeEqual(aa,aa);return false;}return timingSafeEqual(aa,bb)}
-function basicAuth(req:Request,res:Response,next:NextFunction):void{const user=process.env["ADMIN_PANEL_USER"],pass=process.env["ADMIN_PANEL_PASSWORD"];if(!user||!pass){res.status(503).type("html").send("<h1>Panel no configurado</h1>");return;}const [scheme,encoded]=String(req.headers.authorization||"").split(" ");if(scheme==="Basic"&&encoded){const decoded=Buffer.from(encoded,"base64").toString("utf8"),idx=decoded.indexOf(":"),gotUser=decoded.slice(0,idx),gotPass=decoded.slice(idx+1);if(safeEqual(gotUser,user)&&safeEqual(gotPass,pass)){next();return;}}res.set("WWW-Authenticate",'Basic realm="STOP Panel", charset="UTF-8"').status(401).type("html").send("<h1>Acceso restringido</h1><p>Credenciales requeridas.</p>")}
+function basicAuth(req:Request,res:Response,next:NextFunction):void {
+  const user=process.env["ADMIN_PANEL_USER"],pass=process.env["ADMIN_PANEL_PASSWORD"];
+  if(!user||!pass){res.status(503).type("html").send("<h1>Panel no configurado</h1>");return;}
+  const match=/^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(String(req.headers.authorization??""));
+  const encoded=match?.[1];
+  if(encoded&&Buffer.from(encoded,"base64").toString("base64")===encoded){
+    const decoded=Buffer.from(encoded,"base64").toString("utf8"),separator=decoded.indexOf(":");
+    if(separator>0&&safeEqual(decoded.slice(0,separator),user)&&safeEqual(decoded.slice(separator+1),pass)){next();return;}
+  }
+  res.set("WWW-Authenticate",'Basic realm="STOP Panel", charset="UTF-8"').status(401).type("html").send("<h1>Acceso restringido</h1><p>Credenciales requeridas.</p>");
+}
 function esc(value:unknown):string{return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 type Check={name:string;status:"ok"|"warn"|"error";value:string;detail:string};
 function badge(status:Check["status"]){return status==="ok"?"🟢":status==="warn"?"🟡":"🔴"} function statusLabel(status:Check["status"]){return status==="ok"?"OK":status==="warn"?"ATENCIÓN":"PROBLEMA"}
