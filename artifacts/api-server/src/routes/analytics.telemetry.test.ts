@@ -49,4 +49,17 @@ describe("STOP gameplay telemetry allowlist", () => {
     expect(analyticsRouteSource).toContain('router.post("/event"');
     expect(analyticsRouteSource).toContain('router.post("/game-start"');
   });
+
+  it("sanitizes metadata before every analytics event persistence path", () => {
+    expect(analyticsRouteSource).toContain(
+      "JSON.stringify(sanitizeClientMetadata(input.metadata ?? {}))",
+    );
+    expect(analyticsRouteSource).toContain(
+      "JSON.stringify(sanitizeClientMetadata(metadata))",
+    );
+    expect(analyticsRouteSource).toContain(
+      "/password|token|secret|authorization|cookie|api[_-]?key/i",
+    );
+  });
+
 });
