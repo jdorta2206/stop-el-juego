@@ -284,6 +284,7 @@ export default function Room() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const roomQueryKey = getGetRoomQueryKey(roomCode || "");
+  const roomLoadTelemetryRef = useRef<string>("");
   const { data: room, error } = useGetRoom(roomCode || "", {
     query: {
       refetchInterval: pollingInterval,
@@ -531,6 +532,35 @@ export default function Room() {
     }
     prevHostIdRef.current = newHost;
   }, [room?.hostId, player?.id, t.multiplayer, toast]);
+
+  useEffect(() => {
+    if (!roomCode) return;
+    roomLoadTelemetryRef.current = "";
+    trackAnalyticsEvent("lobby_room_load_started", { mode: "multiplayer", metadata: { phase: "room_fetch_started" } });
+  }, [roomCode]);
+  useEffect(() => {
+    if (!roomCode || !room) return;
+    const key = `${roomCode}:loaded`;
+    if (roomLoadTelemetryRef.current === key) return;
+    roomLoadTelemetryRef.current = key;
+    trackAnalyticsEvent("lobby_room_loaded", { mode: "multiplayer", metadata: {
+      phase: "room_data_received",
+      roomStatus: String((room as any)?.status ?? "unknown").slice(0, 32),
+      playerCount: Array.isArray((room as any)?.players) ? (room as any).players.length : null,
+    } });
+  }, [roomCode, room]);
+  useEffect(() => {
+    if (!roomCode || !error) return;
+    const detail = error as any;
+    const signature = `${roomCode}:error:${String(detail?.status ?? detail?.statusCode ?? detail?.message ?? "unknown").slice(0, 80)}`;
+    if (roomLoadTelemetryRef.current === signature) return;
+    roomLoadTelemetryRef.current = signature;
+    trackAnalyticsEvent("lobby_room_load_failed", { mode: "multiplayer", metadata: {
+      phase: "room_fetch_failed",
+      status: Number.isFinite(Number(detail?.status ?? detail?.statusCode)) ? Number(detail?.status ?? detail?.statusCode) : null,
+      errorCode: String(detail?.code ?? "").slice(0, 48) || null,
+    } });
+  }, [roomCode, error]);
 
   const currentLetter = room?.currentLetter || "";
   const currentRound = room?.currentRound || 0;
