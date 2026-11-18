@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Ejemplos de palabras con Y organizados por categorías para practicar y comprobar según las reglas de tu partida de STOP.",
   keywords: ["palabras con Y", "palabras con Y para STOP", "nombres con Y", "animales con Y", "países con Y", "comidas con Y", "marcas con Y"],
   publishedAt: "2026-05-18",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 6,
