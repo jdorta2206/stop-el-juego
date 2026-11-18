@@ -51,7 +51,16 @@ export default function Home() {
     };
   }, []);
 
-  const { player } = usePlayer();
+  const { player, isLoaded } = usePlayer();
+  const lobbyAuthTelemetryRef = useRef<string>("");
+  useEffect(() => {
+    if (!isLoaded) return;
+    const result = !player ? "anonymous" : player.loginMethod === "guest" ? "guest" : "authenticated";
+    const key = `${result}:${player?.loginMethod ?? "none"}`;
+    if (lobbyAuthTelemetryRef.current === key) return;
+    lobbyAuthTelemetryRef.current = key;
+    trackAnalyticsEvent("lobby_auth_resolved", { metadata: { phase: "auth_restore_complete", result, loginMethod: player?.loginMethod ?? null } });
+  }, [isLoaded, player?.id, player?.loginMethod]);
   const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
   const adsBlocked = isPremium || premiumLoading || !!premiumError;
   const { friends } = useFollows(player?.id);
@@ -167,6 +176,8 @@ export default function Home() {
       return;
     }
 
+    const dailyStatusStartedAt = performance.now();
+    trackAnalyticsEvent("lobby_daily_status_started", { metadata: { endpoint: "/api/daily/status", method: "GET", phase: "daily_status_request" } });
     fetch(`${getApiUrl()}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
       headers: { ...authHeaders() },
       credentials: "include",
@@ -179,13 +190,18 @@ export default function Home() {
         error.requestId = r.headers.get("X-Request-Id") || undefined;
         throw error;
       })
-      .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
+      .then(d => {
+        if (controller.signal.aborted) return;
+        setDailyDone(!!d.played);
+        trackAnalyticsEvent("lobby_daily_status_succeeded", { metadata: { endpoint: "/api/daily/status", durationMs: Math.max(0, Math.round(performance.now() - dailyStatusStartedAt)), phase: "daily_status_response" } });
+      })
       .catch((error) => {
         if (controller.signal.aborted) return;
         setDailyDone(null);
         const status = error && typeof error === "object" && "status" in error ? Number((error as { status?: unknown }).status) : null;
         const requestId = error && typeof error === "object" && "requestId" in error ? String((error as { requestId?: unknown }).requestId ?? "") : "";
         trackClientError(error, null, { endpoint: "/api/daily/status", method: "GET", phase: "lobby_daily_status", status, requestId: requestId || null });
+        trackAnalyticsEvent("lobby_daily_status_failed", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null, durationMs: Math.max(0, Math.round(performance.now() - dailyStatusStartedAt)), phase: "daily_status_response" } });
         if (status === 408 || status === 504) trackAnalyticsEvent("lobby_api_timeout", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null } });
         if (status === 401 || status === 403) trackAnalyticsEvent("lobby_auth_failed", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null } });
       });
