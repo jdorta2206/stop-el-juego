@@ -40,6 +40,7 @@ function basicAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 function n(value: unknown): number { return Number(value ?? 0); }
+function latencyValue(value: unknown): string { return value == null || !Number.isFinite(Number(value)) ? "Sin datos" : `${Math.round(Number(value))} ms`; }
 function esc(value: unknown): string {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -410,7 +411,6 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
       return `<tr><td>${labels[String(row.event_name)] ?? esc(row.event_name)}</td><td>${platform}</td><td>${n(row.total)}</td></tr>`;
     }).join("");
     const latencyRow = (lobbyLatency.rows as any[])[0] as any;
-    const latencyValue = (value: unknown) => value == null || !Number.isFinite(Number(value)) ? "Sin datos" : `${Math.round(Number(value))} ms`;
 
     const halloweenSummary = await db.execute(sql`
       SELECT event_name, platform, COUNT(*)::int AS total,
