@@ -3,16 +3,16 @@ import type { BlogPost } from "../types";
 const post: BlogPost = {
   slug: "stop-en-pareja-dinamicas",
   title: "STOP en pareja: 15 ideas divertidas para jugar a dos",
-  description: "El STOP no es solo para grupos: en pareja es ideal para citas, viajes, sobremesa o trayectos largos. 15 dinámicas y modos especiales para hacerlo divertido.",
+  description: "El STOP también se puede adaptar a dos personas: descubre 15 variantes para una cita, una sobremesa o una partida a distancia, con reglas sencillas para cada propuesta.",
   keywords: ["STOP en pareja", "jugar a dos Scattergories", "juego pareja palabras", "STOP cita", "STOP viaje"],
   publishedAt: "2026-05-08",
   author: "Equipo STOP",
   category: "Para todos los públicos",
   readMinutes: 6,
   content: `
-Mucha gente piensa que el STOP **necesita un grupo grande** para ser divertido. **Mentira.** En pareja puede ser igualmente entretenido — y de hecho hay modalidades que **funcionan mejor a dos** que con más gente.
+El STOP no necesita un grupo grande para convertirse en una actividad entretenida. Con dos personas podéis competir, colaborar o cambiar las reglas para adaptar cada ronda a vuestros gustos.
 
-Si tienes a tu pareja delante en una cena, un viaje en coche, una tarde de domingo o simplemente quieres una alternativa al "qué hacemos esta noche", aquí tienes **15 ideas concretas** para jugar al STOP a dos.
+Si queréis jugar durante una cena, una tarde tranquila o a distancia, aquí tienes **15 ideas concretas** para adaptar el STOP a dos personas.
 
 ## 1. STOP express (3 rondas, 5 minutos)
 
@@ -121,13 +121,13 @@ Una partida muy larga: **20 rondas, 10 categorías, todas las letras**. Solo par
 
 ---
 
-## Por qué el STOP funciona en pareja
+## Por qué puede funcionar el STOP en pareja
 
-A diferencia de muchos juegos de mesa (Monopoly, Catan, Risk) que son **brutales a dos jugadores**, el STOP funciona perfectamente porque:
+Estas variantes permiten adaptar la dinámica a dos personas por varios motivos:
 
 1. **No tiene mecánicas de "atacar al otro"** — cada uno hace lo suyo.
 2. **Las rondas son cortas** — se puede empezar y parar fácil.
-3. **No hay "ganador aplastante"** — el azar de la letra equilibra mucho.
+3. **Podéis ajustar la dificultad** — elegid letras, categorías y tiempos que resulten razonables para ambos.
 4. **Da pie a conversación** — cada palabra es excusa para una anécdota o broma.
 
 ## Errores típicos al jugar en pareja
