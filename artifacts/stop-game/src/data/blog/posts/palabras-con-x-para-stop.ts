@@ -10,144 +10,70 @@ const post: BlogPost = {
   category: "Listas de palabras",
   readMinutes: 6,
   content: `
-La letra **X** es poco frecuente al comienzo de muchas palabras en español y puede resultar difícil en STOP. Preparar algunos ejemplos ayuda a practicar, pero no garantiza completar la ronda ni ganarla.
+La X es una de las letras menos habituales al comienzo de palabras en español. Eso hace que algunas categorías sean más difíciles, pero no significa que todas sean imposibles. En esta guía distinguimos palabras comunes, términos científicos y conceptos para que puedas preparar respuestas y explicar por qué encajan.
 
-Aquí tienes ejemplos con X agrupados por categorías. Revisa cada respuesta según el significado, la categoría y las normas que utilicéis.
+Una palabra puede estar correctamente escrita y, aun así, no servir para una categoría concreta. Por ejemplo, un elemento químico no es una profesión. Antes de jugar, acordad si se admiten nombres propios, marcas, extranjerismos y términos especializados.
 
-## La X en español: dos posiciones
+## Profesiones con X: una opción documentada
 
-En español la X puede aparecer en dos lugares:
+- **Xilofonista**: persona que toca el xilófono. Puede servir en una categoría de profesiones si se admiten actividades musicales o artísticas.
 
-1. **Al principio de palabra** (poco común): xilófono, xerox, xenofobia…
-2. **En medio o al final** (más común): taxi, examen, exilio, máximo…
+Consulta la entrada del [DLE para xilofonista](https://dle.rae.es/xilofonista). La definición confirma que la palabra existe y designa a quien toca ese instrumento, aunque no precisa si se ejerce de forma profesional.
 
-En las partidas de STOP, la respuesta debe comenzar por la letra de la ronda. Por eso, para una ronda con X no sirven palabras que solo contienen esa letra en medio o al final.
+## Instrumentos y objetos
 
-## Nombres de persona con X
+- **Xilófono**: instrumento musical de percusión formado por láminas que se golpean con baquetas.
 
-- **Xavier / Xabier / Javier** (depende de cómo se escriba)
-- **Xenia, Ximena, Xochitl** (femeninos)
-- **Xavi** (apodo de Xavier, usado en Cataluña)
+Puedes comprobarlo en el [DLE](https://dle.rae.es/xil%C3%B3fono). Es un ejemplo claro para «Instrumento musical».
 
-> **Ejemplos:** "Xavier" y "Ximena" son nombres propios; su aceptación depende de las normas de la partida.
+## Ciencia
 
-## Apellidos con X
+- **Xenón**: elemento químico del grupo de los gases nobles, con número atómico 54. Encaja en una categoría de elementos químicos. Consulta el [DLE](https://dle.rae.es/xen%C3%B3n).
 
-- **Xifrá, Xirinacs** (catalanes)
-- **Xerez, Ximénez** (variante de Jiménez)
-- **Xi** (apellido chino — como Xi Jinping)
+## Conceptos
 
-## Animales con X
+- **Xenofobia**: rechazo o fobia hacia lo extranjero y hacia las personas extranjeras. Es un concepto, no una profesión ni un objeto. Consulta el [DLE](https://dle.rae.es/xenofobia).
 
-Hay pocos ejemplos conocidos para esta categoría. Estos términos pueden servir para investigar, pero comprobad su significado y si encajan en las reglas:
+## Arte y técnicas
 
-- **Xoloitzcuintle** (raza de perro mexicano sin pelo)
-- **Xenarthra** (grupo taxonómico que incluye armadillos y perezosos; al ser un taxón, su aceptación como respuesta depende de las reglas)
+- **Xilografía**: técnica de grabado sobre madera, y también la impresión hecha con esas planchas. Consulta el [DLE](https://dle.rae.es/xilograf%C3%ADa).
 
-Si no te las sabes, **deja en blanco**. No hay vergüenza.
+## Zoología: un término que exige cuidado
 
-## Países con X
+- **Xilófago**: adjetivo que se aplica a los insectos que roen la madera. Consulta el [DLE](https://dle.rae.es/xil%C3%B3fago).
 
-Ningún país oficialmente reconocido empieza por X en español. Algunos jugadores aceptan:
+Puede servir en una categoría relacionada con la zoología si se admiten términos de este tipo. No es el nombre de una especie concreta, sino una denominación que describe a los insectos que se alimentan de madera.
 
-- **Xinjiang** (región autónoma de China — no es país)
+## Nombres propios, lugares y marcas
 
-Mejor saltarla y centrarte en otras categorías.
+Los nombres propios, los lugares y las marcas con X pueden valer únicamente si la partida incluye una categoría que los admita. No deben mezclarse con las palabras comunes. En esta guía no se incluyen listas de nombres, ciudades o marcas sin una fuente que confirme cada uno.
 
-## Ciudades con X
+## Palabras que contienen X, pero no empiezan por X
 
-Aquí hay algunas opciones reales:
+En una ronda cuya letra sea X no sirven palabras como **taxi**, **examen**, **máximo** o **texto**. Contienen la letra, pero empiezan por otra. La regla se aplica a la primera letra de la respuesta.
 
-- **Xátiva / Játiva** (Valencia, España)
-- **Xian / Xi'an** (China — famosa por los guerreros de terracota)
-- **Xalapa** (capital de Veracruz, México)
-- **Xela / Quetzaltenango** (Guatemala)
+## Cómo preparar una ronda con X
 
-> 🟩 **Top pick:** "Xátiva" si juegas en España, "Xalapa" en Latinoamérica.
+1. Recuerda primero palabras documentadas como *xilófono*.
+2. Para una categoría relacionada con personas que tocan instrumentos, ten presente *xilofonista*.
+3. Coloca cada palabra en su categoría: *xenón* es un elemento químico y *xenofobia* es un concepto.
+4. Separa nombres propios, marcas y lugares de las palabras comunes.
+5. Si una respuesta es especializada, prepárate para explicar su significado y consultar una fuente fiable.
 
-## Comidas y bebidas con X
+## Resumen de ejemplos documentados
 
-Casi inexistentes en español, pero:
+| Categoría | Ejemplo | Qué significa |
+| --- | --- | --- |
+| Profesión o actividad artística | Xilofonista | Persona que toca el xilófono |
+| Instrumento | Xilófono | Instrumento musical de percusión |
+| Elemento químico | Xenón | Gas noble de número atómico 54 |
+| Concepto | Xenofobia | Rechazo hacia lo extranjero |
+| Arte o técnica | Xilografía | Grabado sobre madera |
+| Zoología | Xilófago | Se aplica a insectos que roen madera |
 
-- **Xocolata** (chocolate en catalán) — aceptado si se permite catalán
-- **Xató** (plato catalán de bacalao y verduras)
-- **Ximena** (un tipo de cóctel) — muy local
+Es mejor presentar pocos ejemplos bien documentados que una lista larga de respuestas dudosas.
 
-## Objetos / cosas con X
-
-- **Xilófono** (instrumento musical)
-- **Xerocopia** (término relacionado con la reproducción de documentos; comprueba su aceptación con el diccionario acordado)
-- **Xenón** (gas noble, también marca de faros)
-
-## Deportes con X
-
-- **Xadrez** (ajedrez en portugués) — solo si se permite
-- **X-Games** (competición de deportes extremos)
-
-Otra categoría difícil. Mejor en blanco.
-
-## Profesiones con X
-
-Esta es **literalmente imposible**. Saltar.
-
-## Marcas con X
-
-Aquí sorprendentemente hay opciones:
-
-- **Xerox** (fotocopias e impresoras)
-- **Xiaomi** (móviles)
-- **Xbox** (consola de Microsoft)
-- **XL** (Línea aérea británica)
-
-> 🟩 **Top pick:** **"Xiaomi"** o **"Xbox"** son las más conocidas hoy.
-
-## Famosos con X
-
-- **Xavi Hernández** (futbolista del Barça)
-- **Ximena Sariñana** (cantante mexicana)
-- **Xi Jinping** (presidente de China)
-- **Xena, la princesa guerrera** (personaje de TV — solo si valen ficciones)
-
-## Trucos para sobrevivir a la X
-
-1. **No fuerces respuestas.** Si no encuentras una palabra que encaje, es preferible dejar la casilla vacía según las reglas de vuestra partida.
-2. **Administra el tiempo.** Empieza por las categorías en las que conozcas una respuesta que encaje y vuelve a las difíciles si te queda tiempo.
-3. **Comprueba las normas.** Nombres propios, marcas y personajes ficticios pueden tener criterios distintos según la partida.
-4. **Practica la escritura.** Repasar ejemplos como xilófono o topónimos con X ayuda a recordarlos, pero no sustituye la comprobación de cada respuesta.
-
-## Tu "kit mínimo STOP letra X"
-
-| Categoría | Palabra |
-|---|---|
-| Nombre | Xavier |
-| Animal | Xolo |
-| Ciudad | Xátiva |
-| Objeto | Xilófono |
-| Marca | Xiaomi |
-| Famoso | Xavi Hernández |
-
-Estos seis ejemplos pueden servirte como punto de partida para practicar, pero no garantizan una puntuación: comprueba que cada respuesta encaja con la categoría y las normas de tu partida.
-
-## Por qué la X es ventaja, no problema
-
-Aunque parezca contraintuitivo, las letras menos frecuentes como X, K, W, Y y Z pueden exigir más preparación y dejar categorías sin respuesta. Razón:
-
-- Las letras frecuentes suelen ofrecer más opciones conocidas, aunque eso no asegura que todos obtengan la misma puntuación.
-- Las letras menos habituales pueden exigir más preparación y dejar categorías sin respuesta; el resultado depende de las palabras admitidas y del sistema de puntuación.
-
-Dedicar un rato a practicar letras menos frecuentes puede ampliar tu repertorio, aunque no existe un tiempo de estudio que garantice ganar.
-
----
-
-Sigue mejorando para las letras imposibles:
-
-- [Palabras con K para STOP](/blog/palabras-con-k-para-stop)
-- [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
-- [Palabras con Y para STOP](/blog/palabras-con-y-para-stop)
-- [Palabras con Z para STOP](/blog/palabras-con-z-para-stop)
-- [Las palabras más raras pero válidas](/blog/palabras-raras-pero-validas-stop)
-
-¿Listo para poner la X en práctica? [Juega gratis ahora](/) y demuestra lo aprendido.
+**Fuentes:** [xilofonista](https://dle.rae.es/xilofonista) · [xilófono](https://dle.rae.es/xil%C3%B3fono) · [xenón](https://dle.rae.es/xen%C3%B3n) · [xenofobia](https://dle.rae.es/xenofobia) · [xilografía](https://dle.rae.es/xilograf%C3%ADa) · [xilófago](https://dle.rae.es/xil%C3%B3fago)
 `,
 };
 
