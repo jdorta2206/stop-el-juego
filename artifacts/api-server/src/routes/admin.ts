@@ -587,7 +587,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
 
     const activityRows = activityByDay.map((row) =>
-      `<tr><td>${esc(row.d)}</td><td>${num(row.active)}</td><td>${num(row.starters)}</td><td>${num(row.completers)}</td><td>${num(row.starters) > 0 ? `${Math.round((num(row.completers) / num(row.starters)) * 100}%` : "Sin muestra"}</td></tr>`
+      `<tr><td>${esc(row.d)}</td><td>${num(row.active)}</td><td>${num(row.starters)}</td><td>${num(row.completers)}</td><td>${num(row.starters) > 0 ? `${Math.round((num(row.completers) / num(row.starters)) * 100)}%` : "Sin muestra"}</td></tr>`
     ).join('');
 
 
@@ -796,7 +796,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     <div class="card"><div class="label">MAU real · 30 días</div><div class="val">${num(retentionKpis?.mau)}</div></div>
     <div class="card"><div class="label">Cuentas activas · 7 días</div><div class="val">${num(retentionKpis?.account_active_7d)}</div></div>
     <div class="card"><div class="label">Invitados activos · 7 días</div><div class="val">${num(retentionKpis?.guest_active_7d)}</div></div>
-    <div class="card"><div class="label">Jugadores con resultado / inicio · 7 días</div><div class="val">${num(funnel?.game_players) > 0 ? `${Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100}%` : "Sin muestra"}</div></div>
+    <div class="card"><div class="label">Jugadores con resultado / inicio · 7 días</div><div class="val">${num(funnel?.game_players) > 0 ? `${Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100)}%` : "Sin muestra"}</div></div>
   </div>
 
   <h2>🎯 Actividad de jugadores · últimos 7 días</h2>
