@@ -48,11 +48,9 @@ Aquí hay opciones reales:
 
 ## Colores con Y
 
-Casi nada. Algunos aceptan:
+No hay un ejemplo de color de uso general y claramente asentado que convenga recomendar para esta letra. «Yema» nombra una parte del huevo o ciertos dulces; «amarillo yema» describe un tono, pero no es una respuesta inequívoca para una categoría estricta de colores.
 
-- **Yema** (color amarillo yema de huevo) — discutible
-
-Mejor en blanco.
+Si no habéis acordado aceptar nombres descriptivos de tonos, es mejor dejar la casilla en blanco.
 
 ## Países con Y
 
@@ -93,8 +91,9 @@ Mejor en blanco.
 
 ## Profesiones con Y
 
-- **Yesero** (el que trabaja con yeso)
-- **Yogui** (practicante de yoga)
+- **Yesero** (persona que trabaja con yeso)
+
+«Yogui» designa a quien practica yoga, pero no necesariamente una profesión; úsalo solo si vuestra categoría admite actividades o roles que no son ocupaciones.
 
 
 ## Marcas con Y
@@ -133,7 +132,7 @@ Mejor en blanco.
 | Ciudad | Yakarta |
 | Comida | Yogur |
 | Objeto | Yate |
-| Deporte | Yoga |
+| Actividad física (si se admite) | Yoga |
 | Marca (si se admiten marcas) | Yamaha |
 | Famoso | Yoko Ono |
 
