@@ -962,16 +962,20 @@ function sameOrigin(req: Request): boolean {
   return false;
 }
 
+function requireSameOrigin(req: Request, res: Response, next: () => void) {
+  if (!sameOrigin(req)) {
+    res.status(403).type("html").send("<h1>Solicitud bloqueada</h1><p>Origen no válido.</p><a href='/test'>Volver</a>");
+    return;
+  }
+  next();
+}
+
 // POST /test/notify-mundial — el propietario lo dispara desde el panel privado.
 // Envía la notificación del Pack Mundial a TODOS los suscriptores, con el texto
 // traducido al idioma de cada suscripción (es por defecto). No se envía nada de
 // forma automática: solo al pulsar el botón del panel (protegido por Basic Auth
 // + comprobación de mismo origen contra CSRF).
-router.post("/notify-mundial", authLimiter, basicAuth, adminBroadcastLimiter, async (req: Request, res: Response) => {
-  if (!sameOrigin(req)) {
-    res.status(403).type("html").send('<h1>Solicitud bloqueada</h1><p>Origen no válido.</p><a href="/test">← Volver</a>');
-    return;
-  }
+router.post("/notify-mundial", authLimiter, basicAuth, requireSameOrigin, adminBroadcastLimiter, async (req: Request, res: Response) => {
   try {
     const { sent, failed, removed } = await sendLocalizedBroadcast(MUNDIAL_PUSH, "es");
     const requestId = String((req as Request & { stopRequestId?: string }).stopRequestId ?? req.headers["x-request-id"] ?? "").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || null;
