@@ -37,13 +37,13 @@ const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set([
 function redactClientDiagnostic(value: unknown, max: number): string | null {
   if (typeof value !== "string" || !value) return null;
   return value.slice(0, max)
-    .replace(/\\bBearer\\s+[A-Za-z0-9._~+\\/-]+=*/gi, "Bearer [redacted]")
-    .replace(/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b/g, "[token redacted]")
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email redacted]")
-    .replace(/([?&](?:token|access_token|refresh_token|authorization|key|api_key|code)=)[^&#\\s]*/gi, "$1[redacted]")
-    .replace(/(token|password|authorization|cookie|secret|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+/gi, "$1=[redacted]")
-    .replace(/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/g, "[ip redacted]")
-    .replace(/\\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\b/gi, "[id redacted]");
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [redacted]")
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[token redacted]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email redacted]")
+    .replace(/([?&](?:token|access_token|refresh_token|authorization|key|api_key|code)=)[^&#\s]*/gi, "$1[redacted]")
+    .replace(/(token|password|authorization|cookie|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[ip redacted]")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[id redacted]");
 }
 
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
