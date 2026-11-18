@@ -1665,3 +1665,9 @@ router.post("/validate", async (req, res) => {
         TRUE
       )
     `).catch((err) => console.error("[game] solo validation telemetry failed:", err));
+  }
+
+  res.json(response);
+});
+
+export default router;
