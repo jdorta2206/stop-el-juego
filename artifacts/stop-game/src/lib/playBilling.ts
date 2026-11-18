@@ -83,6 +83,7 @@ export async function restorePlayPurchases(playerId: string): Promise<boolean> {
   try {
     const service = await window.getDigitalGoodsService!(PLAY_BILLING_METHOD);
     const purchases = await (service as any).listPurchases();
+    let hasPremium = false;
     for (const purchase of purchases || []) {
       const itemId = purchase.itemId ?? purchase.productId;
       if (!purchase.purchaseToken) continue;
@@ -114,8 +115,9 @@ export async function restorePlayPurchases(playerId: string): Promise<boolean> {
       const res = await fetch("/api/billing/play/verify", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...authHeadersSafe() }, body: JSON.stringify({ playerId, productId: PREMIUM_SKU, purchaseToken: purchase.purchaseToken }) });
       if (!res.ok) continue;
       const data = await res.json().catch(() => ({}));
-      if (data.isPremium === true) return true;
+      if (data.isPremium === true) hasPremium = true;
     }
+    return hasPremium;
   } catch {}
   return false;
 }
