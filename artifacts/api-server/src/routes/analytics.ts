@@ -46,6 +46,21 @@ function redactClientDiagnostic(value: unknown, max: number): string | null {
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[id redacted]");
 }
 
+function sanitizeClientMetadata(value: unknown, depth = 0): unknown {
+  if (depth > 4) return "[truncated]";
+  if (typeof value === "string") return redactClientDiagnostic(value, 1000);
+  if (Array.isArray(value)) return value.slice(0, 25).map((item) => sanitizeClientMetadata(item, depth + 1));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 40).map(([key, item]) => [
+      key.slice(0, 64),
+      /password|token|secret|authorization|cookie|api[_-]?key/i.test(key)
+        ? "[redacted]"
+        : sanitizeClientMetadata(item, depth + 1),
+    ]));
+  }
+  return value;
+}
+
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
 const CURRENT_TWA_ANALYTICS_VERSION = "1.3.6.9";
 const CURRENT_WEB_ANALYTICS_VERSION = String(process.env.RAILWAY_GIT_COMMIT_SHA ?? "web-dev").slice(0, 12);
@@ -330,7 +345,7 @@ router.post("/event", presenceLimiter, async (req, res) => {
     if (!eventName) return res.status(400).json({ error: "eventName required" });
     const clean = (value: unknown, max: number): string | null => typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
     const metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
-    const metadataJson = JSON.stringify(metadata).slice(0, 4000);
+    const metadataJson = JSON.stringify(sanitizeClientMetadata(metadata)).slice(0, 4000);
     const playerId = readPlayerId(req);
     const sessionId = clean(body.sessionId, 128) ?? serverSessionId(req, res);
     const trusted = TRUSTED_CLIENT_TELEMETRY_EVENTS.has(eventName);
