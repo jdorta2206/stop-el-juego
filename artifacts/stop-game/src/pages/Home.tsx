@@ -52,6 +52,7 @@ export default function Home() {
   }, []);
 
   const { player, isLoaded } = usePlayer();
+  const lobbyAuthStartedAtRef = useRef(performance.now());
   const lobbyAuthTelemetryRef = useRef<string>("");
   useEffect(() => {
     if (!isLoaded) return;
@@ -59,7 +60,7 @@ export default function Home() {
     const key = `${result}:${player?.loginMethod ?? "none"}`;
     if (lobbyAuthTelemetryRef.current === key) return;
     lobbyAuthTelemetryRef.current = key;
-    trackAnalyticsEvent("lobby_auth_resolved", { metadata: { phase: "auth_restore_complete", result, loginMethod: player?.loginMethod ?? null } });
+    trackAnalyticsEvent("lobby_auth_resolved", { metadata: { phase: "auth_restore_complete", result, loginMethod: player?.loginMethod ?? null, durationMs: Math.max(0, Math.round(performance.now() - lobbyAuthStartedAtRef.current)) } });
   }, [isLoaded, player?.id, player?.loginMethod]);
   const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
   const adsBlocked = isPremium || premiumLoading || !!premiumError;
