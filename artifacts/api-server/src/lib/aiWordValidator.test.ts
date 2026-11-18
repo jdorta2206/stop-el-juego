@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const transaction = vi.fn();
+const { transaction } = vi.hoisted(() => ({ transaction: vi.fn() }));
 
 vi.mock("@workspace/db", () => ({
   db: { transaction },
