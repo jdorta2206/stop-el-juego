@@ -155,6 +155,7 @@ export default function Home() {
       headers: { ...authHeaders() },
       credentials: "include",
       signal: controller.signal,
+      cache: "no-store",
     })
       .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
       .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
