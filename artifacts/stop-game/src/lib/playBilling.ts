@@ -85,7 +85,32 @@ export async function restorePlayPurchases(playerId: string): Promise<boolean> {
     const purchases = await (service as any).listPurchases();
     for (const purchase of purchases || []) {
       const itemId = purchase.itemId ?? purchase.productId;
-      if (itemId !== PREMIUM_SKU || !purchase.purchaseToken) continue;
+      if (!purchase.purchaseToken) continue;
+
+      // Re-verify the permanent pack whenever purchases are restored. This
+      // retries a previously failed server-side acknowledgement on the next
+      // app/session restore, without asking the player to buy the pack again.
+      if (itemId === WORLD_CUP_SKU) {
+        try {
+          const packRes = await fetch("/api/billing/play/verify-pack", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json", ...authHeadersSafe() },
+            body: JSON.stringify({ playerId, productId: WORLD_CUP_SKU, purchaseToken: purchase.purchaseToken }),
+          });
+          const packData = await packRes.json().catch(() => ({}));
+          if (packData.granted === true && packData.acknowledgementPending !== true) {
+            console.info("[playBilling] Restored World Cup pack and confirmed Google Play acknowledgement.");
+          } else if (packData.granted === true) {
+            console.warn("[playBilling] World Cup pack remains granted; Google Play acknowledgement is still pending.");
+          }
+        } catch (error) {
+          console.warn("[playBilling] Could not retry World Cup pack acknowledgement during restore:", error);
+        }
+        continue;
+      }
+
+      if (itemId !== PREMIUM_SKU) continue;
       const res = await fetch("/api/billing/play/verify", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...authHeadersSafe() }, body: JSON.stringify({ playerId, productId: PREMIUM_SKU, purchaseToken: purchase.purchaseToken }) });
       if (!res.ok) continue;
       const data = await res.json().catch(() => ({}));
