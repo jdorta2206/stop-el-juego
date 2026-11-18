@@ -331,6 +331,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
           CASE WHEN (metadata_json::jsonb ->> 'wordValidationCount') ~ '^[0-9]+$' THEN (metadata_json::jsonb ->> 'wordValidationCount')::int ELSE 0 END AS word_count
         FROM public.analytics_events
         WHERE trusted = TRUE AND event_name = 'solo_round_validation'
+          AND (${diagnosticMode} = 'all' OR mode = ${diagnosticMode})
           AND created_at >= NOW() - (${diagnosticDays}::int * INTERVAL '1 day')
           AND (${diagnosticPlatform} = 'all' OR platform = ${diagnosticPlatform})
           AND (${diagnosticVersion} = '' OR COALESCE(app_version, '') = ${diagnosticVersion})
