@@ -139,7 +139,7 @@ A diferencia de muchos juegos de mesa (Monopoly, Catan, Risk) que son **brutales
 
 ## STOP online en pareja a distancia
 
-¿Estáis lejos? [STOP online](/) tiene **salas privadas con código**. Creas una, le pasas el link a tu pareja, y jugáis en tiempo real desde cualquier ciudad o país. Funciona en cualquier móvil sin descargas.
+¿Estáis lejos? Consultad en [STOP online](/) las modalidades disponibles y comprobad si permiten jugar juntos a distancia antes de organizar la partida.
 
 Si jugáis a distancia, podéis comparar vuestras respuestas del día cuando el modo disponible lo permita; revisad las instrucciones actuales del reto diario dentro del juego. Buena forma de "compartir un momento" aunque no podáis estar físicamente juntos.
 
@@ -152,7 +152,7 @@ Más ideas:
 - [Cómo organizar un torneo de STOP](/blog/como-organizar-torneo-stop)
 - [Trucos para pensar palabras rápido](/blog/pensar-palabras-rapido-bajo-presion)
 
-¿Os animáis a una partida ahora mismo? [Crea sala privada en STOP online](/) y compartid el enlace.
+¿Os animáis a una partida? [Entrad en STOP online](/) y consultad las opciones disponibles para jugar en pareja.
 `,
 };
 
