@@ -1642,7 +1642,7 @@ router.post("/validate", async (req, res) => {
   });
 
   // Aggregate diagnostics only; never include answer text, categories or identity.
-  if (requestedGameMode === "solo") {
+  if (requestedGameMode === "solo" || requestedGameMode === "daily") {
     void db.execute(sql`
       INSERT INTO public.analytics_events
         (event_name, platform, app_version, language, mode, metadata_json, trusted)
@@ -1651,7 +1651,7 @@ router.post("/validate", async (req, res) => {
         ${req.header("x-client-twa") === "1" || req.header("x-client-platform") === "android" ? "android" : req.header("x-client-platform") === "ios" ? "ios" : "web"},
         ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null},
         ${language},
-        'solo',
+        ${requestedGameMode},
         ${JSON.stringify({
           durationMs: Date.now() - roundValidationStartedAt,
           validationDurationMs: roundValidationDurationMs,
