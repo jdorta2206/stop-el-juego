@@ -24,6 +24,12 @@ describe("STOP gameplay telemetry allowlist", () => {
       "rewarded_ad_completed",
       "rewarded_ad_failed",
       "powerup_used",
+      "lobby_view",
+      "lobby_ready",
+      "lobby_api_timeout",
+      "lobby_auth_failed",
+      "lobby_page_exit",
+      "rewarded_ad_pending",
     ]) {
       expect(allowlist).toContain(`"${eventName}"`);
     }
