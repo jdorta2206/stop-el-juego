@@ -1644,6 +1644,7 @@ router.post("/validate", async (req, res) => {
   if (requestedGameMode === "solo") {
     void recordTrustedAnalyticsEvent({
       eventName: "solo_round_validation",
+      platform: req.header("x-client-twa") === "1" || req.header("x-client-platform") === "android" ? "android" : req.header("x-client-platform") === "ios" ? "ios" : "web",
       appVersion: String(req.headers["x-client-version"] ?? "").slice(0, 32) || null,
       language,
       mode: "solo",
