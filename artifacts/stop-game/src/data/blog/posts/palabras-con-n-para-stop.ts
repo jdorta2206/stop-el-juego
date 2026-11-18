@@ -10,108 +10,67 @@ const post: BlogPost = {
   category: "Listas de palabras",
   readMinutes: 5,
   content: `
-La letra **Ñ** es **la pesadilla absoluta del STOP en español**. En la mayoría de grupos se vota por **saltarla** antes de empezar la partida. Pero si juegas con un grupo "duro" que sí la acepta, esta guía te salvará la ronda.
+La Ñ plantea un reto especial en STOP porque hay menos palabras de uso general que comiencen por esta letra que con muchas otras. Aun así, existen ejemplos reales en español y nombres geográficos oficiales.
 
-## ¿Se incluye la Ñ en STOP?
+Esta guía distingue entre animales, plantas, alimentos, adjetivos y topónimos, y aclara cuándo una palabra es regional o tiene un significado que no encaja en cualquier categoría.
 
-**Acuérdalo antes de empezar.** Las opciones son:
+## Un aviso sobre las palabras muy cortas
 
-1. **Excluir la Ñ del sorteo** (lo más común).
-2. **Incluirla pero aceptar palabras con Ñ en cualquier posición** (más fácil).
-3. **Incluirla y obligar a que empiecen por Ñ** (modo "hardcore").
-
-La opción 3 es brutal: hay literalmente **menos de 30 palabras** comunes en español que empiezan por Ñ.
-
-## Nombres de persona con Ñ
-
-Casi inexistentes:
-
-- **Ñoño** (apodo, personaje de "El Chavo del 8")
-- **Ñato / Ñata** (apodo en Argentina y Uruguay para nariz chata)
-
-> ⚠️ Si dices que "Ñoño" es nombre, tu grupo te mirará raro. Pero técnicamente es un nombre de personaje famoso.
-
-## Apellidos con Ñ
-
-- **Ñoño** (no es apellido)
-- En realidad, **ningún apellido español empieza por Ñ**.
-
-Más útil: apellidos que **contienen Ñ** (no cuentan en STOP estricto):
-
-- **Núñez, Peñalosa, Iñaki, Muñoz, Ibañez**
+Aunque **ñu** es una palabra válida en español y está recogida en el DLE, tiene solo dos letras. Algunas partidas exigen un mínimo de tres letras, así que puede no puntuar en todas las modalidades. Consulta las instrucciones de la partida antes de contar con ella.
 
 ## Animales con Ñ
 
-- **Ñu** (la apuesta segura, antílope africano)
-- **Ñandú** (ave sudamericana parecida al avestruz)
-- **Ñoño** (personaje, no animal real)
-- **Ñacaniná** (serpiente sudamericana — muy regional)
+- **Ñu**: antílope africano de gran tamaño.
+- **Ñandú**: ave corredora sudamericana, parecida al avestruz.
 
-> 🟩 **Top pick:** **"Ñu"** — corto, fácil, válido.
+Ambos están recogidos en el DLE: [ñu](https://dle.rae.es/%C3%B1u) y [ñandú](https://dle.rae.es/%C3%B1and%C3%BA). Son dos animales distintos.
 
-## Comidas con Ñ
+## Plantas y árboles con Ñ
 
-- **Ñame** (tubérculo comestible africano y caribeño)
-- **Ñoquis** (pasta italiana)
+- **Ñire**: árbol o arbusto de los bosques andino-patagónicos. El DLE indica que se usa en Argentina y Chile.
 
-## Objetos / cosas con Ñ
+Consulta el [DLE](https://dle.rae.es/%C3%B1ire). Es una respuesta adecuada para «Árbol» o «Planta», siempre que se acepte vocabulario regional.
 
-- **Ñudo** (variante antigua de "nudo", aceptada por la RAE)
+## Comidas y alimentos con Ñ
 
-## Países, ciudades, marcas con Ñ
+- **Ñame**: planta tropical que se cultiva por su tubérculo comestible; también se llama así al propio tubérculo. [DLE](https://dle.rae.es/%C3%B1ame).
+- **Ñoqui**: pasta de masa de patata u otros ingredientes, cortada en trocitos. El DLE señala que se usa más en plural: **ñoquis**. [DLE](https://dle.rae.es/%C3%B1oqui).
+- **Ñora**: pimiento pequeño y redondo que se consume seco como condimento. El DLE marca esta acepción como propia de España. [DLE](https://dle.rae.es/%C3%B1ora).
 
-**Ninguno reconocido empieza por Ñ.** Mejor dejarlo en blanco.
+## Otras palabras con Ñ
 
-## Famosos con Ñ
+- **Ñoño / ñoña**: adjetivo coloquial. Referido a una persona, significa apocada y de poco ingenio; referido a una cosa, sosa y sin sustancia. [DLE](https://dle.rae.es/%C3%B1o%C3%B1o).
+- **Ñapa**: añadido o regalo que se da por encima de lo comprado o debido. Se usa en varios países de América; consulta el [DLE](https://dle.rae.es/%C3%B1apa) para ver en cuáles.
 
-- **Ñejo** (cantante de reggaetón puertorriqueño)
-- **Ñu** (banda española de rock)
+*Ñoño* puede servir en una categoría como «Adjetivo». *Ñapa* es un sustantivo y puede encajar en una categoría abierta como «Palabra» si se admiten regionalismos.
 
-## Trucos para sobrevivir a la Ñ
+## Lugares que empiezan por Ñ
 
-1. **Negocia antes de empezar:** propone excluir la Ñ. La mayoría aceptará.
-2. **Si la juegas, memoriza estas 4 palabras**: Ñu, Ñandú, Ñoquis, Ñame.
-3. **Acepta que vas a perder casillas.** Es normal. El que ponga 2-3 palabras válidas con Ñ ya gana la ronda.
-4. **No pierdas tiempo en categorías sin opciones** (país, color, profesión).
+- **Ñuble**: región de Chile. Puedes consultar la información de la [Delegación Presidencial Regional de Ñuble](https://dprnuble.dpr.gob.cl/conozca-la-region/).
+- **Ñiquén**: comuna de la provincia de Punilla, en la Región de Ñuble. Aparece en la [Ley 21.033 del Diario Oficial de Chile](https://www.diariooficial.interior.gob.cl/publicaciones/2017/09/05/41852/01/1267631.pdf).
 
-## Tu "kit mínimo STOP letra Ñ"
+Ñuble no es una ciudad y Ñiquén no es un país: conviene respetar la diferencia entre categorías.
 
-| Categoría | Palabra |
-|---|---|
-| Nombre | (en blanco) |
-| Animal | Ñu |
-| País | (en blanco) |
-| Ciudad | (en blanco) |
-| Comida | Ñoquis |
-| Objeto | Ñudo |
-| Famoso | Ñejo |
+## ¿Y los nombres de persona y los apellidos?
 
-Con 3-4 palabras ya **superas al 95% de jugadores**.
+No conviene inventar nombres ni convertir en nombres con Ñ los apellidos que solo la contienen. **Núñez**, **Muñoz** o **Peñalosa** no empiezan por Ñ, y tampoco sirve *Iñaki*, que empieza por I. Si la categoría es «Nombre» o «Apellido», usa solo nombres cuya grafía real empiece por Ñ y que puedas acreditar.
 
-## ¿Por qué la Ñ es tan pobre?
+## Cómo jugar una ronda con Ñ
 
-La letra Ñ es **única del español** (y de algunas lenguas relacionadas como gallego, asturiano, vasco…). Pero curiosamente, **no hay raíces latinas que empiecen por Ñ**. La Ñ moderna nació de la abreviatura medieval de "nn" (annus → año). Por eso casi todas las palabras españolas con Ñ tienen la Ñ **en medio** (año, niño, español, mañana…), no al principio.
+Antes de empezar, acordad si la Ñ entra en el sorteo y qué tipos de respuesta se admiten. Si entra, las palabras deben comenzar por Ñ.
 
-Las pocas palabras que empiezan por Ñ son **extranjerismos** o **onomatopeyas** (ñam ñam…).
+| Categoría | Ejemplo |
+| --- | --- |
+| Animal | Ñu, Ñandú |
+| Árbol o planta | Ñire |
+| Alimento | Ñame, Ñoquis |
+| Condimento | Ñora |
+| Lugar | Ñuble, Ñiquén |
+| Adjetivo | Ñoño / ñoña |
 
-## Mi recomendación honesta
+No todas las palabras encajan en todas las variantes: una región sirve para «Lugar», pero no para «Ciudad». También conviene comprobar si se admiten regionalismos y palabras de uso localizado.
 
-Si juegas en casa con amigos, **excluye la Ñ** del sorteo. Hace la partida más fluida y divertida.
-
-Si juegas en **STOP online** (nuestra app), normalmente la Ñ se excluye automáticamente del sorteo de letras precisamente por esto.
-
----
-
-Más letras difíciles que sí merecen estudio:
-
-- [Palabras con K](/blog/palabras-con-k-para-stop) (más del doble de opciones)
-- [Palabras con W](/blog/palabras-con-w-para-stop)
-- [Palabras con X](/blog/palabras-con-x-para-stop)
-- [Palabras con Y](/blog/palabras-con-y-para-stop)
-- [Palabras con Z](/blog/palabras-con-z-para-stop)
-- [Cómo jugar al STOP: reglas completas](/blog/como-jugar-stop-reglas-completas)
-
-¿Te animas a una partida? [Juega gratis ahora](/) y reza para que no te toque la Ñ.
+**Fuentes:** [ñu](https://dle.rae.es/%C3%B1u) · [ñandú](https://dle.rae.es/%C3%B1and%C3%BA) · [ñire](https://dle.rae.es/%C3%B1ire) · [ñame](https://dle.rae.es/%C3%B1ame) · [ñoqui](https://dle.rae.es/%C3%B1oqui) · [ñora](https://dle.rae.es/%C3%B1ora) · [ñoño](https://dle.rae.es/%C3%B1o%C3%B1o) · [ñapa](https://dle.rae.es/%C3%B1apa) · [Región de Ñuble](https://dprnuble.dpr.gob.cl/conozca-la-region/) · [Ley 21.033 del Diario Oficial de Chile](https://www.diariooficial.interior.gob.cl/publicaciones/2017/09/05/41852/01/1267631.pdf)
 `,
 };
 

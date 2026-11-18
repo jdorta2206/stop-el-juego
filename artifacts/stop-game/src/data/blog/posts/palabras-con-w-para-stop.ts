@@ -10,80 +10,63 @@ const post: BlogPost = {
   category: "Listas de palabras",
   readMinutes: 5,
   content: `
-La **W** aparece en menos palabras del español que otras letras, por eso puede resultar complicada en STOP. Hay préstamos de otros idiomas, nombres propios y topónimos que empiezan por esta letra, pero no todos se aceptan necesariamente en cualquier partida.
+La W aparece en español sobre todo en voces procedentes de otras lenguas, nombres propios y términos especializados. Que una palabra tenga W no significa que sea incorrecta: algunas están recogidas en el Diccionario de la lengua española.
 
-Usa estos ejemplos como ideas y acuerda antes si se permiten extranjerismos, marcas y nombres propios.
+Para preparar una partida conviene distinguir las voces recogidas en el DLE de las marcas, los nombres propios y las formas extranjeras que el grupo quizá no admita.
 
-## Nombres de persona
+## Tecnología e informática
 
-- Wendy
-- Walter
-- William
-- Wenceslao
-- Wilma
+- **Web**: red informática; también se usa para el sitio web. [DLE](https://dle.rae.es/web).
+- **Wifi**: conexión inalámbrica entre dispositivos en un área limitada, muy usada para acceder a internet. [DLE](https://dle.rae.es/wifi).
 
-Los nombres propios suelen admitirse en categorías de nombres, siempre que esa categoría esté incluida en vuestra partida.
+Encajan en categorías como «Tecnología» o «Informática».
 
-## Animales
+## Cocina y alimentos
 
-- **Wapití**: ciervo norteamericano.
-- **Wombat**: marsupial australiano.
-- **Walabí**: marsupial parecido a un canguro pequeño.
-- **Weimaraner**: raza de perro.
+- **Wasabi**: planta originaria de Japón; de su raíz se obtiene una pasta verde y muy picante que se usa como condimento. [DLE](https://dle.rae.es/wasabi).
+- **Wok**: sartén ancha y honda de origen oriental, usada para saltear; también se llama así al plato preparado en ella. [DLE](https://dle.rae.es/wok).
 
-En esta categoría conviene comprobar la grafía y decidir si se aceptan nombres de razas.
+*Wasabi* puede encajar en «Alimento» o «Condimento»; *wok*, en «Utensilio de cocina» o «Comida», según el sentido.
 
-## Países y territorios
+## Deportes
 
-No hay muchos países soberanos cuyo nombre habitual en español empiece por W. **Wallis y Futuna** es un territorio francés del Pacífico, no un país independiente. Si la categoría es «país», no lo presentes como respuesta equivalente a un Estado soberano.
+- **Waterpolo**: deporte de equipo que se juega en una piscina; consiste en meter el balón en la portería rival mientras se nada. [DLE](https://dle.rae.es/waterpolo).
 
-## Ciudades
+## Cine y cultura
 
-- Washington
-- Wellington
-- Winnipeg
-- Wuhan
-- Wuppertal
+- **Wéstern**: película, o género de películas, ambientadas en el Oeste norteamericano. El DLE recoge esta forma adaptada con tilde. [DLE](https://dle.rae.es/w%C3%A9stern).
 
-Los topónimos pueden escribirse de forma diferente según el idioma. Acordad si se usa el nombre español tradicional o la forma local.
+Si la partida exige palabras escritas en español, es preferible la forma *wéstern*.
 
-## Comidas y bebidas
+## Bebidas
 
-- **Wasabi**: condimento japonés.
-- **Wonton**: preparación de la cocina china.
-- **Waffle**: voz inglesa para un tipo de gofre; comprobad si se aceptan extranjerismos.
-- **Whisky**: bebida cuyo nombre se usa en español.
+- **Whisky**: voz inglesa recogida en el DLE, que remite a [güisqui](https://dle.rae.es/g%C3%BCisqui), un licor alcohólico destilado a partir de cereales. [DLE](https://dle.rae.es/whisky).
 
-## Objetos, actividades y deportes
+Puede encajar en «Bebida» si las reglas admiten ese tipo de respuesta.
 
-- **Web**: término relacionado con internet.
-- **Wifi**: tecnología de conexión inalámbrica.
-- **Walkie-talkie**: aparato de comunicación por radio.
-- **Waterpolo**: deporte acuático.
-- **Windsurf**: deporte que utiliza una tabla y una vela.
+## Nombres propios, marcas y lugares
 
-## Marcas y nombres comerciales
+Los nombres de persona, ciudades, empresas y marcas que empiezan por W solo valen si la categoría los admite. No son equivalentes a las palabras comunes del diccionario. Antes de escribir uno, comprueba su grafía y su identidad en una fuente fiable. Esta guía no presenta nombres comerciales ni topónimos como palabras comunes.
 
-Algunos ejemplos conocidos empiezan por W, pero una marca no equivale necesariamente a un nombre común. Solo utilízala si vuestra categoría admite marcas:
+## La regla de la inicial
 
-- Walmart
-- WhatsApp
-- Wikipedia
-- Wendy's
+En una ronda con W, una palabra que solo contiene la W en medio no sirve: la respuesta debe empezar por W.
 
-## Antes de escribir una palabra con W
+## Tabla rápida
 
-1. Comprueba la ortografía y el significado.
-2. Distingue entre un animal, una raza, un topónimo y una marca.
-3. No confundas un territorio con un país soberano.
-4. Acordad si se admiten préstamos y nombres en otros idiomas.
-5. No des por hecho que una palabra está aceptada por la RAE sin consultar su entrada.
+| Categoría | Palabra |
+| --- | --- |
+| Informática | Web |
+| Tecnología | Wifi |
+| Condimento | Wasabi |
+| Utensilio de cocina | Wok |
+| Deporte | Waterpolo |
+| Cine | Wéstern |
+| Bebida | Whisky |
 
-No hay una puntuación garantizada por usar una palabra poco frecuente: depende de que sea válida según las reglas acordadas y de las respuestas del resto de participantes.
+La W no obliga a recurrir a marcas o palabras dudosas. Hay términos recogidos en el DLE que permiten preparar respuestas reales.
 
-También puedes practicar con [palabras con K](/blog/palabras-con-k-para-stop), [palabras con X](/blog/palabras-con-x-para-stop) y [estrategias para jugar](/blog/estrategias-avanzadas-stop).
-
-[Juega gratis a STOP online](/).
+**Fuentes:** [web](https://dle.rae.es/web) · [wifi](https://dle.rae.es/wifi) · [wasabi](https://dle.rae.es/wasabi) · [wok](https://dle.rae.es/wok) · [waterpolo](https://dle.rae.es/waterpolo) · [wéstern](https://dle.rae.es/w%C3%A9stern) · [whisky](https://dle.rae.es/whisky) · [güisqui](https://dle.rae.es/g%C3%BCisqui)
 `,
 };
 
