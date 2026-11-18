@@ -88,6 +88,18 @@ function svgBars(rows: Array<{ label: string; value: number }>, title: string): 
   return '<div class="chart"><div class="chartTitle">' + esc(title) + '</div>' + bars + '</div>';
 }
 
+function safePanelDiagnosticText(value: unknown, max = 180): string {
+  return String(value ?? "")
+    .slice(0, max)
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [oculto]")
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[token oculto]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email oculto]")
+    .replace(/([?&](?:token|access_token|refresh_token|authorization|key|api_key|code)=)[^&#\s]*/gi, "$1[oculto]")
+    .replace(/(token|password|authorization|cookie|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=[oculto]")
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[ip oculta]")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[id oculto]");
+}
+
 function esc(v: unknown): string {
   return String(v ?? "")
     .replace(/&/g, "&amp;")
@@ -414,7 +426,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       `)
     ).rows as Record<string, unknown>[]; })();
     const activeSessionsPromise = (async () => { return (await executePanelQuery(sql`
-      SELECT s.player_id, COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE s.player_id END) AS player_name,
+      SELECT s.player_id, COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE 'Cuenta registrada' END) AS player_name,
              s.platform, s.app_version, s.language, s.last_seen,
              CASE
                WHEN s.player_id LIKE 'google_%' THEN 'Google / Gmail'
@@ -487,7 +499,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       ORDER BY unique_users DESC, platform
     `)).rows as Record<string, unknown>[]; })();
     const adViewersPromise = (async () => { return (await executePanelQuery(sql`
-      SELECT COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE e.player_id END) AS player_name,
+      SELECT COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE 'Cuenta registrada' END) AS player_name,
              e.platform, e.event_name, MAX(e.created_at) AS last_seen, COUNT(*)::int AS events
       FROM analytics_events e LEFT JOIN player_scores ps ON ps.player_id = e.player_id
       WHERE e.trusted = TRUE
@@ -575,7 +587,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
 
     const activityRows = activityByDay.map((row) =>
-      `<tr><td>${esc(row.d)}</td><td>${num(row.active)}</td><td>${num(row.starters)}</td><td>${num(row.completers)}</td><td>${num(row.starters) > 0 ? Math.round((num(row.completers) / num(row.starters)) * 100) : 0}%</td></tr>`
+      `<tr><td>${esc(row.d)}</td><td>${num(row.active)}</td><td>${num(row.starters)}</td><td>${num(row.completers)}</td><td>${num(row.starters) > 0 ? `${Math.round((num(row.completers) / num(row.starters)) * 100}%` : "Sin muestra"}</td></tr>`
     ).join('');
 
 
@@ -597,7 +609,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       let message = '—';
       try {
         const meta = JSON.parse(String(row.metadata_json || '{}')) as Record<string, unknown>;
-        message = String(meta.message ?? meta.path ?? '—').slice(0, 180);
+        message = safePanelDiagnosticText(meta.message ?? meta.path ?? '—', 180);
       } catch {}
       const time = row.created_at ? new Date(String(row.created_at)).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }) : '—';
       return `<tr><td>${String(row.event_name) === "client_error" ? "🐛 Juego" : "⚠️ API"}</td><td>${esc(row.platform)}</td><td>${esc(row.app_version || "—")}</td><td>${esc(message)}</td><td>${time}</td></tr>`;
@@ -612,7 +624,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
 
     const chartActivity = [...activityByDay].reverse().map((row) => ({ label: String(row.d).slice(5), value: num(row.active) }));
-    const chartCompletions = [...activityByDay].reverse().map((row) => ({ label: String(row.d).slice(5), value: num(row.starters) > 0 ? Math.round((num(row.completers) / num(row.starters)) * 100) : 0 }));
+    const chartCompletions = [...activityByDay].reverse().filter((row) => num(row.starters) > 0).map((row) => ({ label: String(row.d).slice(5), value: Math.round((num(row.completers) / num(row.starters)) * 100) }));
     const modeChart = modeUsage.map((row) => ({ label: String(row.mode), value: num(row.total) }));
     const powerupChart = powerupUsage.map((row) => ({ label: String(row.powerup), value: num(row.total) }));
     const funnelChart = [
@@ -784,7 +796,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     <div class="card"><div class="label">MAU real · 30 días</div><div class="val">${num(retentionKpis?.mau)}</div></div>
     <div class="card"><div class="label">Cuentas activas · 7 días</div><div class="val">${num(retentionKpis?.account_active_7d)}</div></div>
     <div class="card"><div class="label">Invitados activos · 7 días</div><div class="val">${num(retentionKpis?.guest_active_7d)}</div></div>
-    <div class="card"><div class="label">Inicio → fin · 7 días</div><div class="val">${num(funnel?.game_players) > 0 ? Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100) : 0}%</div></div>
+    <div class="card"><div class="label">Inicio → fin · 7 días</div><div class="val">${num(funnel?.game_players) > 0 ? `${Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100}%` : "Sin muestra"}</div></div>
   </div>
 
   <h2>🎯 Embudo de jugadores · últimos 7 días</h2>
