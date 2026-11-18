@@ -67,7 +67,7 @@ Para un torneo presencial necesitas:
 
 Para torneo online:
 
-- **App de STOP** (recomendamos [STOP online](/) que soporta salas privadas).
+- **Juego o herramienta online** que vayáis a utilizar. Comprobad antes si permite partidas con el número de participantes previsto; no deis por disponible una función de salas privadas sin verificarla.
 - **Chat o videollamada** para coordinar entre rondas.
 - **Spreadsheet compartido** (Google Sheets) para llevar puntuaciones.
 
@@ -83,7 +83,7 @@ Calcula tiempos reales:
 | Pausa entre partidas | 5-10 min |
 | Ceremonia final + premios | 10-15 min |
 
-**Ejemplo de 8 personas en liga:** hay 28 enfrentamientos si cada pareja juega una vez. Con partidas de 5 rondas, calcula el tiempo multiplicando los enfrentamientos por la duración real de cada partida y añade pausas; no equivale automáticamente a 18-20 horas.
+**Ejemplo de 8 personas en liga:** si cada pareja se enfrenta una vez, hay 28 enfrentamientos. Es un formato largo; para un evento breve, es preferible dividir al grupo en mesas o reducir el número de enfrentamientos y explicar cómo se clasificará a la final.
 
 **Ejemplo de 16 personas en eliminación directa:** hacen falta 15 enfrentamientos. La duración total depende del número de rondas, del tiempo de respuesta y de las pausas; calcula esos factores antes de anunciar un horario.
 
@@ -128,31 +128,27 @@ Un torneo es **más que un juego**. Para hacerlo memorable:
 4. **No medir el tiempo.** Sin cronómetro, las rondas se eternizan.
 5. **Letras imposibles seguidas.** Si caen K, W, X en las 3 primeras rondas, el torneo arranca mal.
 
-## Plantilla rápida: torneo de oficina (1 hora)
+## Plantilla rápida: torneo de oficina
 
-Aquí una plantilla concreta para un **torneo express en oficina**:
+- **Participantes:** 6-8.
+- **Formato:** dos mesas simultáneas o una fase inicial por grupos; explica antes cómo se eligen las personas que pasan a la final.
+- **Partidas:** 3-5 rondas por fase.
+- **Categorías:** Nombre, Animal, Comida, Ciudad y Objeto.
+- **Tiempo:** el mismo para todas las personas de una fase.
+- **Letras:** acordadas antes de empezar.
+- **Duración:** calcula el horario después de probar una ronda y contar el tiempo de corrección y puntuación.
+- **Premio:** un detalle simbólico para quien gane.
 
-- **Participantes:** 6-8
-- **Formato:** Liga rápida, todos contra todos (1 partida cada uno contra cada uno)
-- **Partidas:** 5 rondas cada una
-- **Categorías:** Nombre, Animal, Comida, Ciudad, Marca
-- **Tiempo por ronda:** 45 segundos
-- **Letras:** del sorteo, excluyendo Ñ
-- **Duración total:** 50-60 minutos
-- **Premio:** café/desayuno gratis al ganador
+## Plantilla: cumpleaños familiar
 
-Fácil, divertido, sin estrés.
-
-## Plantilla: cumpleaños familiar (2 horas)
-
-- **Participantes:** 8-12 (mezclando edades 8-70 años)
-- **Formato:** Eliminación directa
-- **Partidas:** 6 rondas
-- **Categorías:** Nombre, Animal, Color, Fruta, País, Cosa, Marca, Famoso (8 fáciles)
-- **Tiempo por ronda:** 90 segundos (más generoso para los mayores)
-- **Letras:** todas excepto Ñ, X, W
-- **Duración total:** 2 horas
-- **Premios:** medalla casera + dulce para el ganador
+- **Participantes:** 8-12, con equipos o emparejamientos equilibrados por edades.
+- **Formato:** eliminatoria si el grupo acepta que parte de los participantes juegue menos; si no, utiliza una fase de grupos.
+- **Partidas:** define el número de rondas por fase antes de anunciar el horario.
+- **Categorías:** Nombre, Animal, Color, Fruta, País, Objeto y Comida.
+- **Tiempo:** ajustado a la edad y experiencia del grupo.
+- **Letras:** acordadas de antemano; podéis excluir las menos frecuentes.
+- **Duración:** depende de las fases, rondas y pausas; haz un cálculo con una partida de prueba.
+- **Premios:** medalla casera o un detalle para el equipo ganador.
 
 ---
 
