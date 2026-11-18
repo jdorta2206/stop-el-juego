@@ -179,24 +179,7 @@ async function writeCache(
   }
 }
 
-// Main entry point. Always cache-first. If no cache hit and quota allows,
-// asks the LLM and caches the verdict. On any failure returns `false` so
-// the player simply gets the same answer they would have gotten before this
-// feature existed — never a 500.
-export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiValidationResult> {
-  const { word, category, lang, playerId = null } = opts;
-
-  if (!word || !category) return { isValid: false, source: "error" };
-
-  const cached = await lookupCachedValidation(word, category, lang);
-  if (cached !== null) return { isValid: cached, source: "cache" };
-
-  const client = getClient();
-  if (!client) return { isValid: false, source: "no_client" };
-
-  if (!(await ensureAiQuotaTables())) return { isValid: false, source: "error" };
-
-  // Cross-replica single-flight without holding a PostgreSQL connection during
+// Cross-replica single-flight without holding a PostgreSQL connection during
 // the external OpenAI call.
 async function claimValidation(key: string): Promise<boolean> {
   const result = await db.execute(sql`
@@ -264,7 +247,25 @@ async function waitForValidationCache(word: string, category: string, lang: stri
   }
   return null;
 }
-    const claimKey = `${word}\u0000${category}\u0000${lang}`;
+
+// Main entry point. Always cache-first. If no cache hit and quota allows,
+// asks the LLM and caches the verdict. On any failure returns `false` so
+// the player simply gets the same answer they would have gotten before this
+// feature existed — never a 500.
+export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiValidationResult> {
+  const { word, category, lang, playerId = null } = opts;
+
+  if (!word || !category) return { isValid: false, source: "error" };
+
+  const cached = await lookupCachedValidation(word, category, lang);
+  if (cached !== null) return { isValid: cached, source: "cache" };
+
+  const client = getClient();
+  if (!client) return { isValid: false, source: "no_client" };
+
+  if (!(await ensureAiQuotaTables())) return { isValid: false, source: "error" };
+
+      const claimKey = `${word}\u0000${category}\u0000${lang}`;
     let claimed = await claimValidation(claimKey);
     if (!claimed) {
       const waited = await waitForValidationCache(word, category, lang);
