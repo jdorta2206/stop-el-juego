@@ -84,27 +84,39 @@ function decodeHandoffPayload(encoded: string): [string, string][] | null {
  * into the DESTINATION origin before React starts, so the login never depends
  * on cross-origin cookies or sessionStorage surviving the OAuth round-trip.
  */
-export async function consumeAuthHandoff(): Promise<void> {
+function markOAuthHandoffFailed(): void {
   try {
     const params = new URLSearchParams(window.location.search);
-    const queryHandoff = params.get("stopauth");
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const hashHandoff = hashParams.get("stopauth");
-    const code = hashHandoff || queryHandoff;
-    if (!code) return;
+    params.set("auth_error", "oauth_handoff_failed");
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}?${params.toString()}${window.location.hash}`,
+    );
+  } catch {}
+}
 
-    // Bind the bearer handoff to the browser session that initiated OAuth.
-    // Without this check, a valid handoff URL could be forwarded to another
-    // user and silently sign that browser into the attacker's account.
+/**
+ * Imports OAuth material before React mounts. A handoff is accepted only when
+ * it contains both a valid profile and the server-issued session token.
+ * Partial handoffs must never create a client-side logged-in profile.
+ */
+export async function consumeAuthHandoff(): Promise<void> {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const code = hashParams.get("stopauth") || params.get("stopauth");
+  if (!code) return;
+
+  try {
     const handoffNonce = params.get("oauth_handoff_nonce");
     let expectedNonce: string | null = null;
     try { expectedNonce = sessionStorage.getItem("oauth_handoff_nonce"); } catch {}
-    if (!handoffNonce || !expectedNonce || handoffNonce !== expectedNonce) return;
+    if (!handoffNonce || !expectedNonce || handoffNonce !== expectedNonce) {
+      markOAuthHandoffFailed();
+      return;
+    }
 
-    // Remove the opaque one-time code and browser-binding nonce from the address bar
-    // before making the redemption request.
-    // redemption request. The code itself carries no credentials and expires
-    // after two minutes; the actual session/provider tokens stay server-side.
+    // Remove the one-time code and nonce from the address bar before redeeming.
     params.delete("stopauth");
     params.delete("oauth_handoff_nonce");
     hashParams.delete("stopauth");
@@ -114,60 +126,92 @@ export async function consumeAuthHandoff(): Promise<void> {
     const query = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`);
 
-    const apiBase = getApiBase();
-
-    const response = await fetch(`${apiBase}/api/auth/handoff`, {
+    const response = await fetch(`${getApiBase()}/api/auth/handoff`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ code }),
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      markOAuthHandoffFailed();
+      return;
+    }
 
     const data = await response.json() as { items?: unknown };
-    if (!Array.isArray(data.items)) return;
+    if (!Array.isArray(data.items)) {
+      markOAuthHandoffFailed();
+      return;
+    }
 
-    const allowed = new Set(["oauth_user", "fb_access_token", "stop_session_token"]);
     const values: Record<string, string> = {};
-
+    const allowed = new Set(["oauth_user", "fb_access_token", "stop_session_token"]);
     for (const item of data.items) {
       if (!Array.isArray(item) || item.length !== 2) continue;
       const [key, value] = item;
-      if (!allowed.has(key) || typeof value !== "string" || !value) continue;
-      values[key] = value;
-      try {
-        if (key === "stop_session_token") localStorage.setItem(SESSION_TOKEN_KEY, value);
-        else sessionStorage.setItem(key, value);
-      } catch {}
+      if (typeof key === "string" && allowed.has(key) && typeof value === "string" && value) {
+        values[key] = value;
+      }
     }
 
-    if (values.oauth_user) {
-      try {
-        const user = JSON.parse(values.oauth_user) as OAuthUser;
-        if (user?.id && user?.name) {
-          const existingRaw = localStorage.getItem(PLAYER_STORAGE_KEY);
-          const existing = existingRaw ? JSON.parse(existingRaw) : null;
-          const avatarColor = existing?.avatarColor || AVATAR_COLORS[0];
-          const profile = {
-            id: String(user.id),
-            name: String(user.name).trim().slice(0, 14),
-            avatarColor,
-            loginMethod: user.provider || null,
-            picture: user.picture ?? null,
-            fbAccessToken: null,
-          };
-          if (profile.name) {
-            localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(profile));
-            // The handoff can finish after main.tsx's startup timeout has
-            // already mounted React. Notify usePlayer so it reloads the
-            // newly persisted identity and the push hook re-registers the
-            // browser subscription against the correct account.
-            window.dispatchEvent(new CustomEvent("stop:player-changed"));
-          }
-        }
-      } catch {}
+    if (!values.stop_session_token || !values.oauth_user) {
+      markOAuthHandoffFailed();
+      return;
     }
-  } catch {}
+
+    let user: OAuthUser;
+    try {
+      user = JSON.parse(values.oauth_user) as OAuthUser;
+    } catch {
+      markOAuthHandoffFailed();
+      return;
+    }
+    const validProviders = new Set(["google", "facebook", "instagram", "tiktok", "apple"]);
+    if (
+      !user ||
+      typeof user.id !== "string" ||
+      !user.id.trim() ||
+      typeof user.name !== "string" ||
+      !user.name.trim() ||
+      !validProviders.has(user.provider)
+    ) {
+      markOAuthHandoffFailed();
+      return;
+    }
+
+    // Persist the credential before exposing the OAuth profile to React.
+    // If storage is unavailable, fail closed rather than showing a false login.
+    try {
+      localStorage.setItem(SESSION_TOKEN_KEY, values.stop_session_token);
+      if (localStorage.getItem(SESSION_TOKEN_KEY) !== values.stop_session_token) {
+        throw new Error("Session token could not be persisted");
+      }
+      sessionStorage.setItem("oauth_user", JSON.stringify(user));
+      if (values.fb_access_token) sessionStorage.setItem("fb_access_token", values.fb_access_token);
+
+      const existingRaw = localStorage.getItem(PLAYER_STORAGE_KEY);
+      const existing = existingRaw ? JSON.parse(existingRaw) : null;
+      const profile = {
+        id: user.id,
+        name: user.name.trim().slice(0, 14),
+        avatarColor: existing?.avatarColor || AVATAR_COLORS[0],
+        loginMethod: user.provider,
+        picture: user.picture ?? null,
+        fbAccessToken: null,
+      };
+      if (!profile.name) throw new Error("OAuth profile has no usable name");
+      localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(profile));
+    } catch {
+      try { sessionStorage.removeItem("oauth_user"); } catch {}
+      try { sessionStorage.removeItem("fb_access_token"); } catch {}
+      markOAuthHandoffFailed();
+      return;
+    }
+
+    // Refresh usePlayer even when the startup timeout has already mounted React.
+    window.dispatchEvent(new CustomEvent("stop:player-changed"));
+  } catch {
+    markOAuthHandoffFailed();
+  }
 }
 
 export function checkOAuthReturn(): OAuthUser | null {
@@ -210,6 +254,7 @@ function friendlyError(code: string): string {
     instagram_cancelled: "Inicio con Instagram cancelado.", instagram_failed: "Error al conectar con Instagram. Inténtalo de nuevo.", instagram_not_configured: "Instagram no está configurado aún.",
     tiktok_cancelled: "Inicio con TikTok cancelado.", tiktok_failed: "Error al conectar con TikTok. Inténtalo de nuevo.", tiktok_not_configured: "TikTok no está configurado aún.",
     apple_cancelled: "Inicio con Apple cancelado.", apple_failed: "Error al conectar con Apple. Inténtalo de nuevo.", apple_not_configured: "Apple no está configurado aún.",
+    oauth_handoff_failed: "No se pudo completar el inicio de sesión. Inténtalo de nuevo.",
   };
   return map[code] || "Error al iniciar sesión. Inténtalo de nuevo.";
 }
