@@ -130,12 +130,22 @@ async function ensureAnalyticsTables(): Promise<void> {
 // Share one initialization attempt between concurrent requests. A failed attempt
 // is discarded so a later request can retry after a transient database outage.
 let analyticsTablesReady: Promise<void> | null = null;
+let analyticsRetryAfter = 0;
+let analyticsInitError: unknown = null;
 
 export async function ensureAnalyticsReady(): Promise<void> {
   if (!analyticsTablesReady) {
-    analyticsTablesReady = ensureAnalyticsTables().catch((err) => {
+    if (Date.now() < analyticsRetryAfter) {
+      throw analyticsInitError ?? new Error("Analytics schema initialization is cooling down");
+    }
+    analyticsTablesReady = ensureAnalyticsTables().then(() => {
+      analyticsRetryAfter = 0;
+      analyticsInitError = null;
+    }).catch((err) => {
       analyticsTablesReady = null;
-      console.error("[analytics] schema initialization failed; a later request will retry:", err);
+      analyticsRetryAfter = Date.now() + 5_000;
+      analyticsInitError = err;
+      console.error("[analytics] schema initialization failed; retrying after cooldown:", err);
       throw err;
     });
   }
