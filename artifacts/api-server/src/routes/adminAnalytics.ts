@@ -226,8 +226,8 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
       FROM normalized
       WHERE (
         ${diagnosticMode} = 'all'
-        OR (${diagnosticMode} = 'solo' AND COALESCE(game_mode, '') NOT IN ('multiplayer', 'room', 'tournament'))
-        OR (${diagnosticMode} = 'multiplayer' AND COALESCE(game_mode, '') IN ('multiplayer', 'room', 'tournament'))
+        OR (${diagnosticMode} = 'solo' AND game_mode IN ('normal', 'quick', 'chaos', 'random', 'daily'))
+        OR (${diagnosticMode} = 'multiplayer' AND COALESCE(game_mode, '') NOT IN ('', 'normal', 'quick', 'chaos', 'random', 'daily'))
       )
       GROUP BY platform, app_version, language, game_mode
       ORDER BY starts DESC, completions DESC
@@ -415,7 +415,7 @@ a{color:#4ade80;text-decoration:none}
       <h3>Últimos fallos de registro</h3><table><thead><tr><th>Fecha (Madrid)</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Diagnóstico</th></tr></thead><tbody>${halloweenFailureRows || '<tr><td colspan="5">No hay fallos registrados en las últimas 24 horas.</td></tr>'}</tbody></table>
     </div>
     <div class="card"><h2>🔎 Investigación de partidas individuales y modos</h2>
-      <p class="sub">Consulta de solo lectura. Filtra por periodo, plataforma, versión e idioma. “Individual” excluye los modos multiplayer/room/tournament; los modos concretos se muestran por separado.</p>
+      <p class="sub">Consulta de solo lectura. Filtra por periodo, plataforma, versión e idioma. “Individual / IA” usa exactamente los modos registrados por SoloGame: normal, quick, chaos, random y daily. “Multijugador” agrupa los demás modos con valor.</p>
       <form method="get" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:12px 0 18px">
         <label>Periodo<br><select name="days"><option value="1" ${diagnosticDays === 1 ? "selected" : ""}>24 horas</option><option value="7" ${diagnosticDays === 7 ? "selected" : ""}>7 días</option><option value="14" ${diagnosticDays === 14 ? "selected" : ""}>14 días</option><option value="30" ${diagnosticDays === 30 ? "selected" : ""}>30 días</option></select></label>
         <label>Modo<br><select name="mode"><option value="all" ${diagnosticMode === "all" ? "selected" : ""}>Todos</option><option value="solo" ${diagnosticMode === "solo" ? "selected" : ""}>Individual / IA</option><option value="multiplayer" ${diagnosticMode === "multiplayer" ? "selected" : ""}>Multijugador</option></select></label>
@@ -423,7 +423,7 @@ a{color:#4ade80;text-decoration:none}
         <label>Versión<br><input name="version" maxlength="32" value="${esc(diagnosticVersion)}" placeholder="p. ej. 1.3.6.9"></label>
         <label>Idioma<br><input name="language" maxlength="16" value="${esc(diagnosticLanguage)}" placeholder="p. ej. pt"></label>
         <button type="submit">Aplicar filtros</button>
-        <a href="/api/admin/analytics">Limpiar</a>
+        <a href="/test/analytics">Limpiar</a>
       </form>
       <h3>Inicios y partidas terminadas por modo</h3>
       <p class="sub">Los inicios y finales se cuentan por separado. No se calcula “abandono” porque el game_start usa una sesión de servidor y el game_complete puede usar otra sesión de cliente; no existe una unión fiable entre ambos.</p>
