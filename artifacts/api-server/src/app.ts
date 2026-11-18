@@ -1,4 +1,5 @@
 import path from "path";
+import { randomUUID } from "crypto";
 import { existsSync } from "fs";
 import express, { type Express } from "express";
 import cors from "cors";
@@ -17,6 +18,13 @@ import { sql } from "drizzle-orm";
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+app.use((req, res, next) => {
+  const requestId = String(req.headers["x-request-id"] ?? randomUUID()).slice(0, 128);
+  (req as express.Request & { stopRequestId?: string }).stopRequestId = requestId;
+  res.setHeader("X-Request-Id", requestId);
+  next();
+});
 
 // Baseline response hardening. Keep CSP out of this middleware because the
 // frontend uses third-party OAuth, AdMob/TWA bridges and runtime assets whose
@@ -242,11 +250,16 @@ app.use((err: any, req: express.Request, res: express.Response, _next: express.N
   console.error("[API ERROR]", err?.message ?? err, err?.stack);
   void db.execute(sql`
     INSERT INTO analytics_events (event_name, platform, metadata_json, trusted)
-    VALUES ('api_error', 'web', ${JSON.stringify({
+    VALUES ('api_error', ${String(req.headers["x-client-twa"] ?? "") === "1" ? "android" : String(req.headers["x-client-platform"] ?? "web").slice(0, 16)}, ${JSON.stringify({
+      requestId: (req as express.Request & { stopRequestId?: string }).stopRequestId ?? null,
       method: req.method,
       path: req.path.slice(0, 300),
-      status: 500,
+      status: Number(err?.statusCode ?? err?.status ?? 500),
       message: String(err?.message ?? err).slice(0, 500),
+      code: String(err?.code ?? "").slice(0, 80) || null,
+      platform: String(req.headers["x-client-twa"] ?? "") === "1" ? "android" : String(req.headers["x-client-platform"] ?? "web").slice(0, 16),
+      appVersion: String(req.headers["x-client-version"] ?? "").slice(0, 32) || null,
+      language: String(req.headers["accept-language"] ?? "").slice(0, 16) || null,
     }).slice(0, 4000)}, TRUE)
   `).catch(() => {});
   if (res.headersSent) return;
