@@ -42,7 +42,7 @@ Como el ajedrez competitivo: cada ronda emparejas a jugadores con puntuación si
 - **Contras:** requiere bracket y software (o Excel) para emparejar.
 - **Ideal para:** torneos grandes, eventos formales.
 
-> 💡 **Truco:** para cumpleaños familiares o pequeños eventos, **el formato Liga es siempre el más divertido**. Para algo formal, ve a Suizo.
+> 💡 **Truco:** para cumpleaños familiares o pequeños eventos, una fase de grupos corta puede dar más oportunidades de jugar que una eliminatoria directa. Para grupos grandes, considera un sistema suizo si puedes gestionar los emparejamientos.
 
 ## Paso 2: Definir reglas y categorías
 
@@ -51,7 +51,7 @@ Antes del torneo, **fija las reglas por escrito** y compártelas con los partici
 - **Número de rondas por partida** (recomendado: 10).
 - **Categorías** (recomendado: 8, con 2 "fáciles", 4 "medias", 2 "difíciles" — ver [50 categorías originales](/blog/categorias-originales-stop)).
 - **Tiempo por ronda** (recomendado: 60-90 segundos).
-- **Puntuación** (10/5/0 estándar).
+- **Puntuación** (por ejemplo, 10/5/0 como sistema orientativo; acordadlo antes).
 - **Letras excluidas** (Ñ, K, W, X, Y se pueden excluir si quieres torneo rápido — o incluirlas para hacerlo más reñido).
 - **Validación** (una persona moderadora y una fuente de consulta acordada; si usáis una app, comprobad qué valida realmente y cómo resuelve las dudas).
 
@@ -109,7 +109,7 @@ Las **impugnaciones** son la mayor fuente de problemas en torneos. Protocolo rec
 3. **Decisión rápida (30 segundos máximo)**, sin debate prolongado.
 4. **La decisión del árbitro es definitiva.** No se vuelve sobre ello.
 
-> 💡 **Para evitar el 80% de impugnaciones**, anuncia las reglas al inicio: "vale el DRAE", "no valen siglas", "los plurales sí cuentan", etc.
+> 💡 **Para reducir las impugnaciones**, anuncia las reglas al inicio: "vale el DRAE", "no valen siglas", "los plurales sí cuentan", etc.
 
 ## Paso 7: Crear ambiente
 
@@ -122,7 +122,7 @@ Un torneo es **más que un juego**. Para hacerlo memorable:
 
 ## Errores comunes que matan torneos
 
-1. **Demasiados participantes para el formato elegido.** 32 personas en liga = 8 horas de juego.
+1. **Demasiados participantes para el formato elegido.** Una liga completa con 32 personas, si cada pareja juega una vez, requiere 496 enfrentamientos.
 2. **Categorías muy difíciles** desde la primera ronda. La gente se frustra y se va.
 3. **Sin árbitro claro.** Cada impugnación se convierte en debate de 10 minutos.
 4. **No medir el tiempo.** Sin cronómetro, las rondas se eternizan.
