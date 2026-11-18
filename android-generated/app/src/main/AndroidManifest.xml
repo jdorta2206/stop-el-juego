@@ -36,6 +36,7 @@
             android:value="@string/generatorApp" />
 
         <activity android:name="LauncherActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:alwaysRetainTaskState="true"
             android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|fontWeightAdjustment|uiMode|orientation|screenSize|smallestScreenSize|density|layoutDirection|colorMode|grammaticalGender"
             android:label="@string/launcherName"
