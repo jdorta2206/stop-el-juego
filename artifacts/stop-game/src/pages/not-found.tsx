@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { AlertCircle, ArrowLeft, BookOpen, Home } from "lucide-react";
+import { AlertCircle, BookOpen, Home } from "lucide-react";
 import { Link } from "wouter";
 
 export default function NotFound() {
