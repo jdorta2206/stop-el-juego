@@ -4,9 +4,9 @@ import { and, eq, sql } from "drizzle-orm";
 
 // Fallback word validator backed by an LLM. Used only when the static
 // dictionary cannot answer (i.e. the word isn't in our hand-curated lists
-// for a closed category like fruta/color/animal). Verdicts are cached
-// permanently in `word_validation_cache` so any given (word, category, lang)
-// triple is paid for at most once in the lifetime of the game.
+// for a closed category like fruta/color/animal). Positive verdicts are cached
+// permanently; negative verdicts expire after seven days so a model mistake
+// cannot keep rejecting a valid (word, category, lang) triple indefinitely.
 //
 // Cost model:
 //   - gpt-5-nano is the cheapest model. A single-token "yes"/"no" answer
