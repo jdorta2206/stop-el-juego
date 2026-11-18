@@ -722,6 +722,11 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         })
         .returning();
       if (!created) throw new Error("BONUS_SCORE_INSERT_FAILED");
+      const [leveledBonusPlayer] = await tx
+        .update(playerScoresTable)
+        .set({ level: calcLevel(created.xp) })
+        .where(eq(playerScoresTable.playerId, playerId))
+        .returning();
       await tx.insert(gameHistoryTable).values({
         playerId,
         score,
@@ -729,7 +734,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         mode: mode ?? "solo",
         won: effectiveWon,
       });
-      return created;
+      return leveledBonusPlayer ?? created;
     });
 
     if (bonusAccountDeleted) {
@@ -882,7 +887,14 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         },
       })
       .returning();
-    txPlayer = created;
+    if (created) {
+      const [leveledPlayer] = await tx
+        .update(playerScoresTable)
+        .set({ level: calcLevel(created.xp) })
+        .where(eq(playerScoresTable.playerId, playerId))
+        .returning();
+      txPlayer = leveledPlayer ?? created;
+    }
       }
 
       if (!txPlayer) throw new Error("SCORE_UPDATE_FAILED");
