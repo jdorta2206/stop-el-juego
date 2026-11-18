@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "El STOP también se puede adaptar a dos personas: descubre 15 variantes para una cita, una sobremesa o una partida a distancia, con reglas sencillas para cada propuesta.",
   keywords: ["STOP en pareja", "jugar a dos Scattergories", "juego pareja palabras", "STOP cita", "STOP viaje"],
   publishedAt: "2026-05-08",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Para todos los públicos",
   readMinutes: 6,
