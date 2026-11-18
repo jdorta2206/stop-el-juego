@@ -100,14 +100,15 @@ const homepage = {
 const staticPages = [
   {
     route: "/como-jugar",
-    title: "Cómo jugar a STOP: reglas, rondas y puntuación",
-    description: "Aprende las reglas de STOP, cómo elegir categorías, jugar una ronda, validar respuestas y calcular los puntos.",
-    body: pageBody("Cómo jugar a STOP", "STOP es un juego de categorías y palabras. En cada ronda se elige una letra y todos los jugadores deben escribir respuestas que empiecen por ella antes de que se agote el tiempo.", [
-      ["Preparar la partida", "Elegid las categorías antes de comenzar. Algunas habituales son nombre, animal, lugar, objeto, color, fruta y marca. Acordad también cuántas rondas jugaréis y cuánto durará cada una."],
-      ["Desarrollo de una ronda", "Se anuncia una letra. Cada participante completa una respuesta por categoría. Cuando alguien termina puede pulsar STOP; si el tiempo se agota, la ronda se cierra para todos."],
-      ["Revisar las respuestas", "Comprobad que cada palabra empieza por la letra indicada y encaja en la categoría. Acordad antes de jugar cómo resolver nombres propios, marcas, variantes regionales y respuestas dudosas."],
-      ["Puntuación", "Una regla habitual concede 10 puntos por una respuesta válida que nadie más haya escrito, 5 por una respuesta válida repetida y 0 por una respuesta vacía o inválida. Si jugáis con otra variante, dejadla clara antes de la primera ronda."],
-      ["Consejos para empezar", "No te quedes bloqueado en una categoría. Escribe primero las respuestas que tengas claras, vuelve después a las difíciles y practica con letras poco frecuentes."]
+    title: "Cómo jugar a STOP El Juego: reglas básicas",
+    description: "Aprende a elegir una modalidad, completar categorías con la letra de la ronda y consultar el resultado de STOP El Juego.",
+    body: pageBody("Cómo jugar a STOP El Juego", "Reglas básicas para empezar una partida y comprender cómo se desarrolla una ronda.", [
+      ["1. Elige una modalidad", "En la pantalla de inicio, selecciona una de las modalidades disponibles. Puedes jugar en solitario contra la inteligencia artificial o entrar en una partida multijugador, por ejemplo creando una sala y compartiendo su código con otras personas."],
+      ["2. Lee la letra y las categorías", "Al comenzar la ronda se muestra una letra y aparecen las categorías que debes completar. Las categorías pueden cambiar según la modalidad o la configuración de la partida."],
+      ["3. Escribe tus respuestas", "Escribe una palabra o expresión que empiece por la letra indicada y que corresponda a cada categoría. Si no encuentras una respuesta, puedes dejar esa casilla sin completar y continuar con las demás."],
+      ["4. Termina la ronda", "El tiempo disponible depende de la modalidad. Cuando hayas terminado, utiliza el control STOP si está disponible; si no, la ronda se cerrará al agotarse el contador. Sigue las indicaciones que aparezcan en pantalla."],
+      ["5. Revisa el resultado", "Al cerrar la ronda podrás consultar las respuestas y el resultado. Para que una respuesta sea válida debe comenzar por la letra de la ronda y encajar en la categoría. La puntuación y los efectos de las respuestas repetidas dependen de las reglas de la modalidad."],
+      ["Consejos para jugar", "Empieza por las categorías para las que encuentres una respuesta con facilidad. Si te bloqueas, pasa a otra categoría y vuelve después si queda tiempo. Comprueba la letra y la categoría, y revisa las instrucciones específicas del modo elegido."]
     ]),
   },
   {
@@ -124,11 +125,12 @@ const staticPages = [
   {
     route: "/acerca",
     title: "Acerca de STOP El Juego",
-    description: "Conoce el proyecto STOP El Juego, su propósito, las funciones de la plataforma y cómo contactar con el equipo.",
-    body: pageBody("Acerca de STOP El Juego", "STOP El Juego es un proyecto independiente inspirado en los juegos clásicos de categorías y palabras, conocidos en distintos lugares como STOP, Basta o Tutti Frutti. Su objetivo es ofrecer una forma accesible de jugar desde el navegador y compartir partidas.", [
-      ["Qué ofrece el proyecto", "La plataforma reúne partidas individuales, opciones multijugador y recursos para aprender las reglas y ampliar vocabulario. El juego está pensado para poder abrirse desde dispositivos móviles y ordenadores."],
-      ["Desarrollo y mejoras", "El proyecto evoluciona mediante correcciones, mejoras de accesibilidad y nuevas funciones. La experiencia de juego y la estabilidad de las partidas son prioridades del desarrollo."],
-      ["Contacto", "Para consultas o incidencias puedes escribir a dorynex@stopjuegodepalabras.com o consultar la página de contacto para conocer el correo de soporte."]
+    description: "Conoce el proyecto independiente STOP El Juego, sus modalidades, sus contenidos y las vías de contacto.",
+    body: pageBody("Acerca de STOP El Juego", "STOP El Juego es un proyecto independiente inspirado en los juegos de categorías y palabras. La propuesta consiste en encontrar respuestas que empiecen por una letra y encajen en distintas categorías, dentro del tiempo de cada ronda.", [
+      ["Qué puedes encontrar", "La plataforma ofrece partidas individuales contra la inteligencia artificial y opciones de juego multijugador. La modalidad, las categorías y las condiciones de cada ronda se muestran antes o durante la partida, por lo que pueden variar según el modo elegido. También publicamos guías y artículos sobre reglas, vocabulario y estrategias para ayudar a conocer mejor el juego y practicar con distintas letras."],
+      ["Desarrollo del proyecto", "STOP El Juego se mantiene como un proyecto independiente. Trabajamos en corregir problemas y mejorar la claridad de las instrucciones, la estabilidad de las partidas y la experiencia de uso desde móviles y ordenadores."],
+      ["Contacto", "Para enviar sugerencias, hacer una consulta o comunicar una incidencia, puedes escribir a <a href=\"mailto:dorynex@stopjuegodepalabras.com\">dorynex@stopjuegodepalabras.com</a> o utilizar el <a href=\"/contacto\">formulario de contacto</a>."],
+      ["Independencia", "STOP El Juego es un proyecto independiente y no está afiliado a los titulares de las marcas de terceros que puedan mencionarse en sus contenidos."]
     ]),
   },
   {
