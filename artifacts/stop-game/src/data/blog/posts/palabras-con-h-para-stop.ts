@@ -46,7 +46,7 @@ La H en español **no se pronuncia**, pero **sí se escribe**. En STOP solo cuen
 - **Hormiga**
 - **Hámster**
 - **Hurón**
-- **Hipocampo / Caballito de mar**
+- **Hipocampo** (nombre común de ciertos peces marinos; también se conoce como caballito de mar)
 
 ## Colores con H
 
@@ -58,7 +58,6 @@ Pocos colores empiezan por H. Discutibles:
 
 - **Honduras**
 - **Hungría**
-- **Honduras, Hungría, Haití** (ejemplos de países cuyo nombre empieza por H)
 - **Haití**
 
 ## Ciudades con H
@@ -66,7 +65,7 @@ Pocos colores empiezan por H. Discutibles:
 - **Hamburgo** (Alemania)
 - **Helsinki** (Finlandia)
 - **Houston** (Estados Unidos)
-- **Hong Kong** (región administrativa especial de China; comprobad si vuestra categoría admite territorios)
+- **Hong Kong** (región administrativa especial de China; inclúyela solo si la categoría admite territorios o ciudades, no países)
 - **Heredia** (Costa Rica)
 
 ## Comidas y bebidas con H
