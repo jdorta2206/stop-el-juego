@@ -133,6 +133,10 @@ const analyticsTablesReady = ensureAnalyticsTables().catch((err) => {
   throw err;
 });
 
+export async function ensureAnalyticsReady(): Promise<void> {
+  await analyticsTablesReady;
+}
+
 async function latestPlatformForPlayer(playerId: string | null | undefined): Promise<"web" | "android" | "ios" | null> {
   if (!playerId) return null;
   const rows = await db.execute(sql`
