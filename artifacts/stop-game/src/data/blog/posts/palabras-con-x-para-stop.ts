@@ -41,8 +41,7 @@ En las partidas de STOP, la respuesta debe comenzar por la letra de la ronda. Po
 
 Hay pocos ejemplos conocidos para esta categoría. Estos términos pueden servir para investigar, pero comprobad su significado y si encajan en las reglas:
 
-- **Xoloitzcuintle** (raza de perro mexicano sin pelo)
-- **Xoloitzcuintle** (raza mexicana de perro; acordad si se aceptan razas en lugar de especies o nombres comunes de animales)
+- **Xoloitzcuintle** (raza mexicana de perro sin pelo; acordad si se aceptan razas como respuestas de animales)
 
 Si no te las sabes, **deja en blanco**. No hay vergüenza.
 
@@ -63,7 +62,7 @@ Aquí hay algunas opciones reales:
 - **Xalapa** (capital de Veracruz, México)
 - **Xela / Quetzaltenango** (Guatemala)
 
-> 🟩 **Top pick:** "Xátiva" si juegas en España, "Xalapa" en Latinoamérica.
+> 🟩 **Top pick:** "Xàtiva" si juegas en España, "Xalapa" en Latinoamérica.
 
 ## Comidas y bebidas con X
 
@@ -77,12 +76,11 @@ Casi inexistentes en español, pero:
 
 - **Xilófono** (instrumento musical)
 - **Xerocopia** (término relacionado con la reproducción de documentos; comprueba su aceptación con el diccionario acordado)
-- **Xenón** (gas noble, también marca de faros)
+
 
 ## Deportes con X
 
-- **Xadrez** (ajedrez en portugués) — solo si se permite
-- **X-Games** (competición de deportes extremos)
+- **X Games** (nombre de una competición de deportes extremos; inclúyelo solo si vuestra categoría admite eventos o marcas)
 
 Otra categoría difícil. Mejor en blanco.
 
