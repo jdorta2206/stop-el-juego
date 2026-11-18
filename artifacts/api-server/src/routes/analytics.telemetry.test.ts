@@ -44,6 +44,7 @@ describe("STOP gameplay telemetry allowlist", () => {
   });
 
   it("keeps telemetry trust classification separate from the reward-granting SSV flow", () => {
+    expect(analyticsRouteSource).not.toContain('  "solo_round_validation",');
     expect(analyticsRouteSource).toContain("const trusted = TRUSTED_CLIENT_TELEMETRY_EVENTS.has(eventName)");
     expect(analyticsRouteSource).toContain('router.post("/event"');
     expect(analyticsRouteSource).toContain('router.post("/game-start"');
