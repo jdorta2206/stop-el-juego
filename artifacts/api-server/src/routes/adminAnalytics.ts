@@ -55,10 +55,10 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
       ORDER BY platform
     `);
 
-    // "game_start" no es directamente una partida: Multiplayer puede emitirlo
-    // por participante y por ronda. Para STOP Control lo normalizamos a una
-    // unidad comparable con game_complete: una partida-jugador.
-    // Solo contamos una vez cada jugador y sala para los starts de servidor.
+    // "game_start" no identifica una partida única: no incluye un gameId
+    // ni un roomId correlacionable. Este KPI cuenta jugadores/sesiones distintos
+    // por plataforma y día, no partidas iniciadas; repetir partidas en el día
+    // no incrementa el contador. Los finales siguen siendo eventos registrados.
     const today = await db.execute(sql`
       WITH day_events AS (
         SELECT *
@@ -579,7 +579,7 @@ a{color:#4ade80;text-decoration:none}
         <a href="/test/analytics">Limpiar</a>
       </form>
       <h3>Inicios y partidas terminadas por modo</h3>
-      <p class="sub">Los inicios y finales se cuentan por separado. No se calcula “abandono” porque el game_start usa una sesión de servidor y el game_complete puede usar otra sesión de cliente; no existe una unión fiable entre ambos.</p>
+      <p class="sub">Los inicios son jugadores/sesiones distintos por plataforma, versión, idioma y modo durante el periodo; no equivalen al número de partidas (un jugador puede repetir). Los finales son eventos registrados. No se calcula “abandono”: no existe un identificador de partida fiable para unir ambos.</p>
       <table><thead><tr><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Modo registrado</th><th>Inicios</th><th>Finales</th><th>Jugadores/sesiones inicio</th><th>Jugadores/sesiones fin</th></tr></thead><tbody>${diagnosticRows || '<tr><td colspan="8">No hay partidas registradas con estos filtros.</td></tr>'}</tbody></table>
       <h3>Validación de partidas individuales (solo)</h3>
       <p class="sub">Tiempos de validación del servidor; no se guardan palabras ni categorías. Una demora no identifica por sí sola su origen.</p>
