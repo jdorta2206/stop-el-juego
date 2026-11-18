@@ -15,6 +15,7 @@ const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set([
   "lobby_auth_failed",
   "lobby_page_exit",
   "rewarded_ad_pending",
+  "rewarded_ad_request_created",
   "game_complete",
   "rewarded_ad_requested",
   "rewarded_ad_completed",
