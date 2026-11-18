@@ -582,7 +582,7 @@ a{color:#4ade80;text-decoration:none}
       <table><thead><tr><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Modo registrado</th><th>Inicios</th><th>Finales</th><th>Jugadores/sesiones inicio</th><th>Jugadores/sesiones fin</th></tr></thead><tbody>${diagnosticRows || '<tr><td colspan="8">No hay partidas registradas con estos filtros.</td></tr>'}</tbody></table>
       <h3>Validación de partidas individuales (solo)</h3>
       <p class="sub">Tiempos de validación del servidor; no se guardan palabras ni categorías. Una demora no identifica por sí sola su origen.</p>
-      <table><thead><tr><th>Muestras</th><th>Ronda P50</th><th>Ronda P95</th><th>Validación P50</th><th>Validación P95</th><th>Máximo por respuesta P95</th><th>Validaciones ≥1 s / total</th></tr></thead><tbody>${soloRoundLatencyRows || '<tr><td colspan="7">Sin muestras todavía</td></tr>'}</tbody></table>
+      <table><thead><tr><th>Muestras</th><th>Ronda P50</th><th>Ronda P95</th><th>Validación P50</th><th>Validación P95</th><th>P95 de validación individual</th><th>Validaciones ≥1 s / total</th></tr></thead><tbody>${soloRoundLatencyRows || '<tr><td colspan="7">Sin muestras todavía</td></tr>'}</tbody></table>
       <h3>Latencia del Lobby (primer render útil)</h3>
       <p class="sub">Medición cliente desde el montaje de Home hasta el primer frame. No representa el tiempo completo de autenticación ni garantiza que todas las llamadas API hayan terminado. Muestra solo muestras instrumentadas.</p>
       <div class="grid">
