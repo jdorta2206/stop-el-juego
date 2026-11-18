@@ -974,7 +974,7 @@ router.post("/notify-mundial", authLimiter, basicAuth, adminBroadcastLimiter, as
   }
   try {
     const { sent, failed, removed } = await sendLocalizedBroadcast(MUNDIAL_PUSH, "es");
-    const requestId = String(req.headers["x-request-id"] ?? "").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || null;
+    const requestId = String((req as Request & { stopRequestId?: string }).stopRequestId ?? req.headers["x-request-id"] ?? "").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || null;
     console.info("[admin-audit]", JSON.stringify({
       action: "notify-mundial",
       outcome: "completed",
@@ -1012,7 +1012,7 @@ router.post("/notify-mundial", authLimiter, basicAuth, adminBroadcastLimiter, as
 </body></html>`;
     res.status(200).type("html").send(html);
   } catch (err: any) {
-    const requestId = String(req.headers["x-request-id"] ?? "").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || null;
+    const requestId = String((req as Request & { stopRequestId?: string }).stopRequestId ?? req.headers["x-request-id"] ?? "").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || null;
     console.warn("[admin-audit]", JSON.stringify({
       action: "notify-mundial",
       outcome: "failed",
