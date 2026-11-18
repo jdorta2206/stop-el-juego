@@ -149,6 +149,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
             }
           }, 500);
         } else if (result.pendingSsv && result.requestId) {
+          void trackAnalyticsEvent("rewarded_ad_pending", { metadata: { placement, requestId: result.requestId, phase: "awaiting_ssv" } });
           setRetryRequestId(result.requestId);
           try {
             window.localStorage.setItem(PENDING_REWARD_STORAGE_KEY, JSON.stringify({
@@ -170,7 +171,14 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
             result.errorMessage || "",
           ].filter(Boolean).join(" · ");
           setErrorDetail(detail);
-          void trackAnalyticsEvent("rewarded_ad_failed", { metadata: { placement, error: detail.slice(0, 300) } });
+          void trackAnalyticsEvent("rewarded_ad_failed", { metadata: {
+            placement,
+            errorCode: result.errorCode ?? null,
+            errorDomain: result.errorDomain ?? null,
+            errorMessage: (result.errorMessage || detail).slice(0, 300),
+            error: detail.slice(0, 300),
+            phase: "native_result",
+          } });
           if (!mountedRef.current) return;
           setPhase("error");
           timeoutRef.current = window.setTimeout(() => {
@@ -181,6 +189,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         return;
       }
 
+      void trackAnalyticsEvent("rewarded_ad_failed", { metadata: { placement, errorCode: "BRIDGE_UNAVAILABLE", errorDomain: "STOP_TWA_BRIDGE", errorMessage: "Native rewarded-ad bridge unavailable", phase: "bridge_check" } });
       setErrorDetail("El puente nativo de anuncios no está disponible.");
       if (!mountedRef.current) return;
       setPhase("error");
@@ -202,6 +211,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         return;
       }
       const message = error instanceof Error ? error.message : "Error desconocido";
+      void trackAnalyticsEvent("rewarded_ad_failed", { metadata: { placement, errorCode: "CLIENT_EXCEPTION", errorDomain: "STOP_CLIENT", errorMessage: message.slice(0, 300), phase: "request_exception" } });
       setErrorDetail(message.slice(0, 300));
       if (!mountedRef.current) return;
       setPhase("error");
