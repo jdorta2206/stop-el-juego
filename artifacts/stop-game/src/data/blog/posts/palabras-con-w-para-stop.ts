@@ -6,6 +6,7 @@ const post: BlogPost = {
   description: "Ideas de palabras con W para jugar al STOP, con notas sobre préstamos, nombres propios y respuestas que conviene acordar antes de la partida.",
   keywords: ["palabras con W", "palabras con W para STOP", "nombres con W", "animales con W", "juego de palabras"],
   publishedAt: "2026-11-12",
+  updatedAt: "2026-11-18",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 5,
