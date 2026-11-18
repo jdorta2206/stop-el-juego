@@ -4,9 +4,9 @@ import { and, eq, sql } from "drizzle-orm";
 
 // Fallback word validator backed by an LLM. Used only when the static
 // dictionary cannot answer (i.e. the word isn't in our hand-curated lists
-// for a closed category like fruta/color/animal). Verdicts are cached
-// permanently in `word_validation_cache` so any given (word, category, lang)
-// triple is paid for at most once in the lifetime of the game.
+// for a closed category like fruta/color/animal). Positive verdicts are cached
+// permanently; negative verdicts expire after seven days so a model mistake
+// cannot keep rejecting a valid (word, category, lang) triple indefinitely.
 //
 // Cost model:
 //   - gpt-5-nano is the cheapest model. A single-token "yes"/"no" answer
@@ -25,7 +25,10 @@ const MODEL = "gpt-5-mini";
 
 // Hard ceilings. Tuned to keep monthly bill < 1.5 € even in worst case.
 const GLOBAL_DAILY_LIMIT = 500;
-const PER_PLAYER_DAILY_LIMIT = 10;
+// A full match can contain up to 3 rounds × 12 categories. Allow one full match
+// of uncached words per player while the global cap remains the hard cost ceiling.
+const PER_PLAYER_DAILY_LIMIT = 36;
+const NEGATIVE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Persistent daily quota. The counter lives in PostgreSQL so the limit is
 // shared across Railway replicas, deploys and process restarts.
@@ -119,7 +122,7 @@ export async function lookupCachedValidation(
 ): Promise<boolean | null> {
   try {
     const rows = await db
-      .select({ isValid: wordValidationCacheTable.isValid })
+      .select({ isValid: wordValidationCacheTable.isValid, createdAt: wordValidationCacheTable.createdAt })
       .from(wordValidationCacheTable)
       .where(and(
         eq(wordValidationCacheTable.word, word),
@@ -127,7 +130,12 @@ export async function lookupCachedValidation(
         eq(wordValidationCacheTable.lang, lang),
       ))
       .limit(1);
-    return rows[0]?.isValid ?? null;
+    const row = rows[0];
+    if (!row) return null;
+    // Positive decisions stay cached; a negative decision is rechecked after
+    // seven days so a one-off model mistake cannot reject a valid word forever.
+    if (!row.isValid && Date.now() - row.createdAt.getTime() > NEGATIVE_CACHE_TTL_MS) return null;
+    return row.isValid;
   } catch (err) {
     console.error("[aiWordValidator] cache lookup failed:", err instanceof Error ? err.message : err);
     return null;
@@ -147,7 +155,13 @@ async function writeCache(
     await db.execute(sql`
       INSERT INTO word_validation_cache (word, category, lang, is_valid, source, model)
       VALUES (${word}, ${category}, ${lang}, ${isValid}, 'ai', ${model})
-      ON CONFLICT (word, category, lang) DO NOTHING
+      ON CONFLICT (word, category, lang) DO UPDATE
+        SET is_valid = EXCLUDED.is_valid,
+            source = 'ai',
+            model = EXCLUDED.model,
+            created_at = NOW()
+        WHERE word_validation_cache.is_valid = false
+          AND word_validation_cache.created_at < NOW() - INTERVAL '7 days'
     `);
   } catch (err) {
     console.error("[aiWordValidator] cache write failed:", err instanceof Error ? err.message : err);
@@ -292,7 +306,13 @@ async function waitForValidationCache(word: string, category: string, lang: stri
       await db.execute(sql`
         INSERT INTO word_validation_cache (word, category, lang, is_valid, source, model)
         VALUES (${word}, ${category}, ${lang}, ${isValid}, 'ai', ${MODEL})
-        ON CONFLICT (word, category, lang) DO NOTHING
+        ON CONFLICT (word, category, lang) DO UPDATE
+        SET is_valid = EXCLUDED.is_valid,
+            source = 'ai',
+            model = EXCLUDED.model,
+            created_at = NOW()
+        WHERE word_validation_cache.is_valid = false
+          AND word_validation_cache.created_at < NOW() - INTERVAL '7 days'
       `);
 
       return { isValid, source: "ai" as const };
