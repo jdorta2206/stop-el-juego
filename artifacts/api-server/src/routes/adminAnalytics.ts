@@ -38,13 +38,20 @@ function basicAuth(req: Request, res: Response, next: NextFunction) {
   const user = process.env["ADMIN_PANEL_USER"];
   const pass = process.env["ADMIN_PANEL_PASSWORD"];
   if (!user || !pass) return res.status(503).send("Panel no configurado");
-  const [scheme, encoded] = String(req.headers.authorization ?? "").split(" ");
-  if (scheme === "Basic" && encoded) {
+  const header = String(req.headers.authorization ?? "");
+  const match = /^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(header);
+  const encoded = match?.[1];
+  if (encoded && Buffer.from(encoded, "base64").toString("base64") === encoded) {
     const decoded = Buffer.from(encoded, "base64").toString("utf8");
-    const i = decoded.indexOf(":");
-    const okUser = safeEqual(decoded.slice(0, i), user);
-    const okPass = safeEqual(decoded.slice(i + 1), pass);
-    if (okUser && okPass) return next();
+    const separator = decoded.indexOf(":");
+    if (separator > 0) {
+      const okUser = safeEqual(decoded.slice(0, separator), user);
+      const okPass = safeEqual(decoded.slice(separator + 1), pass);
+      if (okUser && okPass) {
+        next();
+        return;
+      }
+    }
   }
   res.set("WWW-Authenticate", 'Basic realm="STOP Analytics", charset="UTF-8"').status(401).send("Acceso restringido");
 }
