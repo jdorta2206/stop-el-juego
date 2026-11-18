@@ -16,7 +16,7 @@ Esta guía recoge las palabras con Z más útiles por categoría para STOP.
 
 ## La Z en español
 
-La Z es una letra normal en español, pero **no se usa antes de E o I** (excepto en préstamos: zen, zigzag…). Por eso muchas palabras con Z suenan "exóticas".
+La Z aparece en palabras con distintas vocales: **za**, **ze**, **zi**, **zo** y **zu**. Algunas combinaciones, como «ze» y «zi», son menos frecuentes en el vocabulario patrimonial, pero existen ejemplos como «zeta» y «zinc».
 
 ## Nombres de persona con Z
 
@@ -65,7 +65,7 @@ No hay un ejemplo de color de uso general y claramente asentado que convenga rec
 - **Zanahoria** (la apuesta segura)
 - **Zumo** (de naranja, manzana…)
 - **Zarzamora** (mora silvestre)
-- **Zucaritas** (cereal)
+
 - **Zarzaparrilla** (refresco tradicional)
 - **Zapallo** (calabaza en Latinoamérica)
 
@@ -101,7 +101,7 @@ Estos son nombres comerciales; incluidlos solo si las reglas de vuestra partida 
 - **Zumba** (fitness)
 - **Zoom** (videollamadas)
 - **Zippo** (encendedores)
-- **Zelda** (videojuego — discutible si es marca)
+- **Zelda** (franquicia de videojuegos; inclúyela solo si vuestra categoría admite franquicias o nombres comerciales)
 
 > **Ejemplos:** "Zara" o "Zoom", si vuestra partida admite marcas.
 
