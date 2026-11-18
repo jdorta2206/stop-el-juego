@@ -30,6 +30,16 @@ const GLOBAL_DAILY_LIMIT = 500;
 const PER_PLAYER_DAILY_LIMIT = 36;
 const NEGATIVE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Only AI-generated negative verdicts expire; manual and dictionary decisions are authoritative. */
+export function isExpiredNegativeAiVerdict(
+  isValid: boolean,
+  source: string,
+  createdAt: Date,
+  now = Date.now(),
+): boolean {
+  return !isValid && source === "ai" && now - createdAt.getTime() > NEGATIVE_CACHE_TTL_MS;
+}
+
 // Persistent daily quota. The counter lives in PostgreSQL so the limit is
 // shared across Railway replicas, deploys and process restarts.
 const GLOBAL_QUOTA_SCOPE = "__global__";
@@ -122,7 +132,7 @@ export async function lookupCachedValidation(
 ): Promise<boolean | null> {
   try {
     const rows = await db
-      .select({ isValid: wordValidationCacheTable.isValid, createdAt: wordValidationCacheTable.createdAt })
+      .select({ isValid: wordValidationCacheTable.isValid, source: wordValidationCacheTable.source, createdAt: wordValidationCacheTable.createdAt })
       .from(wordValidationCacheTable)
       .where(and(
         eq(wordValidationCacheTable.word, word),
@@ -134,7 +144,7 @@ export async function lookupCachedValidation(
     if (!row) return null;
     // Positive decisions stay cached; a negative decision is rechecked after
     // seven days so a one-off model mistake cannot reject a valid word forever.
-    if (!row.isValid && Date.now() - row.createdAt.getTime() > NEGATIVE_CACHE_TTL_MS) return null;
+    if (isExpiredNegativeAiVerdict(row.isValid, row.source, row.createdAt)) return null;
     return row.isValid;
   } catch (err) {
     console.error("[aiWordValidator] cache lookup failed:", err instanceof Error ? err.message : err);
@@ -161,6 +171,7 @@ async function writeCache(
             model = EXCLUDED.model,
             created_at = NOW()
         WHERE word_validation_cache.is_valid = false
+          AND word_validation_cache.source = 'ai'
           AND word_validation_cache.created_at < NOW() - INTERVAL '7 days'
     `);
   } catch (err) {
@@ -210,7 +221,7 @@ class QuotaUnavailableError extends Error {
   }
 }
 
-async function reserveDailyQuota(playerId: string | null): Promise<boolean> {
+export async function reserveDailyQuota(playerId: string | null): Promise<boolean> {
   const quotaDate = currentUtcDay();
   try {
     return await db.transaction(async (tx) => {
