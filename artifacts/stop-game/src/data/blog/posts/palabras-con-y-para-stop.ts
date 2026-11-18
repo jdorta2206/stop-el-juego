@@ -44,8 +44,7 @@ Aquí hay opciones reales:
 - **Yak** (bóvido del Tíbet)
 - **Yacaré** (caimán sudamericano)
 - **Yegua** (hembra del caballo)
-- **Yorkshire** (raza de perro)
-- **Yaguar** (variante de "jaguar"; comprobad si la aceptáis en vuestro diccionario de referencia)
+- **Yorkshire terrier** (raza de perro; acordad si se aceptan razas como respuestas de animales)
 
 ## Colores con Y
 
@@ -89,14 +88,14 @@ Mejor en blanco.
 ## Deportes con Y
 
 - **Yoga** (actividad física; acordad si encaja en vuestra categoría de deportes)
-- **Yudo / Judo** (depende de la escritura)
+- **Yudo** (variante gráfica de *judo*; comprobad qué forma acepta el diccionario o criterio de vuestra partida)
 - **Yate** es una embarcación, no un deporte; no lo uses como respuesta para esta categoría.
 
 ## Profesiones con Y
 
 - **Yesero** (el que trabaja con yeso)
 - **Yogui** (practicante de yoga)
-- **Yudoka** (practicante de yudo)
+- **Yudoca** (practicante de yudo; comprobad la grafía acordada)
 
 ## Marcas con Y
 
