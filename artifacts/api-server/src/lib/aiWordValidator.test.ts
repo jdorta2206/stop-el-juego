@@ -33,6 +33,17 @@ describe("AI word-validation cache expiry", () => {
   });
 });
 
+function mockQuotaTransaction(execute: ReturnType<typeof vi.fn>) {
+  transaction.mockImplementation(async (...args: unknown[]) => {
+    // Find the callback by type instead of assuming a fixed argument position.
+    const callback = args.find((arg) => typeof arg === "function") as
+      | ((tx: { execute: ReturnType<typeof vi.fn> }) => unknown)
+      | undefined;
+    if (!callback) throw new Error("Expected Drizzle transaction callback");
+    return callback({ execute });
+  });
+}
+
 describe("AI word-validation daily quota reservation", () => {
   beforeEach(() => transaction.mockReset());
 
@@ -40,7 +51,7 @@ describe("AI word-validation daily quota reservation", () => {
     const execute = vi.fn()
       .mockResolvedValueOnce({ rows: [{ used: 1 }] })
       .mockResolvedValueOnce({ rows: [{ used: 1 }] });
-    transaction.mockImplementation(async (callback) => callback({ execute }));
+    mockQuotaTransaction(execute);
 
     await expect(reserveDailyQuota("player-1")).resolves.toBe(true);
     expect(execute).toHaveBeenCalledTimes(2);
@@ -48,7 +59,7 @@ describe("AI word-validation daily quota reservation", () => {
 
   it("blocks when the global quota is exhausted", async () => {
     const execute = vi.fn().mockResolvedValueOnce({ rows: [] });
-    transaction.mockImplementation(async (callback) => callback({ execute }));
+    mockQuotaTransaction(execute);
 
     await expect(reserveDailyQuota("player-1")).resolves.toBe(false);
     expect(execute).toHaveBeenCalledTimes(1);
@@ -58,7 +69,7 @@ describe("AI word-validation daily quota reservation", () => {
     const execute = vi.fn()
       .mockResolvedValueOnce({ rows: [{ used: 500 }] })
       .mockResolvedValueOnce({ rows: [] });
-    transaction.mockImplementation(async (callback) => callback({ execute }));
+    mockQuotaTransaction(execute);
 
     await expect(reserveDailyQuota("player-1")).resolves.toBe(false);
     expect(execute).toHaveBeenCalledTimes(2);
@@ -66,7 +77,7 @@ describe("AI word-validation daily quota reservation", () => {
 
   it("reserves only the global quota for an anonymous player", async () => {
     const execute = vi.fn().mockResolvedValueOnce({ rows: [{ used: 1 }] });
-    transaction.mockImplementation(async (callback) => callback({ execute }));
+    mockQuotaTransaction(execute);
 
     await expect(reserveDailyQuota(null)).resolves.toBe(true);
     expect(execute).toHaveBeenCalledTimes(1);
