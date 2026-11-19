@@ -63,4 +63,20 @@ describe("push subscription initialization safeguards", () => {
     expect(hookSource).not.toContain("withTimeout(\n        permissionRequest");
     expect(notificationsPageSource).toContain("permissionWaiting ? t.waiting");
   });
+ 
+  it("classifies permission, VAPID, service-worker, browser-subscription and server-registration failures", () => {
+    for (const code of [
+      "permission-request-failed",
+      "permission-not-granted",
+      "vapid-key-unavailable",
+      "service-worker-unavailable",
+      "push-subscription-failed",
+      "subscription-registration-failed",
+    ]) {
+      expect(hookSource).toContain(code);
+      expect(notificationsPageSource).toContain(code);
+    }
+    expect(hookSource).toContain('[push] activation failed');
+    expect(notificationsPageSource).toContain("getActivationError()");
+  });
 });
