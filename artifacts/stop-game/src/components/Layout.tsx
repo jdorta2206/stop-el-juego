@@ -172,12 +172,20 @@ export function Layout({ children }: { children: ReactNode }) {
           {/* Language selector */}
           <LanguageSelector />
 
-          {/* Notification bell — visible for all users on supported browsers */}
-          {isSupported && permission !== "denied" && (
+          {/* Keep the bell visible so users can discover and repair blocked/unsupported permissions. */}
+          {(
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={async () => {
                 if (notifLoading) return;
+                if (permission === "denied") {
+                  showNotifToast("Las notificaciones están bloqueadas en los permisos del navegador. Permítelas para este sitio y vuelve a intentarlo.");
+                  return;
+                }
+                if (!isSupported || permission === "unsupported") {
+                  showNotifToast("Este navegador no ofrece compatibilidad con las notificaciones de STOP.");
+                  return;
+                }
                 showNotifToast(isSubscribed ? "Desactivando notificaciones…" : "Solicitando permiso para notificaciones…", 20000);
                 try {
                   if (isSubscribed) {
