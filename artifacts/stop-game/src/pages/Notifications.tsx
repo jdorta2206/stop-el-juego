@@ -19,7 +19,7 @@ export default function NotificationsPage() {
   const { player } = usePlayer();
   const { lang } = useT();
   const {
-    isSupported, isSubscribed, permission, loading,
+    isSupported, isSubscribed, permission, loading, permissionWaiting,
     subscribe, unsubscribe, getPreferences, updatePreferences,
   } = usePushNotifications(player?.id, lang);
 
@@ -60,6 +60,8 @@ export default function NotificationsPage() {
       enableTitle: "Activar notificaciones",
       enableBody: "Recibirás un recordatorio diario del reto, avisos de racha y de misiones para reclamar.",
       enableBtn: "Activar",
+      checking: "Comprobando suscripción…",
+      waiting: "Esperando respuesta de Android…",
       disableBtn: "Desactivar",
       activeTitle: "Notificaciones activadas",
       hourTitle: "Hora del recordatorio",
@@ -86,6 +88,8 @@ export default function NotificationsPage() {
       enableTitle: "Enable notifications",
       enableBody: "Get a daily challenge reminder, streak alerts, and missions ready to claim.",
       enableBtn: "Enable",
+      checking: "Checking subscription…",
+      waiting: "Waiting for Android response…",
       disableBtn: "Disable",
       activeTitle: "Notifications on",
       hourTitle: "Reminder time",
@@ -112,6 +116,8 @@ export default function NotificationsPage() {
       enableTitle: "Ativar notificações",
       enableBody: "Recebe um lembrete diário do desafio, alertas de sequência e missões a reclamar.",
       enableBtn: "Ativar",
+      checking: "A verificar a subscrição…",
+      waiting: "À espera da resposta do Android…",
       disableBtn: "Desativar",
       activeTitle: "Notificações ativadas",
       hourTitle: "Hora do lembrete",
@@ -138,6 +144,8 @@ export default function NotificationsPage() {
       enableTitle: "Activer les notifications",
       enableBody: "Reçois un rappel quotidien du défi, alertes de série, et missions à réclamer.",
       enableBtn: "Activer",
+      checking: "Vérification de l’abonnement…",
+      waiting: "En attente de la réponse d’Android…",
       disableBtn: "Désactiver",
       activeTitle: "Notifications activées",
       hourTitle: "Heure du rappel",
@@ -217,7 +225,7 @@ export default function NotificationsPage() {
               color: isSubscribed ? "white" : "#0d1757",
             }}
           >
-            {isSubscribed ? t.disableBtn : t.enableBtn}
+            {permissionWaiting ? t.waiting : loading ? t.checking : isSubscribed ? t.disableBtn : t.enableBtn}
           </button>
         </Card>
       )}

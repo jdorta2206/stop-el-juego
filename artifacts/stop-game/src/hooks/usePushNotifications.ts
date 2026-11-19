@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
+import { runSingleFlight, waitForPermissionResult } from "@/lib/pushSubscriptionFlow";
 
 const API_BASE = getApiUrl();
 const DISABLED_KEY = "stop_push_notifications_disabled";
@@ -53,13 +54,16 @@ export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
 export function usePushNotifications(playerId: string | undefined, language: string) {
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const currentPlayerIdRef = useRef(playerId);
   const preferencesAbortRef = useRef<AbortController | null>(null);
+  const subscribeOperationRef = useRef<Promise<boolean> | null>(null);
+  const [permissionWaiting, setPermissionWaiting] = useState(false);
   currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
 
     const controller = new AbortController();
     const initialise = async () => {
@@ -72,10 +76,10 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const perm = Notification.permission as NotifPermission;
         if (!cancelled) setPermission(perm);
 
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready");
         if (cancelled) return;
 
-        let sub = await reg.pushManager.getSubscription();
+        let sub = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription");
         if (cancelled) return;
 
         if (!sub) {
@@ -152,6 +156,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
         }
       } catch (e) {
         console.warn("[push] initialise error", e);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -177,6 +183,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
       applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
     }), 12000, "Push subscription timed out");
 
+    if (currentPlayerIdRef.current !== playerId) return false;
+
     const tzOffsetMinutes = -new Date().getTimezoneOffset();
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
     const res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
@@ -201,56 +209,43 @@ export function usePushNotifications(playerId: string | undefined, language: str
     return true;
   }, [playerId, language]);
 
-  const subscribe = useCallback(async () => {
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) return false;
-    let permissionRequest: Promise<NotificationPermission> | null = null;
-    setLoading(true);
-    try {
-      // Request permission immediately while the click's transient user
-      // activation is still available. Network and service-worker awaits can
-      // otherwise consume that activation and cause Chrome/Android to ignore
-      // or reject the permission prompt.
-      // Some Android WebView/TWA permission prompts may leave this Promise pending.
-      // Bound the wait so the activation control never remains disabled forever.
-      permissionRequest = Notification.requestPermission();
-      const perm = await withTimeout(
-        permissionRequest,
-        15000,
-        "Notification permission request timed out",
-      );
-      setPermission(perm as NotifPermission);
-      if (perm !== "granted") return false;
-
-      // Only perform network/service-worker work after the browser permission
-      // decision has been made.
-      return await registerSubscription();
-    } catch (e) {
-      console.error("Push subscribe error:", e);
-      // A timed-out permission prompt is not cancelled by Promise.race. If the
-      // user accepts it later, finish registration instead of leaving Android
-      // permission granted while STOP remains unsubscribed.
-      if (permissionRequest && e instanceof Error && e.message === "Notification permission request timed out") {
-        void permissionRequest.then(async (latePermission) => {
-          if (currentPlayerIdRef.current !== playerId) return;
-          setPermission(latePermission as NotifPermission);
-          if (latePermission !== "granted") return;
-          setLoading(true);
-          try {
-            await registerSubscription();
-          } catch (lateError) {
-            console.error("Late push subscription registration failed:", lateError);
-          } finally {
-            setLoading(false);
-          }
-        }).catch((lateError) => {
-          console.error("Late notification permission result failed:", lateError);
-        });
-      }
-      return false;
-    } finally {
-      setLoading(false);
+  const subscribe = useCallback((): Promise<boolean> => {
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      return Promise.resolve(false);
     }
-  }, [playerId, language, registerSubscription]);
+
+    return runSingleFlight(
+      () => subscribeOperationRef.current,
+      (operation) => { subscribeOperationRef.current = operation; },
+      async () => {
+        setLoading(true);
+        setPermissionWaiting(false);
+        try {
+          // Request permission synchronously from the click handler so Android
+          // retains transient user activation. A slow prompt remains the same
+          // operation; the 15s threshold changes only the visible status.
+          const permissionRequest = Notification.requestPermission();
+          const perm = await waitForPermissionResult(
+            permissionRequest,
+            () => setPermissionWaiting(true),
+            15000,
+          );
+
+          if (currentPlayerIdRef.current !== playerId) return false;
+          setPermission(perm as NotifPermission);
+          if (perm !== "granted") return false;
+
+          return await registerSubscription();
+        } catch (e) {
+          console.error("Push subscribe error:", e);
+          return false;
+        } finally {
+          setPermissionWaiting(false);
+          setLoading(false);
+        }
+      },
+    );
+  }, [playerId, registerSubscription]);
 
   const getPreferences = useCallback(async (): Promise<{
     enabled: boolean; hourLocal: number; mutedUntil: number; tzOffsetMinutes: number;
@@ -334,5 +329,5 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator;
 
-  return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
+  return { permission, isSubscribed, loading, permissionWaiting, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
