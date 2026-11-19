@@ -1,7 +1,9 @@
 const pt = {
   lang: "Português",
   flag: "🇧🇷",
-  categories: ["Nome", "Lugar", "Animal", "Objeto", "Cor", "Fruta", "Marca"],
+
+  notificationPermissionBlocked: "As notificações estão bloqueadas nas permissões do navegador. Permita-as para este site e tente novamente.",
+  notificationUnsupported: "Este navegador não oferece suporte às notificações do STOP.",  categories: ["Nome", "Lugar", "Animal", "Objeto", "Cor", "Fruta", "Marca"],
   alphabet: "ABCDEFGHIJLMNOPRSTUVZ".split(""),
 
   auth: {
