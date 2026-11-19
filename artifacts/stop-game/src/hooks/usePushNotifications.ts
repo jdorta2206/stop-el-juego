@@ -52,6 +52,7 @@ function subscriptionMatchesVapidKey(subscription: PushSubscription, publicKey: 
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
 export type PushActivationError =
   | "permission-request-failed"
+  | "permission-request-timeout"
   | "permission-not-granted"
   | "vapid-key-unavailable"
   | "service-worker-unavailable"
@@ -270,7 +271,10 @@ export function usePushNotifications(playerId: string | undefined, language: str
               () => setPermissionWaiting(true),
               15000,
             );
-          } catch {
+          } catch (error) {
+            if (error instanceof Error && error.message === "Permission request timed out") {
+              throw new PushActivationFailure("permission-request-timeout", "Android permission request timed out");
+            }
             throw new PushActivationFailure("permission-request-failed", "Permission request failed");
           }
 
