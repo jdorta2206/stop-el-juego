@@ -67,6 +67,7 @@ describe("push subscription initialization safeguards", () => {
   it("classifies permission, VAPID, service-worker, browser-subscription and server-registration failures", () => {
     for (const code of [
       "permission-request-failed",
+      "permission-request-timeout",
       "permission-not-granted",
       "vapid-key-unavailable",
       "service-worker-unavailable",
