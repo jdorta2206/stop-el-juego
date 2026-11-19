@@ -19,8 +19,8 @@ export default function NotificationsPage() {
   const { player } = usePlayer();
   const { lang } = useT();
   const {
-    isSupported, isSubscribed, permission, loading,
-    subscribe, unsubscribe, getPreferences, updatePreferences,
+    isSupported, isSubscribed, permission, loading, permissionWaiting,
+    subscribe, unsubscribe, getPreferences, updatePreferences, getActivationError,
   } = usePushNotifications(player?.id, lang);
 
   const [prefs, setPrefs] = useState<Prefs>(null);
@@ -60,6 +60,8 @@ export default function NotificationsPage() {
       enableTitle: "Activar notificaciones",
       enableBody: "Recibirás un recordatorio diario del reto, avisos de racha y de misiones para reclamar.",
       enableBtn: "Activar",
+      checking: "Comprobando suscripción…",
+      waiting: "Esperando respuesta de Android…",
       disableBtn: "Desactivar",
       activeTitle: "Notificaciones activadas",
       hourTitle: "Hora del recordatorio",
@@ -73,7 +75,8 @@ export default function NotificationsPage() {
       muted: "Silenciado 7 días",
       unmuted: "Reanudado",
       activated: "Notificaciones activadas",
-      failed: "No se pudieron activar. Revisa el permiso del navegador y vuelve a intentarlo.",
+      failed: "No se pudieron activar las notificaciones.",
+      errors: { "permission-request-failed": "Android no pudo mostrar la solicitud de permiso. Cierra y vuelve a abrir STOP.", "permission-not-granted": "No se concedió el permiso de notificaciones.", "vapid-key-unavailable": "El servidor no ha proporcionado la clave de notificaciones. Inténtalo más tarde.", "service-worker-unavailable": "STOP no ha podido iniciar el servicio de notificaciones. Inténtalo de nuevo.", "push-subscription-failed": "Android no ha podido crear la suscripción de notificaciones.", "subscription-registration-failed": "STOP no ha podido registrar la suscripción en el servidor.", unknown: "Ha ocurrido un error inesperado al activar las notificaciones." },
       deactivated: "Notificaciones desactivadas",
     },
     en: {
@@ -86,6 +89,8 @@ export default function NotificationsPage() {
       enableTitle: "Enable notifications",
       enableBody: "Get a daily challenge reminder, streak alerts, and missions ready to claim.",
       enableBtn: "Enable",
+      checking: "Checking subscription…",
+      waiting: "Waiting for Android response…",
       disableBtn: "Disable",
       activeTitle: "Notifications on",
       hourTitle: "Reminder time",
@@ -99,7 +104,8 @@ export default function NotificationsPage() {
       muted: "Muted for 7 days",
       unmuted: "Resumed",
       activated: "Notifications enabled",
-      failed: "Could not enable notifications. Check browser permission and try again.",
+      failed: "Could not enable notifications.",
+      errors: { "permission-request-failed": "Android could not show the permission prompt. Close and reopen the app.", "permission-not-granted": "Notification permission was not granted.", "vapid-key-unavailable": "The server did not provide the notification key. Try again later.", "service-worker-unavailable": "The app could not start its notification service.", "push-subscription-failed": "Android could not create the notification subscription.", "subscription-registration-failed": "The app could not register the subscription with the server.", unknown: "An unexpected error occurred while enabling notifications." },
       deactivated: "Notifications disabled",
     },
     pt: {
@@ -112,6 +118,8 @@ export default function NotificationsPage() {
       enableTitle: "Ativar notificações",
       enableBody: "Recebe um lembrete diário do desafio, alertas de sequência e missões a reclamar.",
       enableBtn: "Ativar",
+      checking: "A verificar a subscrição…",
+      waiting: "À espera da resposta do Android…",
       disableBtn: "Desativar",
       activeTitle: "Notificações ativadas",
       hourTitle: "Hora do lembrete",
@@ -125,7 +133,8 @@ export default function NotificationsPage() {
       muted: "Silenciado 7 dias",
       unmuted: "Retomado",
       activated: "Notificações ativadas",
-      failed: "Não foi possível ativar. Verifica a permissão do navegador e tenta novamente.",
+      failed: "Não foi possível ativar as notificações.",
+      errors: { "permission-request-failed": "O Android não conseguiu mostrar o pedido de permissão. Fecha e reabre a app.", "permission-not-granted": "A permissão de notificações não foi concedida.", "vapid-key-unavailable": "O servidor não forneceu a chave de notificações. Tenta mais tarde.", "service-worker-unavailable": "A app não conseguiu iniciar o serviço de notificações.", "push-subscription-failed": "O Android não conseguiu criar a subscrição.", "subscription-registration-failed": "A app não conseguiu registar a subscrição no servidor.", unknown: "Ocorreu um erro inesperado ao ativar as notificações." },
       deactivated: "Notificações desativadas",
     },
     fr: {
@@ -138,6 +147,8 @@ export default function NotificationsPage() {
       enableTitle: "Activer les notifications",
       enableBody: "Reçois un rappel quotidien du défi, alertes de série, et missions à réclamer.",
       enableBtn: "Activer",
+      checking: "Vérification de l’abonnement…",
+      waiting: "En attente de la réponse d’Android…",
       disableBtn: "Désactiver",
       activeTitle: "Notifications activées",
       hourTitle: "Heure du rappel",
@@ -151,7 +162,8 @@ export default function NotificationsPage() {
       muted: "Coupé 7 jours",
       unmuted: "Repris",
       activated: "Notifications activées",
-      failed: "Impossible d’activer les notifications. Vérifie l’autorisation du navigateur et réessaie.",
+      failed: "Impossible d’activer les notifications.",
+      errors: { "permission-request-failed": "Android n’a pas pu afficher la demande d’autorisation. Ferme et rouvre l’application.", "permission-not-granted": "L’autorisation des notifications n’a pas été accordée.", "vapid-key-unavailable": "Le serveur n’a pas fourni la clé de notification. Réessaie plus tard.", "service-worker-unavailable": "L’application n’a pas pu démarrer le service de notification.", "push-subscription-failed": "Android n’a pas pu créer l’abonnement aux notifications.", "subscription-registration-failed": "L’application n’a pas pu enregistrer l’abonnement sur le serveur.", unknown: "Une erreur inattendue est survenue lors de l’activation." },
       deactivated: "Notifications désactivées",
     },
   } as const;
@@ -207,7 +219,8 @@ export default function NotificationsPage() {
                 if (ok) flashToast(t.deactivated);
               } else {
                 const ok = await subscribe();
-                flashToast(ok ? t.activated : t.failed);
+                const error = getActivationError();
+                flashToast(ok ? t.activated : (error ? t.errors[error] : t.failed));
               }
             }}
             disabled={loading}
@@ -217,7 +230,7 @@ export default function NotificationsPage() {
               color: isSubscribed ? "white" : "#0d1757",
             }}
           >
-            {isSubscribed ? t.disableBtn : t.enableBtn}
+            {permissionWaiting ? t.waiting : loading ? t.checking : isSubscribed ? t.disableBtn : t.enableBtn}
           </button>
         </Card>
       )}

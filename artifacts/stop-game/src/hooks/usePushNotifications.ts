@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
+import { runSingleFlight, waitForPermissionResult } from "@/lib/pushSubscriptionFlow";
 
 const API_BASE = getApiUrl();
 const DISABLED_KEY = "stop_push_notifications_disabled";
@@ -49,17 +50,37 @@ function subscriptionMatchesVapidKey(subscription: PushSubscription, publicKey: 
 }
 
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
+export type PushActivationError =
+  | "permission-request-failed"
+  | "permission-not-granted"
+  | "vapid-key-unavailable"
+  | "service-worker-unavailable"
+  | "push-subscription-failed"
+  | "subscription-registration-failed"
+  | "unknown";
+
+class PushActivationFailure extends Error {
+  constructor(readonly code: PushActivationError, message: string) {
+    super(message);
+    this.name = "PushActivationFailure";
+  }
+}
 
 export function usePushNotifications(playerId: string | undefined, language: string) {
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const currentPlayerIdRef = useRef(playerId);
   const preferencesAbortRef = useRef<AbortController | null>(null);
+  const subscribeOperationRef = useRef<Promise<boolean> | null>(null);
+  const [permissionWaiting, setPermissionWaiting] = useState(false);
+  const [activationError, setActivationError] = useState<PushActivationError | null>(null);
+  const activationErrorRef = useRef<PushActivationError | null>(null);
   currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
 
     const controller = new AbortController();
     const initialise = async () => {
@@ -72,10 +93,10 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const perm = Notification.permission as NotifPermission;
         if (!cancelled) setPermission(perm);
 
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready");
         if (cancelled) return;
 
-        let sub = await reg.pushManager.getSubscription();
+        let sub = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription");
         if (cancelled) return;
 
         if (!sub) {
@@ -152,6 +173,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
         }
       } catch (e) {
         console.warn("[push] initialise error", e);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -161,96 +184,117 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   const registerSubscription = useCallback(async (): Promise<boolean> => {
     const vapidPublicKey = await getServerVapidPublicKey();
-    if (!vapidPublicKey) throw new Error("Server VAPID public key is unavailable");
-    const reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready");
+    if (!vapidPublicKey) throw new PushActivationFailure("vapid-key-unavailable", "Server VAPID public key is unavailable");
+    let reg: ServiceWorkerRegistration;
+    try { reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready"); }
+    catch { throw new PushActivationFailure("service-worker-unavailable", "Service worker is not ready"); }
 
-    let existing = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription");
+    let existing: PushSubscription | null;
+    try { existing = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription"); }
+    catch { throw new PushActivationFailure("push-subscription-failed", "Could not inspect push subscription"); }
     if (currentPlayerIdRef.current !== playerId) return false;
     // A persisted subscription created with a previous VAPID key cannot receive
     // pushes signed by the server current key. Recreate it before registering.
     if (existing && !subscriptionMatchesVapidKey(existing, vapidPublicKey)) {
-      await existing.unsubscribe();
+      try { await existing.unsubscribe(); }
+      catch { throw new PushActivationFailure("push-subscription-failed", "Could not replace stale push subscription"); }
       existing = null;
     }
-    const sub = existing || await withTimeout(reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
-    }), 12000, "Push subscription timed out");
+    let sub: PushSubscription;
+    try {
+      sub = existing || await withTimeout(reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
+      }), 12000, "Push subscription timed out");
+    } catch {
+      throw new PushActivationFailure("push-subscription-failed", "Browser push subscription could not be created");
+    }
 
     const tzOffsetMinutes = -new Date().getTimezoneOffset();
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-    const res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      credentials: "include",
-      body: JSON.stringify({
-        playerId: playerId || "anonymous",
-        subscription: sub.toJSON(),
-        language,
-        hourLocal: 20,
-        tzOffsetMinutes,
-        timeZone,
-        origin: typeof window !== "undefined" ? window.location.origin : undefined,
-      }),
-    }), 12000, "Subscription registration timed out");
+    let res: Response;
+    try {
+      res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        body: JSON.stringify({
+          playerId: playerId || "anonymous",
+          subscription: sub.toJSON(),
+          language,
+          hourLocal: 20,
+          tzOffsetMinutes,
+          timeZone,
+          origin: typeof window !== "undefined" ? window.location.origin : undefined,
+        }),
+      }), 12000, "Subscription registration timed out");
+    } catch {
+      throw new PushActivationFailure("subscription-registration-failed", "Subscription registration request failed");
+    }
 
-    if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
+    if (!res.ok) throw new PushActivationFailure("subscription-registration-failed", `Subscription registration HTTP ${res.status}`);
     if (currentPlayerIdRef.current !== playerId) return false;
     try { localStorage.removeItem(DISABLED_KEY); } catch {}
     setIsSubscribed(true);
     return true;
   }, [playerId, language]);
 
-  const subscribe = useCallback(async () => {
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) return false;
-    let permissionRequest: Promise<NotificationPermission> | null = null;
-    setLoading(true);
-    try {
-      // Request permission immediately while the click's transient user
-      // activation is still available. Network and service-worker awaits can
-      // otherwise consume that activation and cause Chrome/Android to ignore
-      // or reject the permission prompt.
-      // Some Android WebView/TWA permission prompts may leave this Promise pending.
-      // Bound the wait so the activation control never remains disabled forever.
-      permissionRequest = Notification.requestPermission();
-      const perm = await withTimeout(
-        permissionRequest,
-        15000,
-        "Notification permission request timed out",
-      );
-      setPermission(perm as NotifPermission);
-      if (perm !== "granted") return false;
-
-      // Only perform network/service-worker work after the browser permission
-      // decision has been made.
-      return await registerSubscription();
-    } catch (e) {
-      console.error("Push subscribe error:", e);
-      // A timed-out permission prompt is not cancelled by Promise.race. If the
-      // user accepts it later, finish registration instead of leaving Android
-      // permission granted while STOP remains unsubscribed.
-      if (permissionRequest && e instanceof Error && e.message === "Notification permission request timed out") {
-        void permissionRequest.then(async (latePermission) => {
-          if (currentPlayerIdRef.current !== playerId) return;
-          setPermission(latePermission as NotifPermission);
-          if (latePermission !== "granted") return;
-          setLoading(true);
-          try {
-            await registerSubscription();
-          } catch (lateError) {
-            console.error("Late push subscription registration failed:", lateError);
-          } finally {
-            setLoading(false);
-          }
-        }).catch((lateError) => {
-          console.error("Late notification permission result failed:", lateError);
-        });
-      }
-      return false;
-    } finally {
-      setLoading(false);
+  const subscribe = useCallback((): Promise<boolean> => {
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      setActivationError("service-worker-unavailable");
+      activationErrorRef.current = "service-worker-unavailable";
+      return Promise.resolve(false);
     }
-  }, [playerId, language, registerSubscription]);
+
+    return runSingleFlight(
+      () => subscribeOperationRef.current,
+      (operation) => { subscribeOperationRef.current = operation; },
+      async () => {
+        setLoading(true);
+        setPermissionWaiting(false);
+        setActivationError(null);
+        activationErrorRef.current = null;
+        try {
+          // Call synchronously from the click handler to preserve Android's user activation.
+          let permissionRequest: Promise<NotificationPermission>;
+          try {
+            permissionRequest = Notification.requestPermission();
+          } catch {
+            throw new PushActivationFailure("permission-request-failed", "Permission prompt could not be opened");
+          }
+
+          let perm: NotificationPermission;
+          try {
+            perm = await waitForPermissionResult(
+              permissionRequest,
+              () => setPermissionWaiting(true),
+              15000,
+            );
+          } catch {
+            throw new PushActivationFailure("permission-request-failed", "Permission request failed");
+          }
+
+          if (currentPlayerIdRef.current !== playerId) return false;
+          setPermission(perm as NotifPermission);
+          if (perm !== "granted") {
+            throw new PushActivationFailure("permission-not-granted", "Notification permission was not granted");
+          }
+
+          return await registerSubscription();
+        } catch (e) {
+          const code: PushActivationError = e instanceof PushActivationFailure ? e.code : "unknown";
+          setActivationError(code);
+          activationErrorRef.current = code;
+          // Log only the safe failure category; never log endpoints, keys or player identifiers.
+          console.warn("[push] activation failed", code);
+          return false;
+        } finally {
+          setPermissionWaiting(false);
+          setLoading(false);
+        }
+      },
+    );
+  }, [playerId, registerSubscription]);
 
   const getPreferences = useCallback(async (): Promise<{
     enabled: boolean; hourLocal: number; mutedUntil: number; tzOffsetMinutes: number;
@@ -334,5 +378,5 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator;
 
-  return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
+  return { permission, isSubscribed, loading, permissionWaiting, activationError, getActivationError: () => activationErrorRef.current, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
