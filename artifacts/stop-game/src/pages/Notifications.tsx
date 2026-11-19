@@ -75,7 +75,8 @@ export default function NotificationsPage() {
       muted: "Silenciado 7 días",
       unmuted: "Reanudado",
       activated: "Notificaciones activadas",
-      failed: "No se pudieron activar las notificaciones.",\n      errors: { "permission-request-failed": "Android no pudo mostrar la solicitud de permiso. Cierra y vuelve a abrir STOP.", "permission-not-granted": "No se concedió el permiso de notificaciones.", "vapid-key-unavailable": "El servidor no ha proporcionado la clave de notificaciones. Inténtalo más tarde.", "service-worker-unavailable": "STOP no ha podido iniciar el servicio de notificaciones. Inténtalo de nuevo.", "push-subscription-failed": "Android no ha podido crear la suscripción de notificaciones.", "subscription-registration-failed": "STOP no ha podido registrar la suscripción en el servidor.", unknown: "Ha ocurrido un error inesperado al activar las notificaciones." },
+      failed: "No se pudieron activar las notificaciones.",
+      errors: { "permission-request-failed": "Android no pudo mostrar la solicitud de permiso. Cierra y vuelve a abrir STOP.", "permission-not-granted": "No se concedió el permiso de notificaciones.", "vapid-key-unavailable": "El servidor no ha proporcionado la clave de notificaciones. Inténtalo más tarde.", "service-worker-unavailable": "STOP no ha podido iniciar el servicio de notificaciones. Inténtalo de nuevo.", "push-subscription-failed": "Android no ha podido crear la suscripción de notificaciones.", "subscription-registration-failed": "STOP no ha podido registrar la suscripción en el servidor.", unknown: "Ha ocurrido un error inesperado al activar las notificaciones." },
       deactivated: "Notificaciones desactivadas",
     },
     en: {
@@ -103,7 +104,8 @@ export default function NotificationsPage() {
       muted: "Muted for 7 days",
       unmuted: "Resumed",
       activated: "Notifications enabled",
-      failed: "Could not enable notifications.",\n      errors: { "permission-request-failed": "Android could not show the permission prompt. Close and reopen the app.", "permission-not-granted": "Notification permission was not granted.", "vapid-key-unavailable": "The server did not provide the notification key. Try again later.", "service-worker-unavailable": "The app could not start its notification service.", "push-subscription-failed": "Android could not create the notification subscription.", "subscription-registration-failed": "The app could not register the subscription with the server.", unknown: "An unexpected error occurred while enabling notifications." },
+      failed: "Could not enable notifications.",
+      errors: { "permission-request-failed": "Android could not show the permission prompt. Close and reopen the app.", "permission-not-granted": "Notification permission was not granted.", "vapid-key-unavailable": "The server did not provide the notification key. Try again later.", "service-worker-unavailable": "The app could not start its notification service.", "push-subscription-failed": "Android could not create the notification subscription.", "subscription-registration-failed": "The app could not register the subscription with the server.", unknown: "An unexpected error occurred while enabling notifications." },
       deactivated: "Notifications disabled",
     },
     pt: {
@@ -131,7 +133,8 @@ export default function NotificationsPage() {
       muted: "Silenciado 7 dias",
       unmuted: "Retomado",
       activated: "Notificações ativadas",
-      failed: "Não foi possível ativar as notificações.",\n      errors: { "permission-request-failed": "O Android não conseguiu mostrar o pedido de permissão. Fecha e reabre a app.", "permission-not-granted": "A permissão de notificações não foi concedida.", "vapid-key-unavailable": "O servidor não forneceu a chave de notificações. Tenta mais tarde.", "service-worker-unavailable": "A app não conseguiu iniciar o serviço de notificações.", "push-subscription-failed": "O Android não conseguiu criar a subscrição.", "subscription-registration-failed": "A app não conseguiu registar a subscrição no servidor.", unknown: "Ocorreu um erro inesperado ao ativar as notificações." },
+      failed: "Não foi possível ativar as notificações.",
+      errors: { "permission-request-failed": "O Android não conseguiu mostrar o pedido de permissão. Fecha e reabre a app.", "permission-not-granted": "A permissão de notificações não foi concedida.", "vapid-key-unavailable": "O servidor não forneceu a chave de notificações. Tenta mais tarde.", "service-worker-unavailable": "A app não conseguiu iniciar o serviço de notificações.", "push-subscription-failed": "O Android não conseguiu criar a subscrição.", "subscription-registration-failed": "A app não conseguiu registar a subscrição no servidor.", unknown: "Ocorreu um erro inesperado ao ativar as notificações." },
       deactivated: "Notificações desativadas",
     },
     fr: {
@@ -159,7 +162,8 @@ export default function NotificationsPage() {
       muted: "Coupé 7 jours",
       unmuted: "Repris",
       activated: "Notifications activées",
-      failed: "Impossible d’activer les notifications.",\n      errors: { "permission-request-failed": "Android n’a pas pu afficher la demande d’autorisation. Ferme et rouvre l’application.", "permission-not-granted": "L’autorisation des notifications n’a pas été accordée.", "vapid-key-unavailable": "Le serveur n’a pas fourni la clé de notification. Réessaie plus tard.", "service-worker-unavailable": "L’application n’a pas pu démarrer le service de notification.", "push-subscription-failed": "Android n’a pas pu créer l’abonnement aux notifications.", "subscription-registration-failed": "L’application n’a pas pu enregistrer l’abonnement sur le serveur.", unknown: "Une erreur inattendue est survenue lors de l’activation." },
+      failed: "Impossible d’activer les notifications.",
+      errors: { "permission-request-failed": "Android n’a pas pu afficher la demande d’autorisation. Ferme et rouvre l’application.", "permission-not-granted": "L’autorisation des notifications n’a pas été accordée.", "vapid-key-unavailable": "Le serveur n’a pas fourni la clé de notification. Réessaie plus tard.", "service-worker-unavailable": "L’application n’a pas pu démarrer le service de notification.", "push-subscription-failed": "Android n’a pas pu créer l’abonnement aux notifications.", "subscription-registration-failed": "L’application n’a pas pu enregistrer l’abonnement sur le serveur.", unknown: "Une erreur inattendue est survenue lors de l’activation." },
       deactivated: "Notifications désactivées",
     },
   } as const;
@@ -215,7 +219,8 @@ export default function NotificationsPage() {
                 if (ok) flashToast(t.deactivated);
               } else {
                 const ok = await subscribe();
-                const error = getActivationError();\n                flashToast(ok ? t.activated : (error ? t.errors[error] : t.failed));
+                const error = getActivationError();
+                flashToast(ok ? t.activated : (error ? t.errors[error] : t.failed));
               }
             }}
             disabled={loading}
