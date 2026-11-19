@@ -55,9 +55,12 @@ describe("push permission operation coordination", () => {
     vi.useFakeTimers();
     const request = deferred<string>();
     const result = waitForPermissionResult(request.promise, vi.fn(), 15000, 30000);
+    // Attach the rejection assertion before advancing the timer so Vitest does
+    // not report the expected timeout as an unhandled rejection.
+    const timeoutAssertion = expect(result).rejects.toBeInstanceOf(PermissionRequestTimeoutError);
 
     await vi.advanceTimersByTimeAsync(30000);
-    await expect(result).rejects.toBeInstanceOf(PermissionRequestTimeoutError);
+    await timeoutAssertion;
 
     request.reject(new Error("late Android rejection"));
     await Promise.resolve();
