@@ -179,11 +179,11 @@ export function Layout({ children }: { children: ReactNode }) {
               onClick={async () => {
                 if (notifLoading) return;
                 if (permission === "denied") {
-                  showNotifToast("Las notificaciones están bloqueadas en los permisos del navegador. Permítelas para este sitio y vuelve a intentarlo.");
+                  showNotifToast(t.notificationPermissionBlocked);
                   return;
                 }
                 if (!isSupported || permission === "unsupported") {
-                  showNotifToast("Este navegador no ofrece compatibilidad con las notificaciones de STOP.");
+                  showNotifToast(t.notificationUnsupported);
                   return;
                 }
                 showNotifToast(isSubscribed ? "Desactivando notificaciones…" : "Solicitando permiso para notificaciones…", 20000);
