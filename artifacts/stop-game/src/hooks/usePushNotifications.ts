@@ -73,7 +73,9 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const currentPlayerIdRef = useRef(playerId);
   const preferencesAbortRef = useRef<AbortController | null>(null);
   const subscribeOperationRef = useRef<Promise<boolean> | null>(null);
-  const [permissionWaiting, setPermissionWaiting] = useState(false);\n  const [activationError, setActivationError] = useState<PushActivationError | null>(null);\n  const activationErrorRef = useRef<PushActivationError | null>(null);
+  const [permissionWaiting, setPermissionWaiting] = useState(false);
+  const [activationError, setActivationError] = useState<PushActivationError | null>(null);
+  const activationErrorRef = useRef<PushActivationError | null>(null);
   currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
