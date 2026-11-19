@@ -12,7 +12,20 @@ function storageKey(playerId?: string) {
 }
 
 function getPlayerTimeZone(): string {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+  try {
+    const candidate = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (typeof candidate === "string" && candidate.trim()) {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: candidate });
+        return candidate;
+      } catch {
+        // Fall through to the safe UTC default.
+      }
+    }
+  } catch {
+    // Fall through to the safe UTC default.
+  }
+  return "UTC";
 }
 
 function getTodayStr(): string {
