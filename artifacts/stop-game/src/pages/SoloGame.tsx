@@ -1599,9 +1599,8 @@ export default function SoloGame() {
           xpGained={lastWinXp}
           onClose={() => setShowFirstWin(false)}
           onEnableNotifications={() => {
-            if (typeof Notification !== "undefined" && Notification.permission === "default") {
-              Notification.requestPermission().catch(() => {});
-            }
+            // Complete permission, service-worker and server registration in one place.
+            setLocation("/notifications");
           }}
         />
 
