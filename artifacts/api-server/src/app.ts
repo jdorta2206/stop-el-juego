@@ -233,16 +233,34 @@ if (process.env["SERVE_CLIENT"] === "1") {
     });
   });
 
-  // SPA fallback: only application routes should receive index.html.
-  // Never return HTML for a missing JS/CSS/image module, otherwise browsers
-  // reject it with a strict MIME-type error and the whole app fails to boot.
+  // SPA fallback: serve the app shell only for routes registered by the client.
+  // Unknown document paths receive the same Spanish React 404 page, but with a
+  // real HTTP 404 status so crawlers do not index them as valid pages.
+  const knownClientPaths = new Set([
+    "/", "/solo", "/multiplayer", "/streamers", "/en-vivo", "/ranking",
+    "/privacidad", "/terminos", "/faq", "/privacy", "/terms", "/acerca",
+    "/como-jugar", "/como-funciona", "/reto", "/imposible", "/impossible",
+    "/amigos", "/estrategias", "/tienda", "/shop", "/torneo", "/season",
+    "/logros", "/achievements", "/coleccion", "/collection", "/notificaciones",
+    "/notifications", "/blog", "/eliminar-cuenta", "/delete-account",
+    "/contacto", "/contact",
+  ]);
+  const isKnownClientRoute = (pathname: string) => {
+    const normalized = pathname.replace(/\/+$/, "") || "/";
+    return knownClientPaths.has(normalized) ||
+      /^\/(?:room|live|overlay|player|torneo)\/[^/]+$/.test(normalized);
+  };
+
   app.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
     const pathname = req.path;
     if (/\.(?:js|mjs|css|map|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|wasm|webmanifest)$/i.test(pathname)) {
       res.status(404).end();
       return;
     }
-    res.sendFile(path.join(clientDist, "index.html"), {
+
+    const indexPath = path.join(clientDist, "index.html");
+    const status = isKnownClientRoute(pathname) ? 200 : 404;
+    res.status(status).sendFile(indexPath, {
       headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
     }, (error) => {
       if (error && !res.headersSent) next(error);
