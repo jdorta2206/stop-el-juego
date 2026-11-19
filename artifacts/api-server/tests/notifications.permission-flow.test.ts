@@ -51,23 +51,25 @@ describe("push permission operation coordination", () => {
     await expect(result).resolves.toBe("granted");
   });
 
-
   it("releases the UI with a timeout when Android never settles the permission request", async () => {
     vi.useFakeTimers();
     const request = deferred<"granted" | "denied">();
     const onWaiting = vi.fn();
     const result = waitForPermissionResult(request.promise, onWaiting, 15000, 30000);
+    // Attach the rejection assertion before advancing timers so the intentional
+    // timeout rejection is observed immediately by the test runner.
+    const timedOut = expect(result).rejects.toThrow("Permission request timed out");
 
     await vi.advanceTimersByTimeAsync(15000);
     expect(onWaiting).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(14999);
-    await expect(Promise.resolve()).resolves.toBeUndefined();
     await vi.advanceTimersByTimeAsync(1);
-    await expect(result).rejects.toThrow("Permission request timed out");
+    await timedOut;
 
     // The browser promise may settle after the UI timeout; it must be observed.
     request.resolve("granted");
+    await Promise.resolve();
   });
 
   it("propagates a late permission rejection and clears the waiting timer", async () => {
