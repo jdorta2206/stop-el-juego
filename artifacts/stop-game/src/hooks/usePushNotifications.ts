@@ -200,27 +200,37 @@ export function usePushNotifications(playerId: string | undefined, language: str
       catch { throw new PushActivationFailure("push-subscription-failed", "Could not replace stale push subscription"); }
       existing = null;
     }
-    const sub = existing || await withTimeout(reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
-    }), 12000, "Push subscription timed out");
+    let sub: PushSubscription;
+    try {
+      sub = existing || await withTimeout(reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
+      }), 12000, "Push subscription timed out");
+    } catch {
+      throw new PushActivationFailure("push-subscription-failed", "Browser push subscription could not be created");
+    }
 
     const tzOffsetMinutes = -new Date().getTimezoneOffset();
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-    const res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      credentials: "include",
-      body: JSON.stringify({
-        playerId: playerId || "anonymous",
-        subscription: sub.toJSON(),
-        language,
-        hourLocal: 20,
-        tzOffsetMinutes,
-        timeZone,
-        origin: typeof window !== "undefined" ? window.location.origin : undefined,
-      }),
-    }), 12000, "Subscription registration timed out");
+    let res: Response;
+    try {
+      res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        body: JSON.stringify({
+          playerId: playerId || "anonymous",
+          subscription: sub.toJSON(),
+          language,
+          hourLocal: 20,
+          tzOffsetMinutes,
+          timeZone,
+          origin: typeof window !== "undefined" ? window.location.origin : undefined,
+        }),
+      }), 12000, "Subscription registration timed out");
+    } catch {
+      throw new PushActivationFailure("subscription-registration-failed", "Subscription registration request failed");
+    }
 
     if (!res.ok) throw new PushActivationFailure("subscription-registration-failed", `Subscription registration HTTP ${res.status}`);
     if (currentPlayerIdRef.current !== playerId) return false;
