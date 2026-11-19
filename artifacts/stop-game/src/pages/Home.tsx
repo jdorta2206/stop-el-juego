@@ -183,6 +183,7 @@ export default function Home() {
       headers: { ...authHeaders() },
       credentials: "include",
       signal: controller.signal,
+      cache: "no-store",
     })
       .then(r => {
         if (r.ok) return r.json();
