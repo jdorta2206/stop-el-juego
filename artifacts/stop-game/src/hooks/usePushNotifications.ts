@@ -73,7 +73,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const currentPlayerIdRef = useRef(playerId);
   const preferencesAbortRef = useRef<AbortController | null>(null);
   const subscribeOperationRef = useRef<Promise<boolean> | null>(null);
-  const [permissionWaiting, setPermissionWaiting] = useState(false);\n  const [activationError, setActivationError] = useState<PushActivationError | null>(null);
+  const [permissionWaiting, setPermissionWaiting] = useState(false);\n  const [activationError, setActivationError] = useState<PushActivationError | null>(null);\n  const activationErrorRef = useRef<PushActivationError | null>(null);
   currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
@@ -342,5 +342,5 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator;
 
-  return { permission, isSubscribed, loading, permissionWaiting, activationError, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
+  return { permission, isSubscribed, loading, permissionWaiting, activationError, getActivationError: () => activationErrorRef.current, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
