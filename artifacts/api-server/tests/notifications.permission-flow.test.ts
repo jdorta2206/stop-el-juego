@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runSingleFlight, waitForPermissionResult } from "../../stop-game/src/lib/pushSubscriptionFlow";
+import { PermissionRequestTimeoutError, runSingleFlight, waitForPermissionResult } from "../../stop-game/src/lib/pushSubscriptionFlow";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -49,6 +49,18 @@ describe("push permission operation coordination", () => {
 
     request.resolve("granted");
     await expect(result).resolves.toBe("granted");
+  });
+
+  it("times out the UI but continues observing the original permission promise", async () => {
+    vi.useFakeTimers();
+    const request = deferred<string>();
+    const result = waitForPermissionResult(request.promise, vi.fn(), 15000, 30000);
+
+    await vi.advanceTimersByTimeAsync(30000);
+    await expect(result).rejects.toBeInstanceOf(PermissionRequestTimeoutError);
+
+    request.reject(new Error("late Android rejection"));
+    await Promise.resolve();
   });
 
   it("propagates a late permission rejection and clears the waiting timer", async () => {
