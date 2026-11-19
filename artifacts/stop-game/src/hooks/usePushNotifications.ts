@@ -50,6 +50,21 @@ function subscriptionMatchesVapidKey(subscription: PushSubscription, publicKey: 
 }
 
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
+export type PushActivationError =
+  | "permission-request-failed"
+  | "permission-not-granted"
+  | "vapid-key-unavailable"
+  | "service-worker-unavailable"
+  | "push-subscription-failed"
+  | "subscription-registration-failed"
+  | "unknown";
+
+class PushActivationFailure extends Error {
+  constructor(readonly code: PushActivationError, message: string) {
+    super(message);
+    this.name = "PushActivationFailure";
+  }
+}
 
 export function usePushNotifications(playerId: string | undefined, language: string) {
   const [permission, setPermission] = useState<NotifPermission>("default");
@@ -58,7 +73,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const currentPlayerIdRef = useRef(playerId);
   const preferencesAbortRef = useRef<AbortController | null>(null);
   const subscribeOperationRef = useRef<Promise<boolean> | null>(null);
-  const [permissionWaiting, setPermissionWaiting] = useState(false);
+  const [permissionWaiting, setPermissionWaiting] = useState(false);\n  const [activationError, setActivationError] = useState<PushActivationError | null>(null);
   currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
@@ -200,7 +215,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       }),
     }), 12000, "Subscription registration timed out");
 
-    if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
+    if (!res.ok) throw new PushActivationFailure("subscription-registration-failed", `Subscription registration HTTP ${res.status}`);
     if (currentPlayerIdRef.current !== playerId) return false;
     try { localStorage.removeItem(DISABLED_KEY); } catch {}
     setIsSubscribed(true);
@@ -327,5 +342,5 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator;
 
-  return { permission, isSubscribed, loading, permissionWaiting, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
+  return { permission, isSubscribed, loading, permissionWaiting, activationError, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
