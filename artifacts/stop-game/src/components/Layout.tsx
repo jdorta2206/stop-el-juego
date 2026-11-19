@@ -172,12 +172,20 @@ export function Layout({ children }: { children: ReactNode }) {
           {/* Language selector */}
           <LanguageSelector />
 
-          {/* Notification bell — visible for all users on supported browsers */}
-          {isSupported && permission !== "denied" && (
+          {/* Keep the bell visible so users can discover and repair blocked/unsupported permissions. */}
+          {(
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={async () => {
                 if (notifLoading) return;
+                if (permission === "denied") {
+                  showNotifToast(t.notificationPermissionBlocked);
+                  return;
+                }
+                if (!isSupported || permission === "unsupported") {
+                  showNotifToast(t.notificationUnsupported);
+                  return;
+                }
                 showNotifToast(isSubscribed ? "Desactivando notificaciones…" : "Solicitando permiso para notificaciones…", 20000);
                 try {
                   if (isSubscribed) {
