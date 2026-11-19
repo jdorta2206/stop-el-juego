@@ -68,6 +68,8 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS ai_word_validation_claims (cache_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS ai_word_validation_daily_quota (quota_date date NOT NULL, scope text NOT NULL, used integer NOT NULL DEFAULT 0, PRIMARY KEY (quota_date, scope))`,
     `CREATE TABLE IF NOT EXISTS guest_stats (day text PRIMARY KEY, games integer NOT NULL DEFAULT 0, conversions integer NOT NULL DEFAULT 0)`,
+    `CREATE TABLE IF NOT EXISTS guest_stats_events (event_id text PRIMARY KEY, day text NOT NULL, kind text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX CONCURRENTLY IF NOT EXISTS guest_stats_events_created_at_idx ON guest_stats_events (created_at)`,
     `CREATE TABLE IF NOT EXISTS seasons (id serial PRIMARY KEY, start_date text NOT NULL, end_date text NOT NULL, theme_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS season_progress (id serial PRIMARY KEY, player_id text NOT NULL, season_id integer NOT NULL, xp integer NOT NULL DEFAULT 0, claimed_tiers text NOT NULL DEFAULT '{"free":[],"premium":[]}', missions_json text NOT NULL DEFAULT '{}', updated_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE INDEX CONCURRENTLY IF NOT EXISTS seasons_dates_idx ON seasons (start_date, end_date)`,
