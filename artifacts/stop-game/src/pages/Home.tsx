@@ -34,6 +34,23 @@ import { trackClientError, trackAnalyticsEvent } from "@/lib/analyticsClient";
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
 
+function getPlayerTimeZone(): string {
+  try {
+    const candidate = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (typeof candidate === "string" && candidate.trim()) {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: candidate });
+        return candidate;
+      } catch {
+        // Fall through to the safe UTC default.
+      }
+    }
+  } catch {
+    // Fall through to the safe UTC default.
+  }
+  return "UTC";
+}
+
 export default function Home() {
   useEffect(() => {
     const startedAt = performance.now();
@@ -159,9 +176,7 @@ export default function Home() {
   useEffect(() => {
     setDailyDone(null);
     const controller = new AbortController();
-    const timeZone = (() => {
-      try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
-    })();
+    const timeZone = getPlayerTimeZone();
     const today = new Intl.DateTimeFormat("en-CA", {
       timeZone,
       year: "numeric",
