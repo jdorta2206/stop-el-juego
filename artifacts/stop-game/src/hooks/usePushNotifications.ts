@@ -184,15 +184,20 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   const registerSubscription = useCallback(async (): Promise<boolean> => {
     const vapidPublicKey = await getServerVapidPublicKey();
-    if (!vapidPublicKey) throw new Error("Server VAPID public key is unavailable");
-    const reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready");
+    if (!vapidPublicKey) throw new PushActivationFailure("vapid-key-unavailable", "Server VAPID public key is unavailable");
+    let reg: ServiceWorkerRegistration;
+    try { reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready"); }
+    catch { throw new PushActivationFailure("service-worker-unavailable", "Service worker is not ready"); }
 
-    let existing = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription");
+    let existing: PushSubscription | null;
+    try { existing = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription"); }
+    catch { throw new PushActivationFailure("push-subscription-failed", "Could not inspect push subscription"); }
     if (currentPlayerIdRef.current !== playerId) return false;
     // A persisted subscription created with a previous VAPID key cannot receive
     // pushes signed by the server current key. Recreate it before registering.
     if (existing && !subscriptionMatchesVapidKey(existing, vapidPublicKey)) {
-      await existing.unsubscribe();
+      try { await existing.unsubscribe(); }
+      catch { throw new PushActivationFailure("push-subscription-failed", "Could not replace stale push subscription"); }
       existing = null;
     }
     const sub = existing || await withTimeout(reg.pushManager.subscribe({
