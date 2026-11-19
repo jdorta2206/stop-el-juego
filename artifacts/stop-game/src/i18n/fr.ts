@@ -1,7 +1,9 @@
 const fr = {
   lang: "Français",
   flag: "🇫🇷",
-  categories: ["Prénom", "Lieu", "Animal", "Objet", "Couleur", "Fruit", "Marque"],
+
+  notificationPermissionBlocked: "Les notifications sont bloquées dans les paramètres du navigateur. Autorisez-les pour ce site puis réessayez.",
+  notificationUnsupported: "Ce navigateur ne prend pas en charge les notifications de STOP.",  categories: ["Prénom", "Lieu", "Animal", "Objet", "Couleur", "Fruit", "Marque"],
   alphabet: "ABCDEFGHIJLMNOPRSTUVZ".split(""),
 
   auth: {
