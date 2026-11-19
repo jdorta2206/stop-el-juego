@@ -1,7 +1,9 @@
 const en = {
   lang: "English",
   flag: "🇬🇧",
-  categories: ["Name", "Place", "Animal", "Object", "Color", "Fruit", "Brand"],
+
+  notificationPermissionBlocked: "Notifications are blocked in your browser settings. Allow them for this site and try again.",
+  notificationUnsupported: "This browser does not support STOP notifications.",  categories: ["Name", "Place", "Animal", "Object", "Color", "Fruit", "Brand"],
   alphabet: "ABCDEFGHIJKLMNOPRSTUVWYZ".split(""),
 
   auth: {
