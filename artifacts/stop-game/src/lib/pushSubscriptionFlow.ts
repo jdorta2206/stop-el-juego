@@ -22,33 +22,47 @@ export function runSingleFlight<T>(
 }
 
 /**
- * Notify the UI that permission is taking unusually long without cancelling
- * or replacing the original browser permission Promise.
+ * Show a waiting state for slow Android permission prompts, then release the
+ * UI with a recoverable timeout if the browser never settles the request.
+ * The underlying browser Promise cannot be cancelled; handlers remain attached
+ * so a later browser resolution/rejection is safely observed.
  */
 export function waitForPermissionResult<T>(
   permissionRequest: Promise<T>,
   onWaiting: () => void,
   waitingAfterMs = 15000,
+  timeoutAfterMs = 30000,
 ): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let waitingTimer: ReturnType<typeof setTimeout> | undefined;
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+
   return new Promise<T>((resolve, reject) => {
-    timer = setTimeout(onWaiting, waitingAfterMs);
-    const clearWaitingTimer = () => {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-        timer = undefined;
+    const clearTimers = () => {
+      if (waitingTimer !== undefined) {
+        clearTimeout(waitingTimer);
+        waitingTimer = undefined;
+      }
+      if (timeoutTimer !== undefined) {
+        clearTimeout(timeoutTimer);
+        timeoutTimer = undefined;
       }
     };
 
-    // Use the two handlers directly. A dangling .finally() would create a
-    // second rejected Promise when Android/browser permission rejects.
+    waitingTimer = setTimeout(onWaiting, waitingAfterMs);
+    timeoutTimer = setTimeout(() => {
+      clearTimers();
+      reject(new Error("Permission request timed out"));
+    }, timeoutAfterMs);
+
+    // Attach both handlers even if the UI timeout wins, so a later browser
+    // rejection is observed and cannot become an unhandled rejection.
     permissionRequest.then(
       (value) => {
-        clearWaitingTimer();
+        clearTimers();
         resolve(value);
       },
       (error) => {
-        clearWaitingTimer();
+        clearTimers();
         reject(error);
       },
     );
