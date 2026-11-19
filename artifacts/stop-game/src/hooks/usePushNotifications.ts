@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
-import { runSingleFlight, waitForPermissionResult } from "@/lib/pushSubscriptionFlow";
+import { PermissionRequestTimeoutError, runSingleFlight, waitForPermissionResult } from "@/lib/pushSubscriptionFlow";
 
 const API_BASE = getApiUrl();
 const DISABLED_KEY = "stop_push_notifications_disabled";
@@ -52,6 +52,7 @@ function subscriptionMatchesVapidKey(subscription: PushSubscription, publicKey: 
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
 export type PushActivationError =
   | "permission-request-failed"
+  | "permission-request-pending"
   | "permission-not-granted"
   | "vapid-key-unavailable"
   | "service-worker-unavailable"
@@ -73,6 +74,9 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const currentPlayerIdRef = useRef(playerId);
   const preferencesAbortRef = useRef<AbortController | null>(null);
   const subscribeOperationRef = useRef<Promise<boolean> | null>(null);
+  // The UI timeout cannot cancel Android's native permission request. Keep a
+  // separate lock until that original Promise actually settles.
+  const permissionRequestRef = useRef<Promise<NotificationPermission> | null>(null);
   const [permissionWaiting, setPermissionWaiting] = useState(false);
   const [activationError, setActivationError] = useState<PushActivationError | null>(null);
   const activationErrorRef = useRef<PushActivationError | null>(null);
@@ -240,6 +244,11 @@ export function usePushNotifications(playerId: string | undefined, language: str
   }, [playerId, language]);
 
   const subscribe = useCallback((): Promise<boolean> => {
+    if (permissionRequestRef.current) {
+      setActivationError("permission-request-pending");
+      activationErrorRef.current = "permission-request-pending";
+      return Promise.resolve(false);
+    }
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
       setActivationError("service-worker-unavailable");
       activationErrorRef.current = "service-worker-unavailable";
@@ -259,6 +268,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
           let permissionRequest: Promise<NotificationPermission>;
           try {
             permissionRequest = Notification.requestPermission();
+            permissionRequestRef.current = permissionRequest;
+            // Release this lock only when the original Android request settles.
+            void permissionRequest.then(
+              () => { if (permissionRequestRef.current === permissionRequest) permissionRequestRef.current = null; },
+              () => { if (permissionRequestRef.current === permissionRequest) permissionRequestRef.current = null; },
+            );
           } catch {
             throw new PushActivationFailure("permission-request-failed", "Permission prompt could not be opened");
           }
@@ -270,7 +285,10 @@ export function usePushNotifications(playerId: string | undefined, language: str
               () => setPermissionWaiting(true),
               15000,
             );
-          } catch {
+          } catch (error) {
+            if (error instanceof PermissionRequestTimeoutError) {
+              throw new PushActivationFailure("permission-request-pending", "Android permission request is still pending");
+            }
             throw new PushActivationFailure("permission-request-failed", "Permission request failed");
           }
 
