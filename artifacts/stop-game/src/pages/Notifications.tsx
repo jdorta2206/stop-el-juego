@@ -20,7 +20,7 @@ export default function NotificationsPage() {
   const { lang } = useT();
   const {
     isSupported, isSubscribed, permission, loading, permissionWaiting,
-    subscribe, unsubscribe, getPreferences, updatePreferences, activationError,
+    subscribe, unsubscribe, getPreferences, updatePreferences, getActivationError,
   } = usePushNotifications(player?.id, lang);
 
   const [prefs, setPrefs] = useState<Prefs>(null);
@@ -215,7 +215,7 @@ export default function NotificationsPage() {
                 if (ok) flashToast(t.deactivated);
               } else {
                 const ok = await subscribe();
-                flashToast(ok ? t.activated : (activationError ? t.errors[activationError] : t.failed));
+                const error = getActivationError();\n                flashToast(ok ? t.activated : (error ? t.errors[error] : t.failed));
               }
             }}
             disabled={loading}
