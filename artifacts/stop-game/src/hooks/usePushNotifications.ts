@@ -226,6 +226,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   const subscribe = useCallback((): Promise<boolean> => {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      setActivationError("service-worker-unavailable");
+      activationErrorRef.current = "service-worker-unavailable";
       return Promise.resolve(false);
     }
 
@@ -235,24 +237,41 @@ export function usePushNotifications(playerId: string | undefined, language: str
       async () => {
         setLoading(true);
         setPermissionWaiting(false);
+        setActivationError(null);
+        activationErrorRef.current = null;
         try {
-          // Request permission synchronously from the click handler so Android
-          // retains transient user activation. A slow prompt remains the same
-          // operation; the 15s threshold changes only the visible status.
-          const permissionRequest = Notification.requestPermission();
-          const perm = await waitForPermissionResult(
-            permissionRequest,
-            () => setPermissionWaiting(true),
-            15000,
-          );
+          // Call synchronously from the click handler to preserve Android's user activation.
+          let permissionRequest: Promise<NotificationPermission>;
+          try {
+            permissionRequest = Notification.requestPermission();
+          } catch {
+            throw new PushActivationFailure("permission-request-failed", "Permission prompt could not be opened");
+          }
+
+          let perm: NotificationPermission;
+          try {
+            perm = await waitForPermissionResult(
+              permissionRequest,
+              () => setPermissionWaiting(true),
+              15000,
+            );
+          } catch {
+            throw new PushActivationFailure("permission-request-failed", "Permission request failed");
+          }
 
           if (currentPlayerIdRef.current !== playerId) return false;
           setPermission(perm as NotifPermission);
-          if (perm !== "granted") return false;
+          if (perm !== "granted") {
+            throw new PushActivationFailure("permission-not-granted", "Notification permission was not granted");
+          }
 
           return await registerSubscription();
         } catch (e) {
-          console.error("Push subscribe error:", e);
+          const code: PushActivationError = e instanceof PushActivationFailure ? e.code : "unknown";
+          setActivationError(code);
+          activationErrorRef.current = code;
+          // Log only the safe failure category; never log endpoints, keys or player identifiers.
+          console.warn("[push] activation failed", code);
           return false;
         } finally {
           setPermissionWaiting(false);
