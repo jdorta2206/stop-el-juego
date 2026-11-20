@@ -20,15 +20,31 @@ type StoredPendingReward = {
   status?: "pending" | "applied";
 };
 
-function readStoredPendingReward(): StoredPendingReward | null {
+function pendingRewardStorageKey(playerId?: string): string {
+  return `${PENDING_REWARD_STORAGE_KEY}:${encodeURIComponent(playerId || "guest")}`;
+}
+
+function readStoredPendingReward(playerId?: string): StoredPendingReward | null {
+  const ownerId = playerId || "guest";
+  const storageKey = pendingRewardStorageKey(ownerId);
   try {
-    const raw = window.localStorage.getItem(PENDING_REWARD_STORAGE_KEY);
-    if (!raw) return null;
+    let raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      // Migrate the previous single-key record only for the account that owns it.
+      // A different account must never read, acknowledge, or delete that record.
+      const legacyRaw = window.localStorage.getItem(PENDING_REWARD_STORAGE_KEY);
+      if (!legacyRaw) return null;
+      const legacy = JSON.parse(legacyRaw) as StoredPendingReward;
+      if (legacy.playerId !== ownerId) return null;
+      raw = legacyRaw;
+      window.localStorage.setItem(storageKey, raw);
+      window.localStorage.removeItem(PENDING_REWARD_STORAGE_KEY);
+    }
     const value = JSON.parse(raw) as StoredPendingReward;
-    if (!value.requestId || !value.playerId || !value.rewardType
+    if (value.playerId !== ownerId || !value.requestId || !value.rewardType
       || !Number.isFinite(value.rewardAmount) || !Number.isFinite(value.createdAt)
       || Date.now() - value.createdAt > 24 * 60 * 60 * 1000) {
-      window.localStorage.removeItem(PENDING_REWARD_STORAGE_KEY);
+      window.localStorage.removeItem(storageKey);
       return null;
     }
     return value;
@@ -37,19 +53,45 @@ function readStoredPendingReward(): StoredPendingReward | null {
   }
 }
 
-function markStoredRewardApplied(requestId: string): boolean {
+function saveStoredPendingReward(value: StoredPendingReward): boolean {
   try {
-    const stored = readStoredPendingReward();
-    if (!stored || stored.requestId !== requestId) return false;
-    window.localStorage.setItem(PENDING_REWARD_STORAGE_KEY, JSON.stringify({ ...stored, status: "applied" } satisfies StoredPendingReward));
+    const ownerId = value.playerId || "guest";
+    window.localStorage.setItem(pendingRewardStorageKey(ownerId), JSON.stringify(value));
+    const legacyRaw = window.localStorage.getItem(PENDING_REWARD_STORAGE_KEY);
+    if (legacyRaw) {
+      try {
+        const legacy = JSON.parse(legacyRaw) as StoredPendingReward;
+        if (legacy.playerId === ownerId) window.localStorage.removeItem(PENDING_REWARD_STORAGE_KEY);
+      } catch {}
+    }
     return true;
   } catch {
     return false;
   }
 }
 
-function clearStoredPendingReward(): void {
-  try { window.localStorage.removeItem(PENDING_REWARD_STORAGE_KEY); } catch {}
+function markStoredRewardApplied(requestId: string, playerId?: string): boolean {
+  try {
+    const stored = readStoredPendingReward(playerId);
+    if (!stored || stored.requestId !== requestId) return false;
+    return saveStoredPendingReward({ ...stored, status: "applied" });
+  } catch {
+    return false;
+  }
+}
+
+function clearStoredPendingReward(playerId?: string): void {
+  const ownerId = playerId || "guest";
+  try {
+    window.localStorage.removeItem(pendingRewardStorageKey(ownerId));
+    const legacyRaw = window.localStorage.getItem(PENDING_REWARD_STORAGE_KEY);
+    if (legacyRaw) {
+      try {
+        const legacy = JSON.parse(legacyRaw) as StoredPendingReward;
+        if (legacy.playerId === ownerId) window.localStorage.removeItem(PENDING_REWARD_STORAGE_KEY);
+      } catch {}
+    }
+  } catch {}
 }
 
 // STOP uses the existing native Google AdMob integration inside the Android TWA.
@@ -82,10 +124,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       // Persist that the local reward was applied before asking the server to
       // consume the SSV result. If the acknowledgement fails or the app closes,
       // the next mount retries consumption without applying the reward again.
-      const persisted = markStoredRewardApplied(requestId);
+      const persisted = markStoredRewardApplied(requestId, playerId);
       if (persisted) {
         const acknowledged = await acknowledgeRewardResult(requestId);
-        if (acknowledged) clearStoredPendingReward();
+        if (acknowledged) clearStoredPendingReward(playerId);
       }
       setRetryRequestId(null);
       return true;
@@ -109,8 +151,8 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   useEffect(() => { initTwaAdBridge(); }, []);
 
   useEffect(() => {
-    const stored = readStoredPendingReward();
-    if (!stored) return;
+    const stored = readStoredPendingReward(playerId);
+    if (!stored || stored.playerId !== (playerId || "guest")) return;
     if (stored.status === "applied") {
       // The reward was already delivered in the previous session. Block new
       // ads until its server acknowledgement is completed; never reapply it.
@@ -119,7 +161,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       setPhase("pending");
       void acknowledgeRewardResult(stored.requestId).then((acknowledged) => {
         if (acknowledged) {
-          clearStoredPendingReward();
+          clearStoredPendingReward(playerId);
           if (mountedRef.current) {
             setConsumeAckPending(false);
             setErrorDetail("");
@@ -159,13 +201,13 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         const result = await requestRewardedAd(placement, (requestId) => {
           void trackAnalyticsEvent("rewarded_ad_request_created", { metadata: { placement, requestId, phase: "native_request_created" } });
           try {
-            window.localStorage.setItem(PENDING_REWARD_STORAGE_KEY, JSON.stringify({
+            saveStoredPendingReward({
               requestId,
               playerId: playerId || "guest",
               rewardType,
               rewardAmount,
               createdAt: Date.now(),
-            } satisfies StoredPendingReward));
+            });
           } catch {}
         });
         // The server only reports source=admob after validating Google's signed SSV callback.
@@ -193,19 +235,19 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
           void trackAnalyticsEvent("rewarded_ad_pending", { metadata: { placement, requestId: result.requestId, phase: "awaiting_ssv" } });
           setRetryRequestId(result.requestId);
           try {
-            window.localStorage.setItem(PENDING_REWARD_STORAGE_KEY, JSON.stringify({
+            saveStoredPendingReward({
               requestId: result.requestId,
               playerId: playerId || "guest",
               rewardType,
               rewardAmount,
               createdAt: Date.now(),
-            } satisfies StoredPendingReward));
+            });
           } catch {}
           setErrorDetail(result.errorMessage || "El anuncio se ha visto, pero falta la confirmación de Google.");
           if (!mountedRef.current) return;
           setPhase("pending");
         } else {
-          clearStoredPendingReward();
+          clearStoredPendingReward(playerId);
           const detail = [
             result.errorCode != null ? `código ${result.errorCode}` : "",
             result.errorDomain || "",
@@ -240,7 +282,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         if (mountedRef.current) onSkipRef.current();
       }, 5000);
     } catch (error) {
-      const stored = readStoredPendingReward();
+      const stored = readStoredPendingReward(playerId);
       if (stored
         && stored.playerId === (playerId || "guest")
         && stored.rewardType === rewardType
@@ -265,13 +307,13 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   };
 
   const retryConsumeAcknowledgement = async () => {
-    const stored = readStoredPendingReward();
-    if (!stored || stored.status !== "applied" || !mountedRef.current) return;
+    const stored = readStoredPendingReward(playerId);
+    if (!stored || stored.playerId !== (playerId || "guest") || stored.status !== "applied" || !mountedRef.current) return;
     setPhase("loading");
     const acknowledged = await acknowledgeRewardResult(stored.requestId);
     if (!mountedRef.current) return;
     if (acknowledged) {
-      clearStoredPendingReward();
+      clearStoredPendingReward(playerId);
       setConsumeAckPending(false);
       setErrorDetail("");
       setPhase("pre");
@@ -314,7 +356,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       // A definitive non-reward result (for example, the user skipped the ad)
       // must not be restored as a pending confirmation on the next mount.
       if (!result.pendingSsv) {
-        clearStoredPendingReward();
+        clearStoredPendingReward(playerId);
         setRetryRequestId(null);
       }
       setErrorDetail(result.errorMessage || "No se pudo confirmar la recompensa.");
@@ -324,7 +366,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
   if (isPremium) return null;
   const continueWithoutReward = () => {
-    clearStoredPendingReward();
+    clearStoredPendingReward(playerId);
     setRetryRequestId(null);
     onSkipRef.current();
   };
