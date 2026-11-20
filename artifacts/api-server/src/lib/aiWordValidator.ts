@@ -4,9 +4,9 @@ import { and, eq, sql } from "drizzle-orm";
 
 // Fallback word validator backed by an LLM. Used only when the static
 // dictionary cannot answer (i.e. the word isn't in our hand-curated lists
-// for a closed category like fruta/color/animal). Verdicts are cached
-// permanently in `word_validation_cache` so any given (word, category, lang)
-// triple is paid for at most once in the lifetime of the game.
+// for a closed category like fruta/color/animal). Positive verdicts are cached
+// permanently; negative verdicts expire after seven days so a model mistake
+// cannot keep rejecting a valid (word, category, lang) triple indefinitely.
 //
 // Cost model:
 //   - gpt-5-nano is the cheapest model. A single-token "yes"/"no" answer
@@ -25,7 +25,20 @@ const MODEL = "gpt-5-mini";
 
 // Hard ceilings. Tuned to keep monthly bill < 1.5 € even in worst case.
 const GLOBAL_DAILY_LIMIT = 500;
-const PER_PLAYER_DAILY_LIMIT = 10;
+// A full match can contain up to 3 rounds × 12 categories. Allow one full match
+// of uncached words per player while the global cap remains the hard cost ceiling.
+const PER_PLAYER_DAILY_LIMIT = 36;
+const NEGATIVE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Only AI-generated negative verdicts expire; manual and dictionary decisions are authoritative. */
+export function isExpiredNegativeAiVerdict(
+  isValid: boolean,
+  source: string,
+  createdAt: Date,
+  now = Date.now(),
+): boolean {
+  return !isValid && source === "ai" && now - createdAt.getTime() > NEGATIVE_CACHE_TTL_MS;
+}
 
 // Persistent daily quota. The counter lives in PostgreSQL so the limit is
 // shared across Railway replicas, deploys and process restarts.
@@ -119,7 +132,7 @@ export async function lookupCachedValidation(
 ): Promise<boolean | null> {
   try {
     const rows = await db
-      .select({ isValid: wordValidationCacheTable.isValid })
+      .select({ isValid: wordValidationCacheTable.isValid, source: wordValidationCacheTable.source, createdAt: wordValidationCacheTable.createdAt })
       .from(wordValidationCacheTable)
       .where(and(
         eq(wordValidationCacheTable.word, word),
@@ -127,7 +140,12 @@ export async function lookupCachedValidation(
         eq(wordValidationCacheTable.lang, lang),
       ))
       .limit(1);
-    return rows[0]?.isValid ?? null;
+    const row = rows[0];
+    if (!row) return null;
+    // Positive decisions stay cached; a negative decision is rechecked after
+    // seven days so a one-off model mistake cannot reject a valid word forever.
+    if (isExpiredNegativeAiVerdict(row.isValid, row.source, row.createdAt)) return null;
+    return row.isValid;
   } catch (err) {
     console.error("[aiWordValidator] cache lookup failed:", err instanceof Error ? err.message : err);
     return null;
@@ -147,31 +165,21 @@ async function writeCache(
     await db.execute(sql`
       INSERT INTO word_validation_cache (word, category, lang, is_valid, source, model)
       VALUES (${word}, ${category}, ${lang}, ${isValid}, 'ai', ${model})
-      ON CONFLICT (word, category, lang) DO NOTHING
+      ON CONFLICT (word, category, lang) DO UPDATE
+        SET is_valid = EXCLUDED.is_valid,
+            source = 'ai',
+            model = EXCLUDED.model,
+            created_at = NOW()
+        WHERE word_validation_cache.is_valid = false
+          AND word_validation_cache.source = 'ai'
+          AND word_validation_cache.created_at < NOW() - INTERVAL '7 days'
     `);
   } catch (err) {
     console.error("[aiWordValidator] cache write failed:", err instanceof Error ? err.message : err);
   }
 }
 
-// Main entry point. Always cache-first. If no cache hit and quota allows,
-// asks the LLM and caches the verdict. On any failure returns `false` so
-// the player simply gets the same answer they would have gotten before this
-// feature existed — never a 500.
-export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiValidationResult> {
-  const { word, category, lang, playerId = null } = opts;
-
-  if (!word || !category) return { isValid: false, source: "error" };
-
-  const cached = await lookupCachedValidation(word, category, lang);
-  if (cached !== null) return { isValid: cached, source: "cache" };
-
-  const client = getClient();
-  if (!client) return { isValid: false, source: "no_client" };
-
-  if (!(await ensureAiQuotaTables())) return { isValid: false, source: "error" };
-
-  // Cross-replica single-flight without holding a PostgreSQL connection during
+// Cross-replica single-flight without holding a PostgreSQL connection during
 // the external OpenAI call.
 async function claimValidation(key: string): Promise<boolean> {
   const result = await db.execute(sql`
@@ -196,7 +204,7 @@ class QuotaUnavailableError extends Error {
   }
 }
 
-async function reserveDailyQuota(playerId: string | null): Promise<boolean> {
+export async function reserveDailyQuota(playerId: string | null): Promise<boolean> {
   const quotaDate = currentUtcDay();
   try {
     return await db.transaction(async (tx) => {
@@ -239,7 +247,25 @@ async function waitForValidationCache(word: string, category: string, lang: stri
   }
   return null;
 }
-    const claimKey = `${word}\u0000${category}\u0000${lang}`;
+
+// Main entry point. Always cache-first. If no cache hit and quota allows,
+// asks the LLM and caches the verdict. On any failure returns `false` so
+// the player simply gets the same answer they would have gotten before this
+// feature existed — never a 500.
+export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiValidationResult> {
+  const { word, category, lang, playerId = null } = opts;
+
+  if (!word || !category) return { isValid: false, source: "error" };
+
+  const cached = await lookupCachedValidation(word, category, lang);
+  if (cached !== null) return { isValid: cached, source: "cache" };
+
+  const client = getClient();
+  if (!client) return { isValid: false, source: "no_client" };
+
+  if (!(await ensureAiQuotaTables())) return { isValid: false, source: "error" };
+
+      const claimKey = `${word}\u0000${category}\u0000${lang}`;
     let claimed = await claimValidation(claimKey);
     if (!claimed) {
       const waited = await waitForValidationCache(word, category, lang);
@@ -292,7 +318,14 @@ async function waitForValidationCache(word: string, category: string, lang: stri
       await db.execute(sql`
         INSERT INTO word_validation_cache (word, category, lang, is_valid, source, model)
         VALUES (${word}, ${category}, ${lang}, ${isValid}, 'ai', ${MODEL})
-        ON CONFLICT (word, category, lang) DO NOTHING
+        ON CONFLICT (word, category, lang) DO UPDATE
+        SET is_valid = EXCLUDED.is_valid,
+            source = 'ai',
+            model = EXCLUDED.model,
+            created_at = NOW()
+        WHERE word_validation_cache.is_valid = false
+          AND word_validation_cache.source = 'ai'
+          AND word_validation_cache.created_at < NOW() - INTERVAL '7 days'
       `);
 
       return { isValid, source: "ai" as const };
