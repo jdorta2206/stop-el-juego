@@ -499,6 +499,8 @@ export default function SoloGame() {
   const gameOwnerPlayerIdRef = useRef<string | null>(null);
   const appliedRewardRequestIdsRef = useRef<string[]>([]);
   const pendingDoubleBonusRef = useRef<{ bonus: number; aiTotalScore: number } | null>(null);
+  const pendingRewardAckRequestIdRef = useRef<string | null>(null);
+  const pendingRewardAckTypeRef = useRef<null | "extraTime" | "hint" | "double">(null);
   const reportedHalloweenScareRef = useRef<string | null>(null);
   const buildSoloGameRecoveryPayload = (overrides: Record<string, unknown> = {}) => ({
     state: "PLAYING",
@@ -508,7 +510,9 @@ export default function SoloGame() {
     round,
     totalScore,
     aiTotalScore,
-    rewardedAdType,
+    rewardedAdType: pendingRewardAckTypeRef.current ?? rewardedAdType,
+    pendingRewardAckRequestId: pendingRewardAckRequestIdRef.current,
+    pendingRewardAckType: pendingRewardAckTypeRef.current,
     rewardedUsed,
     hintUsed,
     doubleUsed,
@@ -634,6 +638,8 @@ export default function SoloGame() {
       if (player?.id) clearSoloGameRecovery(player.id);
       appliedRewardRequestIdsRef.current = [];
       pendingDoubleBonusRef.current = null;
+      pendingRewardAckRequestIdRef.current = null;
+      pendingRewardAckTypeRef.current = null;
     }
     if (!gameSubmissionIdRef.current) gameSubmissionIdRef.current = createSubmissionId();
     if (newGame) {
@@ -1515,6 +1521,9 @@ export default function SoloGame() {
     // before AdSystemFixed could mark its request as applied. In that case the
     // durable game snapshot is authoritative: acknowledge without applying again.
     if (previouslyApplied.includes(requestId)) {
+      const savedType = existing?.payload.pendingRewardAckType ?? existing?.payload.rewardedAdType;
+      pendingRewardAckRequestIdRef.current = requestId;
+      pendingRewardAckTypeRef.current = savedType === "extraTime" || savedType === "hint" || savedType === "double" ? savedType : null;
       setRewardedAdType(null);
       return;
     }
@@ -1529,7 +1538,8 @@ export default function SoloGame() {
     const nextAppliedIds = [...previouslyApplied, requestId];
     const next: Record<string, unknown> = {
       ...saved,
-      rewardedAdType: null,
+      pendingRewardAckRequestId: requestId,
+      pendingRewardAckType: rewardType,
       appliedRewardRequestIds: nextAppliedIds,
     };
 
@@ -1562,6 +1572,8 @@ export default function SoloGame() {
       throw new Error("No se pudo guardar la partida antes de aplicar la recompensa. No se aplicará sin recuperación.");
     }
     gameOwnerPlayerIdRef.current = player.id;
+    pendingRewardAckRequestIdRef.current = requestId;
+    pendingRewardAckTypeRef.current = rewardType;
     appliedRewardRequestIdsRef.current = nextAppliedIds;
     pendingHintRef.current = (next.pendingHint as { category: string; word: string } | null) ?? null;
     pendingDoubleBonusRef.current = (next.pendingDoubleBonus as { bonus: number; aiTotalScore: number } | null) ?? null;
@@ -1587,6 +1599,23 @@ export default function SoloGame() {
     setRewardedAdType(null);
     resumeGameTimer();
     window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
+  };
+
+  const handleRewardAcknowledged = (requestId: string) => {
+    if (!player?.id || gameOwnerPlayerIdRef.current !== player.id) return;
+    if (pendingRewardAckRequestIdRef.current && pendingRewardAckRequestIdRef.current !== requestId) return;
+    const snapshot = readSoloGameRecovery(player.id);
+    pendingRewardAckRequestIdRef.current = null;
+    pendingRewardAckTypeRef.current = null;
+    if (snapshot && snapshot.payload.appliedRewardRequestIds && Array.isArray(snapshot.payload.appliedRewardRequestIds)) {
+      saveSoloGameRecovery(player.id, gameMode, packId, {
+        ...snapshot.payload,
+        rewardedAdType: null,
+        pendingRewardAckRequestId: null,
+        pendingRewardAckType: null,
+      });
+    }
+    setRewardedAdType(null);
   };
 
   // Restore an interrupted PLAYING round for this player only. The snapshot
@@ -1659,6 +1688,8 @@ export default function SoloGame() {
     pendingDoubleBonusRef.current = saved.pendingDoubleBonus && typeof saved.pendingDoubleBonus === "object"
       ? saved.pendingDoubleBonus
       : null;
+    pendingRewardAckRequestIdRef.current = typeof saved.pendingRewardAckRequestId === "string" ? saved.pendingRewardAckRequestId : null;
+    pendingRewardAckTypeRef.current = saved.pendingRewardAckType === "extraTime" || saved.pendingRewardAckType === "hint" || saved.pendingRewardAckType === "double" ? saved.pendingRewardAckType : null;
     if (saved.rewardedAdType) window.dispatchEvent(new Event("stop:rewarded-ad-pause"));
     setRoundResults(null);
     stoppedRef.current = false;
@@ -1797,10 +1828,13 @@ export default function SoloGame() {
               resumeGameTimer();
               window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
               pendingHintRef.current = null;
+              pendingRewardAckRequestIdRef.current = null;
+              pendingRewardAckTypeRef.current = null;
               setRewardedAdType(null);
             }}
             playerId={player?.id}
             canStartReward={() => Boolean(player?.id && gameOwnerPlayerIdRef.current === player.id && saveSoloGameRecovery(player.id, gameMode, packId, buildSoloGameRecoveryPayload()))}
+            onRewardAcknowledged={handleRewardAcknowledged}
             isPremium={adsBlocked}
           />
         )}
