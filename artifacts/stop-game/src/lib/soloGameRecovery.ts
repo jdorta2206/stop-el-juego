@@ -204,11 +204,17 @@ export function isRestorableSoloGameRecovery(
       && typeof payload.pendingHint.word === "string");
   const pendingBonusValid = payload.pendingDoubleBonus === undefined || payload.pendingDoubleBonus === null
     || (isRecord(payload.pendingDoubleBonus)
-      && typeof payload.pendingDoubleBonus.playerId === "string"
-      && typeof payload.pendingDoubleBonus.submissionId === "string"
+      // The game snapshot stores only the local recovery amount and AI score.
+      // Player/submission identity lives in the separate durable outbox.
       && typeof payload.pendingDoubleBonus.bonus === "number"
       && Number.isFinite(payload.pendingDoubleBonus.bonus)
-      && payload.pendingDoubleBonus.bonus > 0);
+      && payload.pendingDoubleBonus.bonus > 0
+      && (payload.pendingDoubleBonus.aiTotalScore === undefined
+        || (typeof payload.pendingDoubleBonus.aiTotalScore === "number"
+          && Number.isFinite(payload.pendingDoubleBonus.aiTotalScore)
+          && payload.pendingDoubleBonus.aiTotalScore >= 0))
+      && (payload.pendingDoubleBonus.playerId === undefined || typeof payload.pendingDoubleBonus.playerId === "string")
+      && (payload.pendingDoubleBonus.submissionId === undefined || typeof payload.pendingDoubleBonus.submissionId === "string"));
   return (payload.state === "PLAYING" || payload.state === "RESULTS")
     && typeof payload.currentLetter === "string"
     && payload.currentLetter.trim().length > 0
