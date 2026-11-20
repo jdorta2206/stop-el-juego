@@ -248,7 +248,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
           try {
             saveStoredPendingReward({
               requestId: result.requestId,
-              playerId: playerId || "guest",
+              playerId,
               rewardType,
               rewardAmount,
               createdAt: Date.now(),
@@ -295,7 +295,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     } catch (error) {
       const stored = readStoredPendingReward(playerId);
       if (stored
-        && stored.playerId === (playerId || "guest")
+        && stored.playerId === playerId
         && stored.rewardType === rewardType
         && stored.rewardAmount === rewardAmount) {
         // The native request may already have started before the bridge/poll
@@ -319,7 +319,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
   const retryConsumeAcknowledgement = async () => {
     const stored = readStoredPendingReward(playerId);
-    if (!stored || stored.playerId !== (playerId || "guest") || stored.status !== "applied" || !mountedRef.current) return;
+    if (!stored || stored.playerId !== playerId || stored.status !== "applied" || !mountedRef.current) return;
     setPhase("loading");
     const acknowledged = await acknowledgeRewardResult(stored.requestId);
     if (!mountedRef.current) return;
