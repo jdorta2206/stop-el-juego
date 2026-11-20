@@ -1514,6 +1514,7 @@ export default function SoloGame() {
       throw new Error("No se puede recuperar la partida sin identificar al jugador y la recompensa.");
     }
     const existing = readSoloGameRecovery(player.id);
+    if (existing) gameOwnerPlayerIdRef.current = player.id;
     const previouslyApplied = Array.isArray(existing?.payload.appliedRewardRequestIds)
       ? existing.payload.appliedRewardRequestIds.filter((id): id is string => typeof id === "string")
       : [];
