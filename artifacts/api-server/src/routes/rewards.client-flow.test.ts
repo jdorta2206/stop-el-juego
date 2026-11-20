@@ -80,6 +80,9 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(normalPending).toBeGreaterThan(retryConsume);
     expect(rewardedSource).toContain('status?: "pending" | "applied"');
     expect(rewardedSource).toContain("if (acknowledged) clearStoredPendingReward()");
+    expect(rewardedSource).toContain("const [consumeAckPending, setConsumeAckPending] = useState(false)");
+    expect(rewardedSource).toContain("retryConsumeAcknowledgement");
+    expect(rewardedSource).toContain("consumeAckPending ? retryConsumeAcknowledgement : retryConfirmation");
     expect(bridgeSource).toContain("Promise<boolean>");
     expect(bridgeSource).toContain("if (response.ok) return true");
     expect(bridgeSource).toContain("return false");
