@@ -163,3 +163,21 @@ export function clearPendingDoubleBonus(playerId: string, submissionId: string):
     return false;
   }
 }
+
+/**
+ * Validate that a persisted snapshot belongs to the currently selected game
+ * and contains the minimum state needed to resume it safely.
+ */
+export function isRestorableSoloGameRecovery(
+  snapshot: SoloGameRecoverySnapshot | null,
+  gameMode: string,
+  packId: string,
+): snapshot is SoloGameRecoverySnapshot {
+  if (!snapshot || snapshot.gameMode !== gameMode || snapshot.packId !== packId) return false;
+  const payload = snapshot.payload;
+  return (payload.state === "PLAYING" || payload.state === "RESULTS")
+    && typeof payload.currentLetter === "string"
+    && typeof payload.timeLeft === "number"
+    && Number.isFinite(payload.timeLeft)
+    && Array.isArray(payload.categories);
+}
