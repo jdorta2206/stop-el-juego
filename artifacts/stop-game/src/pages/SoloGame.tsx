@@ -1369,7 +1369,7 @@ export default function SoloGame() {
               bonus: isBonus,
               scoreTokens: leaderboardScoreTokens,
             });
-            if (isBonus) clearPendingDoubleBonus(player.id, submissionId);
+            clearBonusRecovery();
             const offMsg =
               lang === "en" ? "Offline — verified rounds will sync when you're back." :
               lang === "pt" ? "Offline — as rondas verificadas sincronizam quando voltares." :
