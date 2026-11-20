@@ -63,6 +63,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
+  const [consumeAckPending, setConsumeAckPending] = useState(false);
   const t = getT();
   const timeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const mountedRef = useRef(true);
@@ -111,10 +112,20 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     const stored = readStoredPendingReward();
     if (!stored) return;
     if (stored.status === "applied") {
-      // The reward was already delivered in the previous session. Only retry
-      // the server acknowledgement; never run onComplete for this request again.
+      // The reward was already delivered in the previous session. Block new
+      // ads until its server acknowledgement is completed; never reapply it.
+      setConsumeAckPending(true);
+      setErrorDetail("La recompensa anterior ya se aplicó. Falta cerrar su confirmación con el servidor.");
+      setPhase("pending");
       void acknowledgeRewardResult(stored.requestId).then((acknowledged) => {
-        if (acknowledged) clearStoredPendingReward();
+        if (acknowledged) {
+          clearStoredPendingReward();
+          if (mountedRef.current) {
+            setConsumeAckPending(false);
+            setErrorDetail("");
+            setPhase("pre");
+          }
+        }
       });
       return;
     }
@@ -253,6 +264,23 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     }
   };
 
+  const retryConsumeAcknowledgement = async () => {
+    const stored = readStoredPendingReward();
+    if (!stored || stored.status !== "applied" || !mountedRef.current) return;
+    setPhase("loading");
+    const acknowledged = await acknowledgeRewardResult(stored.requestId);
+    if (!mountedRef.current) return;
+    if (acknowledged) {
+      clearStoredPendingReward();
+      setConsumeAckPending(false);
+      setErrorDetail("");
+      setPhase("pre");
+    } else {
+      setErrorDetail("La recompensa ya está aplicada. No vuelvas a ver otro anuncio todavía; reintenta cerrar la confirmación.");
+      setPhase("pending");
+    }
+  };
+
   const retryConfirmation = async () => {
     if (!retryRequestId || !mountedRef.current) return;
     setPhase("loading");
@@ -302,5 +330,5 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   };
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : phase === "pending" ? "Confirmación pendiente" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={continueWithoutReward} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar o confirmar el anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={continueWithoutReward} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}
-      {phase === "pending" && <><div className="py-8 text-4xl">⏳</div><p className="text-sm text-gray-700">El anuncio se ha visto, pero Google todavía no ha confirmado la recompensa. No se concederá hasta recibir la verificación segura.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={retryConfirmation} className="w-full py-3 mt-4 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Reintentar comprobación</button><button onClick={continueWithoutReward} className="w-full py-2 mt-2 text-gray-500">Continuar sin recompensa</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
+      {phase === "pending" && <><div className="py-8 text-4xl">⏳</div><p className="text-sm text-gray-700">{consumeAckPending ? "La recompensa anterior ya se aplicó. Solo falta confirmar al servidor que se ha cerrado; no se volverá a aplicar." : "El anuncio se ha visto, pero Google todavía no ha confirmado la recompensa. No se concederá hasta recibir la verificación segura."}</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={consumeAckPending ? retryConsumeAcknowledgement : retryConfirmation} className="w-full py-3 mt-4 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">{consumeAckPending ? "Reintentar cierre" : "Reintentar comprobación"}</button><button onClick={continueWithoutReward} className="w-full py-2 mt-2 text-gray-500">Continuar sin recompensa</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
 }
