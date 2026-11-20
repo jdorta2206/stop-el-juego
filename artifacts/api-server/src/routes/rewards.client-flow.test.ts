@@ -280,6 +280,10 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("pendingBonusRetriesRef.current.add(submissionId)");
     expect(soloGameSource).toContain("pendingDoubleBonus: null");
     expect(soloGameSource).toContain('window.addEventListener("online", retryPendingBonuses)');
+    expect(soloGameSource).toContain('window.addEventListener("focus", retryPendingBonuses)');
+    expect(soloGameSource).toContain('window.addEventListener("pageshow", retryPendingBonuses)');
+    expect(soloGameSource).toContain('document.addEventListener("visibilitychange", retryPendingBonuses)');
+    expect(soloGameSource).toContain("pendingBonusRetryTimersRef.current.clear()");
     expect(soloGameSource).toContain("pendingBonusRetryAttemptsRef.current");
     expect(soloGameSource).toContain("pendingBonusRetryTimersRef.current");
     expect(soloGameSource).toContain("const delays = [5_000, 15_000, 30_000, 60_000]");
