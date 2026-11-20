@@ -507,6 +507,7 @@ export default function SoloGame() {
     round,
     totalScore,
     aiTotalScore,
+    rewardedAdType,
     rewardedUsed,
     hintUsed,
     doubleUsed,
@@ -841,6 +842,7 @@ export default function SoloGame() {
     // Guard: never run more than once per round
     if (stoppedRef.current) return;
     stoppedRef.current = true;
+    if (player?.id) clearSoloGameRecovery(player.id);
 
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -1609,6 +1611,7 @@ export default function SoloGame() {
     setRound(Number.isInteger(saved.round) ? saved.round : 1);
     setTotalScore(Number(saved.totalScore) || 0);
     setAiTotalScore(Number(saved.aiTotalScore) || 0);
+    setRewardedAdType(saved.rewardedAdType === "extraTime" || saved.rewardedAdType === "hint" || saved.rewardedAdType === "double" ? saved.rewardedAdType : null);
     setRewardedUsed(Boolean(saved.rewardedUsed));
     setHintUsed(Boolean(saved.hintUsed));
     setDoubleUsed(Boolean(saved.doubleUsed));
