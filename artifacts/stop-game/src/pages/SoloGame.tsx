@@ -1618,6 +1618,8 @@ export default function SoloGame() {
     pendingRewardAckRequestIdRef.current = null;
     pendingRewardAckTypeRef.current = null;
     setRewardedAdType(null);
+    resumeGameTimer();
+    window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
   };
 
   // Restore an interrupted PLAYING round for this player only. The snapshot
