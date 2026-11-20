@@ -1,6 +1,17 @@
 name: Rewarded AdMob SSV regression
 
 on:
+  push:
+    branches:
+      - "fix/rewarded-game-state-recovery"
+    paths:
+      - "artifacts/api-server/src/lib/admobSsv.ts"
+      - "artifacts/api-server/src/lib/admobSsv.test.ts"
+      - "artifacts/api-server/src/lib/admobRewardPoll.ts"
+      - "artifacts/api-server/src/routes/rewards.ts"
+      - "artifacts/api-server/src/routes/rewards.admob-poll.test.ts"
+      - "artifacts/api-server/src/routes/rewards.client-flow.test.ts"
+      - ".github/workflows/rewarded-ssv-regression.yml"
   pull_request:
     paths:
       - "artifacts/api-server/src/lib/admobSsv.ts"
