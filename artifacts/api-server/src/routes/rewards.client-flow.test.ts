@@ -287,6 +287,8 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("pendingBonusRetryAttemptsRef.current");
     expect(soloGameSource).toContain("pendingBonusRetryTimersRef.current");
     expect(soloGameSource).toContain("const delays = [5_000, 15_000, 30_000, 60_000]");
+    expect(soloGameSource).toContain("if (attempts < delays.length)");
+    expect(soloGameSource).toContain("The durable\n            // outbox remains available for the next app-resume/online event.");
     expect(soloGameSource).toContain("readPendingDoubleBonuses(player.id).find((entry) => entry.submissionId === submissionId)");
     expect(soloGameSource).toContain("pendingBonusRetriesRef.current.delete(submissionId)");
     expect(soloGameSource).toContain("pendingBonusRetriesRef.current.add(submissionId)");
