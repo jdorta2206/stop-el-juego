@@ -1602,24 +1602,26 @@ export default function SoloGame() {
     window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
   };
 
-  const handleRewardAcknowledged = (requestId: string) => {
-    if (!player?.id || gameOwnerPlayerIdRef.current !== player.id) return;
-    if (pendingRewardAckRequestIdRef.current && pendingRewardAckRequestIdRef.current !== requestId) return;
+  const handleRewardAcknowledged = (requestId: string): boolean => {
+    if (!player?.id || (gameOwnerPlayerIdRef.current && gameOwnerPlayerIdRef.current !== player.id)) return false;
+    if (pendingRewardAckRequestIdRef.current && pendingRewardAckRequestIdRef.current !== requestId) return false;
     const snapshot = readSoloGameRecovery(player.id);
-    if (!snapshot || !Array.isArray(snapshot.payload.appliedRewardRequestIds)
-      || !snapshot.payload.appliedRewardRequestIds.includes(requestId)) return;
-    const saved = saveSoloGameRecovery(player.id, gameMode, packId, {
-      ...snapshot.payload,
-      rewardedAdType: null,
-      pendingRewardAckRequestId: null,
-      pendingRewardAckType: null,
-    });
-    if (!saved) return;
+    if (snapshot && Array.isArray(snapshot.payload.appliedRewardRequestIds)
+      && snapshot.payload.appliedRewardRequestIds.includes(requestId)) {
+      const saved = saveSoloGameRecovery(player.id, gameMode, packId, {
+        ...snapshot.payload,
+        rewardedAdType: null,
+        pendingRewardAckRequestId: null,
+        pendingRewardAckType: null,
+      });
+      if (!saved) return false;
+    }
     pendingRewardAckRequestIdRef.current = null;
     pendingRewardAckTypeRef.current = null;
     setRewardedAdType(null);
     resumeGameTimer();
     window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
+    return true;
   };
 
   // Restore an interrupted PLAYING round for this player only. The snapshot
