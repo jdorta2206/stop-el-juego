@@ -1759,7 +1759,10 @@ export default function SoloGame() {
     pendingRewardAckTypeRef.current = saved.pendingRewardAckType === "extraTime" || saved.pendingRewardAckType === "hint" || saved.pendingRewardAckType === "double" ? saved.pendingRewardAckType : null;
     if (saved.rewardedAdType && saved.state === "PLAYING") window.dispatchEvent(new Event("stop:rewarded-ad-pause"));
     stoppedRef.current = saved.state === "RESULTS";
-    resultsAppliedRef.current = saved.resultsApplied === true || saved.state === "RESULTS";
+    // RESULTS alone does not prove that its processing effect completed.
+    // Re-run it when the durable marker is absent; score submission uses the
+    // stable submissionId so a retry cannot credit the same result twice.
+    resultsAppliedRef.current = saved.resultsApplied === true;
     setGameState(saved.state === "RESULTS" ? "RESULTS" : "PLAYING");
 
     if (pendingDoubleBonusRef.current && gameSubmissionIdRef.current) {
