@@ -69,7 +69,7 @@ describe("rewarded AdMob client safety regressions", () => {
   });
 
   it("persists an applied marker before consume and retries consume without reapplying", () => {
-    const markApplied = rewardedSource.indexOf("const persisted = markStoredRewardApplied(requestId)");
+    const markApplied = rewardedSource.indexOf("const persisted = markStoredRewardApplied(requestId, playerId)");
     const consume = rewardedSource.indexOf("await acknowledgeRewardResult(requestId)", markApplied);
     const appliedMount = rewardedSource.indexOf('if (stored.status === "applied")');
     const retryConsume = rewardedSource.indexOf("acknowledgeRewardResult(stored.requestId)", appliedMount);
@@ -80,7 +80,7 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(retryConsume).toBeGreaterThan(appliedMount);
     expect(normalPending).toBeGreaterThan(retryConsume);
     expect(rewardedSource).toContain('status?: "pending" | "applied"');
-    expect(rewardedSource).toContain("if (acknowledged) clearStoredPendingReward()");
+    expect(rewardedSource).toContain("if (acknowledged) clearStoredPendingReward(playerId)");
     expect(rewardedSource).toContain("const [consumeAckPending, setConsumeAckPending] = useState(false)");
     expect(rewardedSource).toContain("retryConsumeAcknowledgement");
     expect(rewardedSource).toContain("consumeAckPending ? retryConsumeAcknowledgement : retryConfirmation");
