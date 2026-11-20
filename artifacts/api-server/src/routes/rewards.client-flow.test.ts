@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readResult } from "../../../stop-game/src/lib/twaAdBridge.ts";
+import { clearSoloGameRecovery, readSoloGameRecovery, saveSoloGameRecovery } from "../../../stop-game/src/lib/soloGameRecovery.ts";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -151,6 +152,39 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(bridgeSource).toContain('let pendingPlayerId = "";');
     expect(bridgeSource).toContain("if (!pendingPlayerId)");
     expect(rewardedSource).toContain("if (!playerId?.trim()) {");
+  });
+
+
+  it("stores recovery snapshots per player and rejects a different owner", () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", { state: "PLAYING", timeLeft: 24 })).toBe(true);
+    expect(readSoloGameRecovery("player-a")?.payload.timeLeft).toBe(24);
+    expect(readSoloGameRecovery("player-b")).toBeNull();
+    clearSoloGameRecovery("player-a");
+    expect(readSoloGameRecovery("player-a")).toBeNull();
+  });
+
+  it("expires an interrupted game snapshot after 24 hours", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-20T10:00:00.000Z"));
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    saveSoloGameRecovery("player-a", "normal", "classic", { state: "PLAYING" });
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000 + 1);
+    expect(readSoloGameRecovery("player-a")).toBeNull();
   });
 
   it("persists the complete active round before applying a rewarded effect and records request ids", () => {
