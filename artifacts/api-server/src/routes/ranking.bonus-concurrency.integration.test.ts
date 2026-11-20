@@ -1,20 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import pg from "pg";
-
 const databaseUrl = process.env.DATABASE_URL_TEST;
 const suite = databaseUrl ? describe : describe.skip;
-const { Pool } = pg;
 
 suite("PostgreSQL bonus-claim transaction concurrency", () => {
   const schema = `bonus_race_${randomUUID().replace(/-/g, "")}`;
-  const pool = new Pool({ connectionString: databaseUrl, max: 4 });
-  let first: pg.PoolClient;
-  let second: pg.PoolClient;
+  let pool: typeof import("@workspace/db").pool;
+  let first: Awaited<ReturnType<typeof pool.connect>>;
+  let second: Awaited<ReturnType<typeof pool.connect>>;
 
   const table = (name: string) => `"${schema}"."${name}"`;
 
   beforeAll(async () => {
+    process.env.DATABASE_URL = databaseUrl!;
+    ({ pool } = await import("@workspace/db"));
     await pool.query(`CREATE SCHEMA "${schema}"`);
     await pool.query(`CREATE TABLE ${table("score_submission_claims")} (
       id bigserial PRIMARY KEY,
