@@ -355,6 +355,47 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(isRestorableSoloGameRecovery(readSoloGameRecovery("player-a"), "normal", "classic")).toBe(false);
   });
 
+  it("discards corrupt recovery JSON without preventing a fresh game", () => {
+    const values = new Map<string, string>([["stop_solo_game_recovery_v1:player-a", "{broken-json"]]);
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    expect(readSoloGameRecovery("player-a")).toBeNull();
+    expect(values.has("stop_solo_game_recovery_v1:player-a")).toBe(false);
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "PLAYING", currentLetter: "M", timeLeft: 20, categories: ["Nombre"],
+    })).toBe(true);
+    expect(readSoloGameRecovery("player-a")).not.toBeNull();
+  });
+
+  it("rejects incomplete or unsafe recovery payloads before restoring a round", () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    expect(isRestorableSoloGameRecovery({
+      version: 1, playerId: "player-a", gameMode: "normal", packId: "classic",
+      savedAt: Date.now(), payload: { state: "PLAYING", currentLetter: "", timeLeft: 20, categories: ["Nombre"] },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      version: 1, playerId: "player-a", gameMode: "normal", packId: "classic",
+      savedAt: Date.now(), payload: { state: "PLAYING", currentLetter: "M", timeLeft: -1, categories: ["Nombre"] },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      version: 1, playerId: "player-a", gameMode: "normal", packId: "classic",
+      savedAt: Date.now(), payload: { state: "RESULTS", currentLetter: "M", timeLeft: 0, categories: [] },
+    }, "normal", "classic")).toBe(false);
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", [] as unknown as Record<string, unknown>)).toBe(false);
+  });
+
   it("counts actual ad_impression events separately from rewarded completions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
