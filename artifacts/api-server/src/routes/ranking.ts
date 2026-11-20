@@ -677,7 +677,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       // Throwing rolls back the submission claim inserted above. Returning
       // null here would commit that claim and make every retry look successful.
       if (!claimed) throw new Error("BONUS_CLAIM_ALREADY_CONSUMED");
-      if (rawScore <= 0 || rawScore > claimed.maxScore) return null;
+      if (rawScore <= 0 || rawScore > claimed.maxScore) throw new Error("BONUS_CLAIM_ALREADY_CONSUMED");
 
       if (existing.length > 0) {
         const [updated] = await tx
