@@ -17,6 +17,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
 import { isGameTimerPaused, resumeGameTimer } from "@/lib/timerPauseGuard";
+import { clearSoloGameRecovery, readSoloGameRecovery, saveSoloGameRecovery } from "@/lib/soloGameRecovery";
 import { ContextualPremiumPrompt } from "@/components/ContextualPremiumPrompt";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
@@ -494,7 +495,62 @@ export default function SoloGame() {
   // Stable idempotency key for the logical game score. It survives all round
   // transitions and is replaced only when a genuinely new game starts.
   const gameSubmissionIdRef = useRef<string | null>(null);
+  const recoveryInitializedForPlayerRef = useRef<string | null>(null);
+  const appliedRewardRequestIdsRef = useRef<string[]>([]);
+  const pendingDoubleBonusRef = useRef<{ bonus: number; aiTotalScore: number } | null>(null);
   const reportedHalloweenScareRef = useRef<string | null>(null);
+  const buildSoloGameRecoveryPayload = (overrides: Record<string, unknown> = {}) => ({
+    state: "PLAYING",
+    currentLetter,
+    timeLeft,
+    responses,
+    round,
+    totalScore,
+    aiTotalScore,
+    rewardedUsed,
+    hintUsed,
+    doubleUsed,
+    pendingHint: pendingHintRef.current,
+    categories,
+    randomEvent,
+    hiddenCategoryIdx,
+    spyUsesLeft,
+    spyUsesThisRound,
+    combo,
+    insaneMode,
+    activeCard,
+    cardUsed,
+    sabotageCategory,
+    selectingSabotage,
+    specialReveal,
+    bluffedCategories: Array.from(bluffedCategories),
+    aiBluffSetup,
+    bluffResults,
+    aiBluffReveal,
+    playerJudgedAi,
+    judgingPhase,
+    bluffBonusScore,
+    tutorialActive,
+    isFirstEverGame,
+    aiPersonality,
+    randomRoundTime,
+    bestRoundScore,
+    scoreTokens: [...scoreTokensRef.current],
+    rankingScoreTokens: [...rankingScoreTokensRef.current],
+    gameSubmissionId: gameSubmissionIdRef.current,
+    appliedRewardRequestIds: [...appliedRewardRequestIdsRef.current],
+    pendingDoubleBonus: pendingDoubleBonusRef.current,
+    ...overrides,
+  });
+
+  // Persist the live round frequently (including timer ticks). The write is
+  // synchronous so a confirmed reward can update this same snapshot before
+  // changing React state.
+  useEffect(() => {
+    if (!player?.id || recoveryInitializedForPlayerRef.current !== player.id || gameState !== "PLAYING") return;
+    saveSoloGameRecovery(player.id, gameMode, packId, buildSoloGameRecoveryPayload());
+  });
+
   const createSubmissionId = () => {
     try {
       if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -571,6 +627,11 @@ export default function SoloGame() {
   }, [halloweenScare?.id, player?.id, round]);
 
   const startGame = (newGame = true) => {
+    if (newGame) {
+      if (player?.id) clearSoloGameRecovery(player.id);
+      appliedRewardRequestIdsRef.current = [];
+      pendingDoubleBonusRef.current = null;
+    }
     if (!gameSubmissionIdRef.current) gameSubmissionIdRef.current = createSubmissionId();
     if (newGame) {
       scoreTokensRef.current = [];
@@ -1367,6 +1428,9 @@ export default function SoloGame() {
 
       // Never block the replay transition on an ad. The player must always
       // return to the lobby even if the native TWA bridge/ad fails or times out.
+      if (player?.id) clearSoloGameRecovery(player.id);
+      appliedRewardRequestIdsRef.current = [];
+      pendingDoubleBonusRef.current = null;
       setGameState("LOBBY");
       setRound(1);
       setTotalScore(0);
@@ -1434,37 +1498,191 @@ export default function SoloGame() {
     return "";
   };
 
-  const handleRewardedComplete = async (reward: number) => {
-    // The rewarded component keeps the game paused while the native ad is
-    // actually on screen. Only resume after the reward result is confirmed.
-    resumeGameTimer();
-    window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
+  const handleRewardedComplete = async (reward: number, requestId: string) => {
+    if (!player?.id || !requestId) {
+      throw new Error("No se puede recuperar la partida sin identificar al jugador y la recompensa.");
+    }
+    const existing = readSoloGameRecovery(player.id);
+    const previouslyApplied = Array.isArray(existing?.payload.appliedRewardRequestIds)
+      ? existing.payload.appliedRewardRequestIds.filter((id): id is string => typeof id === "string")
+      : [];
+    // A previous WebView may have persisted the reward effect and then closed
+    // before AdSystemFixed could mark its request as applied. In that case the
+    // durable game snapshot is authoritative: acknowledge without applying again.
+    if (previouslyApplied.includes(requestId)) {
+      setRewardedAdType(null);
+      return;
+    }
+    if (!existing || existing.gameMode !== gameMode || existing.packId !== packId || existing.payload.state !== "PLAYING") {
+      throw new Error("No existe una partida recuperable para aplicar esta recompensa. La recompensa no se marcará como completada.");
+    }
+
+    const nextAppliedIds = [...previouslyApplied, requestId];
+    const next: Record<string, unknown> = {
+      ...buildSoloGameRecoveryPayload(),
+      appliedRewardRequestIds: nextAppliedIds,
+    };
+
     if (rewardedAdType === "extraTime") {
-      setTimeLeft(prev => prev + reward);
-      setRewardedUsed(true);
+      next.timeLeft = Math.max(0, timeLeft) + reward;
+      next.rewardedUsed = true;
     } else if (rewardedAdType === "hint") {
-      const pending = pendingHintRef.current;
-      if (!pending) {
+      const pending = pendingHintRef.current
+        ?? (existing.payload.pendingHint as { category: string; word: string } | null);
+      if (!pending?.category || !pending.word) {
         toast({ title: lang === "en" ? "Hint unavailable" : lang === "pt" ? "Pista indisponível" : lang === "fr" ? "Indice indisponible" : "Pista no disponible", variant: "destructive" });
         throw new Error("La pista ya no está disponible; la recompensa no se ha aplicado.");
       }
-      pendingHintRef.current = null;
-      setResponses(prev => ({ ...prev, [pending.category]: pending.word }));
-      setHintReveal({ category: pending.category, word: pending.word });
-      setTimeout(() => setHintReveal(null), 3500);
+      next.responses = { ...responses, [pending.category]: pending.word };
+      next.pendingHint = null;
+      next.hintUsed = true;
+    } else if (rewardedAdType === "double") {
+      const bonus = Math.max(0, totalScore);
+      next.totalScore = totalScore + bonus;
+      next.doubleUsed = true;
+      if (bonus > 0) next.pendingDoubleBonus = { bonus, aiTotalScore };
+    } else {
+      throw new Error("El tipo de recompensa no está disponible.");
+    }
+
+    // Write the resulting game state AND request id in one localStorage
+    // operation before any React state mutation. Recovery can therefore
+    // distinguish "persisted but callback interrupted" from "not applied".
+    const saved = saveSoloGameRecovery(player.id, gameMode, packId, next);
+    if (!saved) {
+      throw new Error("No se pudo guardar la partida antes de aplicar la recompensa. No se aplicará sin recuperación.");
+    }
+    appliedRewardRequestIdsRef.current = nextAppliedIds;
+
+    if (rewardedAdType === "extraTime") {
+      setTimeLeft(next.timeLeft as number);
+      setRewardedUsed(true);
+    } else if (rewardedAdType === "hint") {
+      const pending = next.pendingHint === null
+        ? (existing.payload.pendingHint as { category: string; word: string } | null) ?? pendingHintRef.current
+        : null;
+      const responseState = next.responses as Record<string, string>;
+      setResponses(responseState);
+      responsesRef.current = responseState;
+      if (pending) {
+        pendingHintRef.current = null;
+        setHintReveal({ category: pending.category, word: pending.word });
+        setTimeout(() => setHintReveal(null), 3500);
+      }
       setHintUsed(true);
     } else if (rewardedAdType === "double") {
-      // Capture the current score once. The bonus is a second leaderboard write;
-      // the server must not consume the round vouchers a second time.
       const bonus = Math.max(0, totalScore);
       if (bonus > 0) {
+        pendingDoubleBonusRef.current = { bonus, aiTotalScore };
         submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
-        setTotalScore(prev => prev + bonus);
-        setDoubleUsed(true);
       }
+      setTotalScore(next.totalScore as number);
+      setDoubleUsed(true);
     }
     setRewardedAdType(null);
+    resumeGameTimer();
+    window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
   };
+
+  // Restore an interrupted PLAYING round for this player only. The snapshot
+  // is bound to the selected mode and pack, and expires after 24 hours.
+  useEffect(() => {
+    if (!player?.id || customPacksLoading || recoveryInitializedForPlayerRef.current === player.id) return;
+    recoveryInitializedForPlayerRef.current = player.id;
+    const snapshot = readSoloGameRecovery(player.id);
+    if (!snapshot) return;
+    if (snapshot.gameMode !== gameMode || snapshot.packId !== packId || snapshot.payload.state !== "PLAYING") {
+      clearSoloGameRecovery(player.id);
+      return;
+    }
+    const saved = snapshot.payload as Record<string, any>;
+    if (typeof saved.currentLetter !== "string" || typeof saved.timeLeft !== "number" || !Array.isArray(saved.categories)) {
+      clearSoloGameRecovery(player.id);
+      return;
+    }
+
+    setCurrentLetter(saved.currentLetter);
+    currentLetterRef.current = saved.currentLetter;
+    setTimeLeft(Math.max(0, saved.timeLeft));
+    setResponses(saved.responses && typeof saved.responses === "object" ? saved.responses : {});
+    responsesRef.current = saved.responses && typeof saved.responses === "object" ? saved.responses : {};
+    setRound(Number.isInteger(saved.round) ? saved.round : 1);
+    setTotalScore(Number(saved.totalScore) || 0);
+    setAiTotalScore(Number(saved.aiTotalScore) || 0);
+    setRewardedUsed(Boolean(saved.rewardedUsed));
+    setHintUsed(Boolean(saved.hintUsed));
+    setDoubleUsed(Boolean(saved.doubleUsed));
+    pendingHintRef.current = saved.pendingHint ?? null;
+    setCategories(saved.categories);
+    categoriesRef.current = saved.categories;
+    setRandomEvent(saved.randomEvent as RandomEvent);
+    setHiddenCategoryIdx(typeof saved.hiddenCategoryIdx === "number" ? saved.hiddenCategoryIdx : null);
+    setSpyUsesLeft(Number.isFinite(saved.spyUsesLeft) ? saved.spyUsesLeft : 1);
+    setSpyUsesThisRound(Number.isFinite(saved.spyUsesThisRound) ? saved.spyUsesThisRound : 0);
+    setCombo(Number(saved.combo) || 0);
+    setInsaneMode(Boolean(saved.insaneMode));
+    setActiveCard(saved.activeCard as PowerCardId | null);
+    setCardUsed(Boolean(saved.cardUsed));
+    setSabotageCategory(saved.sabotageCategory ?? null);
+    setSelectingSabotage(Boolean(saved.selectingSabotage));
+    setSpecialReveal(saved.specialReveal as SpecialReveal);
+    const restoredBluffs = Array.isArray(saved.bluffedCategories) ? saved.bluffedCategories : [];
+    setBluffedCategories(new Set(restoredBluffs));
+    bluffedCategoriesRef.current = new Set(restoredBluffs);
+    setAiBluffSetup(saved.aiBluffSetup ?? null);
+    setBluffResults(Array.isArray(saved.bluffResults) ? saved.bluffResults : []);
+    setAiBluffReveal(saved.aiBluffReveal ?? null);
+    setPlayerJudgedAi(typeof saved.playerJudgedAi === "boolean" ? saved.playerJudgedAi : null);
+    setJudgingPhase(saved.judgingPhase === "ai_bluff" ? "ai_bluff" : "player_bluffs");
+    setBluffBonusScore(Number(saved.bluffBonusScore) || 0);
+    setTutorialActive(Boolean(saved.tutorialActive));
+    setIsFirstEverGame(Boolean(saved.isFirstEverGame));
+    if (saved.aiPersonality) setAiPersonality(saved.aiPersonality as AIPersonality);
+    if (Number.isFinite(saved.randomRoundTime)) setRandomRoundTime(saved.randomRoundTime);
+    setBestRoundScore(Number(saved.bestRoundScore) || 0);
+    scoreTokensRef.current = Array.isArray(saved.scoreTokens) ? saved.scoreTokens : [];
+    rankingScoreTokensRef.current = Array.isArray(saved.rankingScoreTokens) ? saved.rankingScoreTokens : [];
+    gameSubmissionIdRef.current = typeof saved.gameSubmissionId === "string" ? saved.gameSubmissionId : null;
+    appliedRewardRequestIdsRef.current = Array.isArray(saved.appliedRewardRequestIds)
+      ? saved.appliedRewardRequestIds.filter((id: unknown): id is string => typeof id === "string")
+      : [];
+    pendingDoubleBonusRef.current = saved.pendingDoubleBonus && typeof saved.pendingDoubleBonus === "object"
+      ? saved.pendingDoubleBonus
+      : null;
+    setRewardedAdType(null);
+    setRoundResults(null);
+    stoppedRef.current = false;
+    resultsAppliedRef.current = false;
+    setGameState("PLAYING");
+
+    if (pendingDoubleBonusRef.current) {
+      submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true });
+    }
+
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (saved.timeLeft <= 0) {
+      stopTimeoutRef.current = window.setTimeout(() => {
+        stopTimeoutRef.current = null;
+        void handleStop();
+      }, 0);
+    } else {
+      timerRef.current = setInterval(() => {
+        if (gameTimerPausedRef.current || isGameTimerPaused()) return;
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current = null;
+            stopTimeoutRef.current = setTimeout(() => {
+              stopTimeoutRef.current = null;
+              void handleStop();
+            }, 0);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  }, [player?.id, customPacksLoading, gameMode, packId]);
 
   // Bluff reveal sounds — play as each result animates in (1.4s per card)
   const bluffSoundFiredRef = useRef(false);
