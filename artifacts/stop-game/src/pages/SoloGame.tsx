@@ -1606,16 +1606,17 @@ export default function SoloGame() {
     if (!player?.id || gameOwnerPlayerIdRef.current !== player.id) return;
     if (pendingRewardAckRequestIdRef.current && pendingRewardAckRequestIdRef.current !== requestId) return;
     const snapshot = readSoloGameRecovery(player.id);
+    if (!snapshot || !Array.isArray(snapshot.payload.appliedRewardRequestIds)
+      || !snapshot.payload.appliedRewardRequestIds.includes(requestId)) return;
+    const saved = saveSoloGameRecovery(player.id, gameMode, packId, {
+      ...snapshot.payload,
+      rewardedAdType: null,
+      pendingRewardAckRequestId: null,
+      pendingRewardAckType: null,
+    });
+    if (!saved) return;
     pendingRewardAckRequestIdRef.current = null;
     pendingRewardAckTypeRef.current = null;
-    if (snapshot && snapshot.payload.appliedRewardRequestIds && Array.isArray(snapshot.payload.appliedRewardRequestIds)) {
-      saveSoloGameRecovery(player.id, gameMode, packId, {
-        ...snapshot.payload,
-        rewardedAdType: null,
-        pendingRewardAckRequestId: null,
-        pendingRewardAckType: null,
-      });
-    }
     setRewardedAdType(null);
   };
 
