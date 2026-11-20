@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readResult } from "../../../stop-game/src/lib/twaAdBridge.ts";
-import { clearSoloGameRecovery, readSoloGameRecovery, saveSoloGameRecovery } from "../../../stop-game/src/lib/soloGameRecovery.ts";
+import { clearPendingDoubleBonus, clearSoloGameRecovery, readPendingDoubleBonuses, readSoloGameRecovery, savePendingDoubleBonus, saveSoloGameRecovery } from "../../../stop-game/src/lib/soloGameRecovery.ts";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -171,6 +171,32 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(readSoloGameRecovery("player-a")).toBeNull();
   });
 
+  it("keeps double-score submissions in a separate player-scoped durable outbox", () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    const entry = {
+      playerId: "player-a",
+      submissionId: "game-123:bonus",
+      bonus: 42,
+      aiTotalScore: 18,
+      letter: "M",
+      scoreTokens: ["proof-a"],
+    };
+    expect(savePendingDoubleBonus(entry)).toBe(true);
+    expect(savePendingDoubleBonus({ ...entry, bonus: 42 })).toBe(true);
+    expect(readPendingDoubleBonuses("player-a")).toHaveLength(1);
+    expect(readPendingDoubleBonuses("player-b")).toHaveLength(0);
+    expect(readPendingDoubleBonuses("player-a")[0]).toMatchObject(entry);
+    expect(clearPendingDoubleBonus("player-a", entry.submissionId)).toBe(true);
+    expect(readPendingDoubleBonuses("player-a")).toHaveLength(0);
+  });
+
   it("expires an interrupted game snapshot after 24 hours", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-11-20T10:00:00.000Z"));
@@ -223,6 +249,20 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("scoreTokensRef.current = Array.isArray(saved.scoreTokens)");
     expect(soloGameSource).toContain("void handleStop()");
     expect(soloGameSource).toContain("clearSoloGameRecovery(player.id)");
+  });
+
+  it("persists and retries double-score submissions independently of the game snapshot", () => {
+    const persist = soloGameSource.indexOf("const persisted = savePendingDoubleBonus(");
+    const mutate = soloGameSource.indexOf("submitScoreMutation.mutate({", persist);
+    const clearSuccess = soloGameSource.indexOf("clearPendingDoubleBonus(player.id, submissionId)", mutate);
+    const retryEffect = soloGameSource.indexOf("readPendingDoubleBonuses(player.id)");
+    expect(persist).toBeGreaterThan(-1);
+    expect(mutate).toBeGreaterThan(persist);
+    expect(clearSuccess).toBeGreaterThan(mutate);
+    expect(retryEffect).toBeGreaterThan(-1);
+    expect(soloGameSource).toContain("pendingBonusRetriesRef.current.has(entry.submissionId)");
+    expect(soloGameSource).toContain("submissionId: entry.submissionId");
+    expect(soloGameSource).toContain("if (isBonus) clearPendingDoubleBonus(player.id, submissionId)");
   });
 
   it("counts actual ad_impression events separately from rewarded completions", () => {
