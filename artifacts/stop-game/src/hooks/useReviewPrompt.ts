@@ -57,49 +57,62 @@ function saveState(s: ReviewState) {
   } catch {}
 }
 
-export function recordGamePlayed() {
+interface GameCounterRecord { count: number; processedIds: string[]; }
+function readGameCounter(): GameCounterRecord {
   try {
-    const current = safeNumber(localStorage.getItem(GAMES_KEY)) ?? 0;
-    localStorage.setItem(GAMES_KEY, String(current + 1));
+    const raw = localStorage.getItem(GAMES_KEY);
+    if (!raw) return { count: 0, processedIds: [] };
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { count: safeNumber(parsed.count) ?? 0, processedIds: Array.isArray(parsed.processedIds) ? parsed.processedIds.filter((id: unknown): id is string => typeof id === "string").slice(-500) : [] };
+    }
+    return { count: safeNumber(raw) ?? 0, processedIds: [] };
+  } catch { return { count: 0, processedIds: [] }; }
+}
+export function recordGamePlayed(gameId?: string) {
+  try {
+    const current = readGameCounter();
+    if (gameId && current.processedIds.includes(gameId)) return;
+    localStorage.setItem(GAMES_KEY, JSON.stringify({
+      count: current.count + 1,
+      processedIds: gameId ? [...current.processedIds, gameId].slice(-500) : current.processedIds,
+    }));
   } catch {}
 }
 
-function getGamesPlayed(): number {
-  try {
-    return safeNumber(localStorage.getItem(GAMES_KEY)) ?? 0;
-  } catch {
-    return 0;
-  }
-}
+function getGamesPlayed(): number { return readGameCounter().count; }
 
-function loadScoreHistory(): number[] {
+interface ScoreHistoryRecord { scores: number[]; processedIds: string[]; }
+function loadScoreHistoryRecord(): ScoreHistoryRecord {
   try {
     const raw = localStorage.getItem(SCORE_HIST_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .map((x) => safeNumber(x))
-      .filter((x): x is number => x !== null);
-  } catch {
-    return [];
+    if (!raw) return { scores: [], processedIds: [] };
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return { scores: parsed.map(safeNumber).filter((x): x is number => x !== null), processedIds: [] };
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.scores)) return {
+      scores: parsed.scores.map(safeNumber).filter((x): x is number => x !== null),
+      processedIds: Array.isArray(parsed.processedIds) ? parsed.processedIds.filter((id: unknown): id is string => typeof id === "string").slice(-500) : [],
+    };
+    return { scores: [], processedIds: [] };
+  } catch { return { scores: [], processedIds: [] }; }
+}
+export function recordScoreAndPercentile(score: number, gameId?: string): number {
+  const record = loadScoreHistoryRecord();
+  const hist = record.scores;
+  if (gameId && record.processedIds.includes(gameId)) {
+    return hist.length >= PERCENTILE_MIN_HISTORY ? hist.filter((s) => s < score).length / hist.length : 0;
   }
-}
-
-function saveScoreHistory(arr: number[]) {
-  try {
-    localStorage.setItem(SCORE_HIST_KEY, JSON.stringify(arr));
-  } catch {}
-}
-
-export function recordScoreAndPercentile(score: number): number {
-  const hist = loadScoreHistory();
   const fraction =
     hist.length >= PERCENTILE_MIN_HISTORY
       ? hist.filter((s) => s < score).length / hist.length
       : 0;
   const next = [...hist, score].slice(-SCORE_HIST_MAX);
-  saveScoreHistory(next);
+  try {
+    localStorage.setItem(SCORE_HIST_KEY, JSON.stringify({
+      scores: next,
+      processedIds: gameId ? [...record.processedIds, gameId].slice(-500) : record.processedIds,
+    }));
+  } catch {}
   return fraction;
 }
 
