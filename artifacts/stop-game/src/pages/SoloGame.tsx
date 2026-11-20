@@ -1504,7 +1504,7 @@ export default function SoloGame() {
   };
 
   const handleRewardedComplete = async (reward: number, requestId: string) => {
-    if (!player?.id || gameOwnerPlayerIdRef.current !== player.id || !requestId) {
+    if (!player?.id || (gameOwnerPlayerIdRef.current && gameOwnerPlayerIdRef.current !== player.id) || !requestId) {
       throw new Error("No se puede recuperar la partida sin identificar al jugador y la recompensa.");
     }
     const existing = readSoloGameRecovery(player.id);
@@ -1561,6 +1561,7 @@ export default function SoloGame() {
     if (!savedOk) {
       throw new Error("No se pudo guardar la partida antes de aplicar la recompensa. No se aplicará sin recuperación.");
     }
+    gameOwnerPlayerIdRef.current = player.id;
     appliedRewardRequestIdsRef.current = nextAppliedIds;
     pendingHintRef.current = (next.pendingHint as { category: string; word: string } | null) ?? null;
     pendingDoubleBonusRef.current = (next.pendingDoubleBonus as { bonus: number; aiTotalScore: number } | null) ?? null;
@@ -1594,7 +1595,10 @@ export default function SoloGame() {
     if (!player?.id || customPacksLoading || recoveryInitializedForPlayerRef.current === player.id) return;
     recoveryInitializedForPlayerRef.current = player.id;
     const snapshot = readSoloGameRecovery(player.id);
-    if (!snapshot) return;
+    if (!snapshot) {
+      if (!gameOwnerPlayerIdRef.current && gameState === "PLAYING") gameOwnerPlayerIdRef.current = player.id;
+      return;
+    }
     if (snapshot.gameMode !== gameMode || snapshot.packId !== packId || snapshot.payload.state !== "PLAYING") {
       clearSoloGameRecovery(player.id);
       return;
@@ -1688,7 +1692,7 @@ export default function SoloGame() {
         });
       }, 1000);
     }
-  }, [player?.id, customPacksLoading, gameMode, packId]);
+  }, [player?.id, customPacksLoading, gameMode, packId, gameState]);
 
   // Bluff reveal sounds — play as each result animates in (1.4s per card)
   const bluffSoundFiredRef = useRef(false);
