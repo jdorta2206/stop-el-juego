@@ -1275,6 +1275,7 @@ export default function SoloGame() {
         toast({ title: "⚠️ No se pudo guardar el doble de puntos para reintentar.", variant: "destructive" });
         return;
       }
+      pendingBonusRetriesRef.current.add(submissionId);
     }
     if (!isBonus && leaderboardScoreTokens.length === 0) {
       const offMsg =
@@ -1286,6 +1287,19 @@ export default function SoloGame() {
       return;
     }
     const won = finalScore > finalAiScore;
+    const clearBonusRecovery = () => {
+      if (!isBonus) return;
+      clearPendingDoubleBonus(player.id, submissionId);
+      const gameId = submissionId.endsWith(":bonus") ? submissionId.slice(0, -6) : "";
+      const snapshot = readSoloGameRecovery(player.id);
+      if (gameId && snapshot?.payload.gameSubmissionId === gameId && snapshot.payload.pendingDoubleBonus) {
+        saveSoloGameRecovery(player.id, snapshot.gameMode, snapshot.packId, {
+          ...snapshot.payload,
+          pendingDoubleBonus: null,
+        });
+      }
+      if (gameSubmissionIdRef.current === gameId) pendingDoubleBonusRef.current = null;
+    };
     submitScoreMutation.mutate({
       data: {
         submissionId,
@@ -1301,7 +1315,7 @@ export default function SoloGame() {
       }
     }, {
       onSuccess: (response: any) => {
-        if (isBonus) clearPendingDoubleBonus(player.id, submissionId);
+        clearBonusRecovery();
         queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
         // The server updates the streak on score submit; refresh the calendar
         // query so Home / Daily show the new authoritative streak right away.
