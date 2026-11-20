@@ -1389,24 +1389,28 @@ export default function SoloGame() {
           if (typeof navigator === "undefined" || navigator.onLine !== false) {
             const attempts = pendingBonusRetryAttemptsRef.current.get(submissionId) ?? 0;
             const delays = [5_000, 15_000, 30_000, 60_000];
-            const delay = delays[Math.min(attempts, delays.length - 1)];
-            pendingBonusRetryAttemptsRef.current.set(submissionId, attempts + 1);
-            const previousTimer = pendingBonusRetryTimersRef.current.get(submissionId);
-            if (previousTimer) clearTimeout(previousTimer);
-            const timer = setTimeout(() => {
-              pendingBonusRetryTimersRef.current.delete(submissionId);
-              if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-              const pending = readPendingDoubleBonuses(player.id).find((entry) => entry.submissionId === submissionId);
-              if (!pending || pendingBonusRetriesRef.current.has(submissionId)) return;
-              pendingBonusRetriesRef.current.add(submissionId);
-              submitToLeaderboard(pending.bonus, pending.aiTotalScore, {
-                bonus: true,
-                letter: pending.letter,
-                submissionId: pending.submissionId,
-                scoreTokens: pending.scoreTokens,
-              });
-            }, delay);
-            pendingBonusRetryTimersRef.current.set(submissionId, timer);
+            // Limit each automatic retry burst to four attempts. The durable
+            // outbox remains available for the next app-resume/online event.
+            if (attempts < delays.length) {
+              const delay = delays[attempts];
+              pendingBonusRetryAttemptsRef.current.set(submissionId, attempts + 1);
+              const previousTimer = pendingBonusRetryTimersRef.current.get(submissionId);
+              if (previousTimer) clearTimeout(previousTimer);
+              const timer = setTimeout(() => {
+                pendingBonusRetryTimersRef.current.delete(submissionId);
+                if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+                const pending = readPendingDoubleBonuses(player.id).find((entry) => entry.submissionId === submissionId);
+                if (!pending || pendingBonusRetriesRef.current.has(submissionId)) return;
+                pendingBonusRetriesRef.current.add(submissionId);
+                submitToLeaderboard(pending.bonus, pending.aiTotalScore, {
+                  bonus: true,
+                  letter: pending.letter,
+                  submissionId: pending.submissionId,
+                  scoreTokens: pending.scoreTokens,
+                });
+              }, delay);
+              pendingBonusRetryTimersRef.current.set(submissionId, timer);
+            }
           }
         }
         // 📡 Sin conexión: aparcamos la puntuación en la outbox para
