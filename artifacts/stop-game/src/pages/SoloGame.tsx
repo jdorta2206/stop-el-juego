@@ -1612,10 +1612,13 @@ export default function SoloGame() {
     if (!player?.id || (gameOwnerPlayerIdRef.current && gameOwnerPlayerIdRef.current !== player.id)) return false;
     if (pendingRewardAckRequestIdRef.current && pendingRewardAckRequestIdRef.current !== requestId) return false;
     const snapshot = readSoloGameRecovery(player.id);
-    if (snapshot && (!Array.isArray(snapshot.payload.appliedRewardRequestIds)
-      || !snapshot.payload.appliedRewardRequestIds.includes(requestId))) return false;
-    if (snapshot) {
-      const saved = saveSoloGameRecovery(player.id, gameMode, packId, {
+    // If this request belongs to the current durable game snapshot, close its
+    // marker without changing the snapshot's original mode/pack identity.
+    // A missing or newer snapshot is also safe: the rewarded component has
+    // already durably marked this request as applied and the server ACK passed.
+    if (snapshot && Array.isArray(snapshot.payload.appliedRewardRequestIds)
+      && snapshot.payload.appliedRewardRequestIds.includes(requestId)) {
+      const saved = saveSoloGameRecovery(player.id, snapshot.gameMode, snapshot.packId, {
         ...snapshot.payload,
         rewardedAdType: null,
         pendingRewardAckRequestId: null,
@@ -1623,10 +1626,12 @@ export default function SoloGame() {
       });
       if (!saved) return false;
     }
-    pendingRewardAckRequestIdRef.current = null;
-    pendingRewardAckTypeRef.current = null;
+    if (pendingRewardAckRequestIdRef.current === requestId) {
+      pendingRewardAckRequestIdRef.current = null;
+      pendingRewardAckTypeRef.current = null;
+    }
     setRewardedAdType(null);
-    if (!snapshot || snapshot.payload.state === "PLAYING") {
+    if (gameState === "PLAYING") {
       resumeGameTimer();
       window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
     }
