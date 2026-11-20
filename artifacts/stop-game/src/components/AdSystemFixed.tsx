@@ -139,15 +139,20 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         throw new Error("STOP aplicó la recompensa, pero no pudo guardar su confirmación local. No se volverá a aplicar automáticamente en esta sesión.");
       }
       const acknowledged = await acknowledgeRewardResult(requestId);
-      if (acknowledged) {
-        const gameMarkerCleared = onRewardAcknowledgedRef.current?.(requestId) !== false;
-        if (gameMarkerCleared) clearStoredPendingReward(playerId);
-        else {
-          setConsumeAckPending(true);
-          setErrorDetail("El servidor confirmó la recompensa, pero STOP todavía no pudo cerrar su registro local. Reintenta el cierre.");
-          setPhase("pending");
-        }
+      if (!acknowledged) {
+        setConsumeAckPending(true);
+        setErrorDetail("La recompensa ya se aplicó, pero falta confirmar su cierre con el servidor. Reintenta el cierre; no se volverá a aplicar.");
+        setPhase("pending");
+        throw new Error("REWARDED_ACK_PENDING");
       }
+      const gameMarkerCleared = onRewardAcknowledgedRef.current?.(requestId) !== false;
+      if (!gameMarkerCleared) {
+        setConsumeAckPending(true);
+        setErrorDetail("El servidor confirmó la recompensa, pero STOP todavía no pudo cerrar su registro local. Reintenta el cierre.");
+        setPhase("pending");
+        throw new Error("GAME_RECOVERY_MARKER_PENDING");
+      }
+      clearStoredPendingReward(playerId);
       setRetryRequestId(null);
       return true;
     } catch (error) {
@@ -267,8 +272,14 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
                   setPhase("pending");
                 }
               } catch {
-                setRetryRequestId(result.requestId!);
-                setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
+                const stored = readStoredPendingReward(playerId);
+                if (stored?.requestId === result.requestId && stored.status === "applied") {
+                  setConsumeAckPending(true);
+                  setErrorDetail("La recompensa ya está aplicada. Solo falta cerrar su confirmación; no se volverá a aplicar.");
+                } else {
+                  setRetryRequestId(result.requestId!);
+                  setErrorDetail("Google confirmó el anuncio, pero STOP no pudo guardar la recompensa. Puedes reintentar la comprobación.");
+                }
                 setPhase("pending");
               }
             }
@@ -395,7 +406,13 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
               setPhase("pending");
             }
           } catch {
-            setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
+            const stored = readStoredPendingReward(playerId);
+            if (stored?.requestId === retryRequestId && stored.status === "applied") {
+              setConsumeAckPending(true);
+              setErrorDetail("La recompensa ya está aplicada. Solo falta cerrar su confirmación; no se volverá a aplicar.");
+            } else {
+              setErrorDetail("Google confirmó el anuncio, pero STOP no pudo guardar la recompensa. Puedes reintentar la comprobación.");
+            }
             setPhase("pending");
           }
         }
@@ -417,7 +434,9 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
   if (isPremium) return null;
   const continueWithoutReward = () => {
-    clearStoredPendingReward(playerId);
+    // Once applied locally, keep its durable ACK record even if the player
+    // closes the overlay. A later mount must still be able to finish the ACK.
+    if (!consumeAckPending) clearStoredPendingReward(playerId);
     setRetryRequestId(null);
     onSkipRef.current();
   };
