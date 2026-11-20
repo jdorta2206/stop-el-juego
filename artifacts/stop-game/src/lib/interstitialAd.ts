@@ -2,7 +2,7 @@ import { isTwaInterstitialAvailable, requestInterstitialAd } from "@/lib/twaInte
 import { ADMOB_ADS_ENABLED } from "@/lib/admobPolicy";
 
 const GAMES_KEY = "stop_interstitial_games_completed_v1";
-const CONSUMED_KEY = "stop_interstitial_consumed_games_v1";
+const CONSUMED_KEY = "stop_interstitial_consumed_games_v2";
 const EVERY_N_GAMES = 3;
 
 function readNumber(key: string): number {
