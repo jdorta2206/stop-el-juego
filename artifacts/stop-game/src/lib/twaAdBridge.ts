@@ -2,6 +2,8 @@ const RESULT_BASE = "/api/rewards/admob-result";
 // An earned client callback is only a signal. Keep polling for signed AdMob SSV
 // throughout the reconciliation window; never grant an unverified reward.
 const RESULT_TIMEOUT_MS = 300_000;
+// Bound each network request so a stalled WebView fetch cannot hold the poller forever.
+const RESULT_REQUEST_TIMEOUT_MS = 10_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
 export type RewardResult = {
@@ -52,11 +54,14 @@ function makeRequestId(): string {
 }
 
 async function readResult(requestId: string): Promise<RewardResult | null> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), RESULT_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}`, {
       method: "GET",
       credentials: "include",
       cache: "no-store",
+      signal: controller.signal,
     });
     if (!response.ok) return null;
     const data = await response.json();
@@ -77,19 +82,26 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
     return null;
   } catch {
     return null;
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
 export async function acknowledgeRewardResult(requestId: string): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), RESULT_REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}/consume`, {
         method: "POST",
         credentials: "include",
         cache: "no-store",
+        signal: controller.signal,
       });
       if (response.ok) return;
-    } catch {}
+    } catch {} finally {
+      window.clearTimeout(timeout);
+    }
     await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
   }
 }
