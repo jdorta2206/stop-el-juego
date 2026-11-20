@@ -67,6 +67,24 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(clearPending).toBeGreaterThan(missingHint);
   });
 
+  it("persists an applied marker before consume and retries consume without reapplying", () => {
+    const markApplied = rewardedSource.indexOf("const persisted = markStoredRewardApplied(requestId)");
+    const consume = rewardedSource.indexOf("await acknowledgeRewardResult(requestId)", markApplied);
+    const appliedMount = rewardedSource.indexOf('if (stored.status === "applied")');
+    const retryConsume = rewardedSource.indexOf("acknowledgeRewardResult(stored.requestId)", appliedMount);
+    const normalPending = rewardedSource.indexOf("setRetryRequestId(stored.requestId)", appliedMount);
+    expect(markApplied).toBeGreaterThan(-1);
+    expect(consume).toBeGreaterThan(markApplied);
+    expect(appliedMount).toBeGreaterThan(-1);
+    expect(retryConsume).toBeGreaterThan(appliedMount);
+    expect(normalPending).toBeGreaterThan(retryConsume);
+    expect(rewardedSource).toContain('status?: "pending" | "applied"');
+    expect(rewardedSource).toContain("if (acknowledged) clearStoredPendingReward()");
+    expect(bridgeSource).toContain("Promise<boolean>");
+    expect(bridgeSource).toContain("if (response.ok) return true");
+    expect(bridgeSource).toContain("return false");
+  });
+
   it("counts actual ad_impression events separately from rewarded completions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
