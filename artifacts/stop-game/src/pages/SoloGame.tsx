@@ -1363,6 +1363,7 @@ export default function SoloGame() {
         }
       },
       onError: async () => {
+        if (isBonus) pendingBonusRetriesRef.current.delete(submissionId);
         // 📡 Sin conexión: aparcamos la puntuación en la outbox para
         // reenviarla cuando vuelva la red (evento `online` o próximo
         // arranque). Sólo lo hacemos cuando el navegador reporta offline,
@@ -1794,16 +1795,21 @@ export default function SoloGame() {
   // The queue survives a new game clearing the previous round's recovery state.
   useEffect(() => {
     if (!player?.id) return;
-    for (const entry of readPendingDoubleBonuses(player.id)) {
-      if (pendingBonusRetriesRef.current.has(entry.submissionId)) continue;
-      pendingBonusRetriesRef.current.add(entry.submissionId);
-      submitToLeaderboard(entry.bonus, entry.aiTotalScore, {
-        bonus: true,
-        letter: entry.letter,
-        submissionId: entry.submissionId,
-        scoreTokens: entry.scoreTokens,
-      });
-    }
+    const retryPendingBonuses = () => {
+      for (const entry of readPendingDoubleBonuses(player.id)) {
+        if (pendingBonusRetriesRef.current.has(entry.submissionId)) continue;
+        pendingBonusRetriesRef.current.add(entry.submissionId);
+        submitToLeaderboard(entry.bonus, entry.aiTotalScore, {
+          bonus: true,
+          letter: entry.letter,
+          submissionId: entry.submissionId,
+          scoreTokens: entry.scoreTokens,
+        });
+      }
+    };
+    retryPendingBonuses();
+    window.addEventListener("online", retryPendingBonuses);
+    return () => window.removeEventListener("online", retryPendingBonuses);
   }, [player?.id]);
 
   // Bluff reveal sounds — play as each result animates in (1.4s per card)
