@@ -249,6 +249,8 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("scoreTokensRef.current = Array.isArray(saved.scoreTokens)");
     expect(soloGameSource).toContain("void handleStop()");
     expect(soloGameSource).toContain("clearSoloGameRecovery(player.id)");
+    expect(soloGameSource).toContain("resultsAppliedRef.current = saved.resultsApplied === true;");
+    expect(soloGameSource).not.toContain("saved.resultsApplied === true || saved.state === \"RESULTS\"");
   });
 
   it("persists and retries double-score submissions independently of the game snapshot", () => {
