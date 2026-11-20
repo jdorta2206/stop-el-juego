@@ -1760,7 +1760,7 @@ export default function SoloGame() {
     resultsAppliedRef.current = saved.resultsApplied === true || saved.state === "RESULTS";
     setGameState(saved.state === "RESULTS" ? "RESULTS" : "PLAYING");
 
-    if (pendingDoubleBonusRef.current) {
+    if (pendingDoubleBonusRef.current && gameSubmissionIdRef.current) {
       submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true, letter: saved.currentLetter, submissionId: `${gameSubmissionIdRef.current}:bonus` });
     }
 
