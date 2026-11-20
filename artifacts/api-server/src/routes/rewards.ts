@@ -314,8 +314,15 @@ router.post("/admob-result/:requestId/consume", async (req, res) => {
       return;
     }
 
-    // Repeated acknowledgements are idempotent only for this owner.
-    if (existing.rewarded && existing.consumed_at) {
+    // Re-read after a lost race so simultaneous duplicate acknowledgements remain idempotent.
+    const latestRows = await db.execute(sql`
+      SELECT rewarded, consumed_at
+      FROM admob_reward_requests
+      WHERE request_id = ${requestId} AND player_id = ${existing.player_id}
+      LIMIT 1
+    `) as unknown as SqlResult<{ rewarded: boolean; consumed_at: Date | null }>;
+    const latest = latestRows.rows?.[0];
+    if (latest?.rewarded && latest.consumed_at) {
       res.status(204).end();
       return;
     }
