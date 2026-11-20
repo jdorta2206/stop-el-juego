@@ -124,20 +124,24 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   const applyConfirmedRewardOnce = async (requestId: string, amount: number) => {
     if (completedRewardRequestsRef.current.has(requestId)) return false;
     completedRewardRequestsRef.current.add(requestId);
+    let rewardAppliedLocally = false;
     try {
       await onCompleteRef.current(amount);
-      // Persist that the local reward was applied before asking the server to
-      // consume the SSV result. If the acknowledgement fails or the app closes,
-      // the next mount retries consumption without applying the reward again.
+      rewardAppliedLocally = true;
+      // Never report success or consume the server result unless the durable
+      // applied marker was actually written. Keep the in-memory guard if the
+      // local effect succeeded but persistence failed, so retries in this
+      // mounted session cannot apply the same reward twice.
       const persisted = markStoredRewardApplied(requestId, playerId);
-      if (persisted) {
-        const acknowledged = await acknowledgeRewardResult(requestId);
-        if (acknowledged) clearStoredPendingReward(playerId);
+      if (!persisted) {
+        throw new Error("STOP aplicó la recompensa, pero no pudo guardar su confirmación local. No se volverá a aplicar automáticamente en esta sesión.");
       }
+      const acknowledged = await acknowledgeRewardResult(requestId);
+      if (acknowledged) clearStoredPendingReward(playerId);
       setRetryRequestId(null);
       return true;
     } catch (error) {
-      completedRewardRequestsRef.current.delete(requestId);
+      if (!rewardAppliedLocally) completedRewardRequestsRef.current.delete(requestId);
       throw error;
     }
   };
@@ -212,13 +216,16 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         const result = await requestRewardedAd(placement, (requestId) => {
           void trackAnalyticsEvent("rewarded_ad_request_created", { metadata: { placement, requestId, phase: "native_request_created" } });
           try {
-            saveStoredPendingReward({
+            const saved = saveStoredPendingReward({
               requestId,
               playerId,
               rewardType,
               rewardAmount,
               createdAt: Date.now(),
             });
+            if (!saved) {
+              throw new Error("No se pudo guardar la solicitud del anuncio en este dispositivo. Por seguridad, no se abrirá el anuncio.");
+            }
           } catch {}
         });
         // The server only reports source=admob after validating Google's signed SSV callback.
@@ -233,8 +240,11 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
                 if (applied) {
                   void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob", requestId: result.requestId ?? null } });
                   void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "admob", requestId: result.requestId ?? null } });
+                  setPhase("done");
+                } else {
+                  setErrorDetail("Esta recompensa ya se había aplicado en esta sesión. No se volverá a aplicar.");
+                  setPhase("pending");
                 }
-                setPhase("done");
               } catch {
                 setRetryRequestId(result.requestId!);
                 setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
@@ -352,8 +362,11 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
               const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
               void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob", retry: true, requestId: retryRequestId } });
               void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "admob", retry: true, requestId: retryRequestId } });
+              setPhase("done");
+            } else {
+              setErrorDetail("Esta recompensa ya se había aplicado en esta sesión. No se volverá a aplicar.");
+              setPhase("pending");
             }
-            setPhase("done");
           } catch {
             setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
             setPhase("pending");
