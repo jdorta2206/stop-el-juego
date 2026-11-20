@@ -17,6 +17,7 @@ type StoredPendingReward = {
   rewardType: "points" | "hint" | "extraTime";
   rewardAmount: number;
   createdAt: number;
+  status?: "pending" | "applied";
 };
 
 function readStoredPendingReward(): StoredPendingReward | null {
@@ -33,6 +34,17 @@ function readStoredPendingReward(): StoredPendingReward | null {
     return value;
   } catch {
     return null;
+  }
+}
+
+function markStoredRewardApplied(requestId: string): boolean {
+  try {
+    const stored = readStoredPendingReward();
+    if (!stored || stored.requestId !== requestId) return false;
+    window.localStorage.setItem(PENDING_REWARD_STORAGE_KEY, JSON.stringify({ ...stored, status: "applied" } satisfies StoredPendingReward));
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -66,9 +78,13 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     completedRewardRequestsRef.current.add(requestId);
     try {
       await onCompleteRef.current(amount);
-      clearStoredPendingReward();
+      // Persist that the local reward was applied before asking the server to
+      // consume the SSV result. If the acknowledgement fails or the app closes,
+      // the next mount retries consumption without applying the reward again.
+      markStoredRewardApplied(requestId);
+      const acknowledged = await acknowledgeRewardResult(requestId);
+      if (acknowledged) clearStoredPendingReward();
       setRetryRequestId(null);
-      void acknowledgeRewardResult(requestId);
       return true;
     } catch (error) {
       completedRewardRequestsRef.current.delete(requestId);
@@ -92,6 +108,14 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   useEffect(() => {
     const stored = readStoredPendingReward();
     if (!stored) return;
+    if (stored.status === "applied") {
+      // The reward was already delivered in the previous session. Only retry
+      // the server acknowledgement; never run onComplete for this request again.
+      void acknowledgeRewardResult(stored.requestId).then((acknowledged) => {
+        if (acknowledged) clearStoredPendingReward();
+      });
+      return;
+    }
     if (stored.playerId !== (playerId || "guest")
       || stored.rewardType !== rewardType
       || stored.rewardAmount !== rewardAmount) return;
