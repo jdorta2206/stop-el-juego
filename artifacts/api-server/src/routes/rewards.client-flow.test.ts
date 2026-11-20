@@ -280,7 +280,12 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("pendingBonusRetriesRef.current.add(submissionId)");
     expect(soloGameSource).toContain("pendingDoubleBonus: null");
     expect(soloGameSource).toContain('window.addEventListener("online", retryPendingBonuses)');
-    expect(soloGameSource).toContain("if (isBonus) pendingBonusRetriesRef.current.delete(submissionId)");
+    expect(soloGameSource).toContain("pendingBonusRetryAttemptsRef.current");
+    expect(soloGameSource).toContain("pendingBonusRetryTimersRef.current");
+    expect(soloGameSource).toContain("const delays = [5_000, 15_000, 30_000, 60_000]");
+    expect(soloGameSource).toContain("readPendingDoubleBonuses(player.id).find((entry) => entry.submissionId === submissionId)");
+    expect(soloGameSource).toContain("pendingBonusRetriesRef.current.delete(submissionId)");
+    expect(soloGameSource).toContain("pendingBonusRetriesRef.current.add(submissionId)");
     expect(soloGameSource).toContain("Never discard the active-game snapshot while its double-score submission");
     expect(soloGameSource).toContain("if (newGame && pendingDoubleBonusRef.current");
     expect(soloGameSource).toContain("const persisted = savePendingDoubleBonus({");
