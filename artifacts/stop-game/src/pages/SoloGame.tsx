@@ -1526,6 +1526,7 @@ export default function SoloGame() {
     const nextAppliedIds = [...previouslyApplied, requestId];
     const next: Record<string, unknown> = {
       ...saved,
+      rewardedAdType: null,
       appliedRewardRequestIds: nextAppliedIds,
     };
 
@@ -1650,7 +1651,7 @@ export default function SoloGame() {
     pendingDoubleBonusRef.current = saved.pendingDoubleBonus && typeof saved.pendingDoubleBonus === "object"
       ? saved.pendingDoubleBonus
       : null;
-    setRewardedAdType(null);
+    if (saved.rewardedAdType) window.dispatchEvent(new Event("stop:rewarded-ad-pause"));
     setRoundResults(null);
     stoppedRef.current = false;
     resultsAppliedRef.current = false;
