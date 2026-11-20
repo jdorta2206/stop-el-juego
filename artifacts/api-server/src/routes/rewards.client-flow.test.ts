@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readResult } from "../../../stop-game/src/lib/twaAdBridge.ts";
-import { clearPendingDoubleBonus, clearSoloGameRecovery, readPendingDoubleBonuses, readSoloGameRecovery, savePendingDoubleBonus, saveSoloGameRecovery } from "../../../stop-game/src/lib/soloGameRecovery.ts";
+import { clearPendingDoubleBonus, clearSoloGameRecovery, readPendingDoubleBonuses, readSoloGameRecovery, savePendingDoubleBonus, saveSoloGameRecovery, isRestorableSoloGameRecovery } from "../../../stop-game/src/lib/soloGameRecovery.ts";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -319,6 +319,40 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("recordInterstitialGameCompleted(gameSubmissionIdRef.current ?? undefined)");
     expect(roomSource).toContain('recordInterstitialGameCompleted(roomCode ? `room:${roomCode.toUpperCase()}` : undefined)');
     expect(roomSource).toContain('recordGamePlayed(roomCode ? `room:${roomCode.toUpperCase()}` : undefined)');
+  });
+
+
+  it("accepts only complete snapshots for the selected mode and pack", () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "PLAYING", currentLetter: "M", timeLeft: 31, categories: ["Nombre", "País"],
+    })).toBe(true);
+    const active = readSoloGameRecovery("player-a");
+    expect(isRestorableSoloGameRecovery(active, "normal", "classic")).toBe(true);
+    expect(isRestorableSoloGameRecovery(active, "daily", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery(active, "normal", "animals")).toBe(false);
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "JUDGING", currentLetter: "M", timeLeft: 0, categories: ["Nombre"],
+    })).toBe(true);
+    expect(isRestorableSoloGameRecovery(readSoloGameRecovery("player-a"), "normal", "classic")).toBe(false);
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "RESULTS", currentLetter: "M", timeLeft: 0, categories: ["Nombre"],
+    })).toBe(true);
+    expect(isRestorableSoloGameRecovery(readSoloGameRecovery("player-a"), "normal", "classic")).toBe(true);
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "PLAYING", currentLetter: "M", timeLeft: Number.NaN, categories: ["Nombre"],
+    })).toBe(true);
+    expect(isRestorableSoloGameRecovery(readSoloGameRecovery("player-a"), "normal", "classic")).toBe(false);
   });
 
   it("counts actual ad_impression events separately from rewarded completions", () => {
