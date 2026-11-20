@@ -1519,66 +1519,64 @@ export default function SoloGame() {
       throw new Error("No existe una partida recuperable para aplicar esta recompensa. La recompensa no se marcará como completada.");
     }
 
+    // Use the durable snapshot as the source of truth. The native activity can
+    // recreate the WebView before the parent component has restored React state.
+    const saved = existing.payload as Record<string, any>;
+    const rewardType = rewardedAdType ?? saved.rewardedAdType;
     const nextAppliedIds = [...previouslyApplied, requestId];
     const next: Record<string, unknown> = {
-      ...buildSoloGameRecoveryPayload(),
+      ...saved,
       appliedRewardRequestIds: nextAppliedIds,
     };
 
-    if (rewardedAdType === "extraTime") {
-      next.timeLeft = Math.max(0, timeLeft) + reward;
+    if (rewardType === "extraTime") {
+      next.timeLeft = Math.max(0, Number(saved.timeLeft) || 0) + reward;
       next.rewardedUsed = true;
-    } else if (rewardedAdType === "hint") {
-      const pending = pendingHintRef.current
-        ?? (existing.payload.pendingHint as { category: string; word: string } | null);
+    } else if (rewardType === "hint") {
+      const pending = saved.pendingHint as { category: string; word: string } | null;
       if (!pending?.category || !pending.word) {
         toast({ title: lang === "en" ? "Hint unavailable" : lang === "pt" ? "Pista indisponível" : lang === "fr" ? "Indice indisponible" : "Pista no disponible", variant: "destructive" });
         throw new Error("La pista ya no está disponible; la recompensa no se ha aplicado.");
       }
-      next.responses = { ...responses, [pending.category]: pending.word };
+      next.responses = { ...(saved.responses ?? {}), [pending.category]: pending.word };
       next.pendingHint = null;
       next.hintUsed = true;
-    } else if (rewardedAdType === "double") {
-      const bonus = Math.max(0, totalScore);
-      next.totalScore = totalScore + bonus;
+    } else if (rewardType === "double") {
+      const bonus = Math.max(0, Number(saved.totalScore) || 0);
+      next.totalScore = (Number(saved.totalScore) || 0) + bonus;
       next.doubleUsed = true;
-      if (bonus > 0) next.pendingDoubleBonus = { bonus, aiTotalScore };
+      if (bonus > 0) next.pendingDoubleBonus = { bonus, aiTotalScore: Number(saved.aiTotalScore) || 0 };
     } else {
-      throw new Error("El tipo de recompensa no está disponible.");
+      throw new Error("El tipo de recompensa no está disponible en la partida guardada.");
     }
 
     // Write the resulting game state AND request id in one localStorage
     // operation before any React state mutation. Recovery can therefore
     // distinguish "persisted but callback interrupted" from "not applied".
-    const saved = saveSoloGameRecovery(player.id, gameMode, packId, next);
-    if (!saved) {
+    const savedOk = saveSoloGameRecovery(player.id, gameMode, packId, next);
+    if (!savedOk) {
       throw new Error("No se pudo guardar la partida antes de aplicar la recompensa. No se aplicará sin recuperación.");
     }
     appliedRewardRequestIdsRef.current = nextAppliedIds;
+    pendingHintRef.current = (next.pendingHint as { category: string; word: string } | null) ?? null;
+    pendingDoubleBonusRef.current = (next.pendingDoubleBonus as { bonus: number; aiTotalScore: number } | null) ?? null;
 
-    if (rewardedAdType === "extraTime") {
-      setTimeLeft(next.timeLeft as number);
+    if (rewardType === "extraTime") {
+      setTimeLeft(Number(next.timeLeft));
       setRewardedUsed(true);
-    } else if (rewardedAdType === "hint") {
-      const pending = next.pendingHint === null
-        ? (existing.payload.pendingHint as { category: string; word: string } | null) ?? pendingHintRef.current
-        : null;
+    } else if (rewardType === "hint") {
+      const pending = saved.pendingHint as { category: string; word: string };
       const responseState = next.responses as Record<string, string>;
       setResponses(responseState);
       responsesRef.current = responseState;
-      if (pending) {
-        pendingHintRef.current = null;
-        setHintReveal({ category: pending.category, word: pending.word });
-        setTimeout(() => setHintReveal(null), 3500);
-      }
+      setHintReveal({ category: pending.category, word: pending.word });
+      setTimeout(() => setHintReveal(null), 3500);
       setHintUsed(true);
-    } else if (rewardedAdType === "double") {
-      const bonus = Math.max(0, totalScore);
-      if (bonus > 0) {
-        pendingDoubleBonusRef.current = { bonus, aiTotalScore };
-        submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
+    } else if (rewardType === "double") {
+      if (pendingDoubleBonusRef.current && gameSubmissionIdRef.current) {
+        submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true });
       }
-      setTotalScore(next.totalScore as number);
+      setTotalScore(Number(next.totalScore));
       setDoubleUsed(true);
     }
     setRewardedAdType(null);
