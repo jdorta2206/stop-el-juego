@@ -46,6 +46,16 @@ export function isTwaAdBridgeAvailable(): boolean {
   }
 }
 
+function getRewardAuthHeaders(): Record<string, string> {
+  try {
+    const token = window.localStorage.getItem("stop_session_token")
+      || window.sessionStorage.getItem("stop_session_token");
+    return token ? { "X-Stop-Token": token } : {};
+  } catch {
+    return {};
+  }
+}
+
 function makeRequestId(): string {
   try {
     if (crypto.randomUUID) return crypto.randomUUID().replace(/-/g, "");
@@ -61,6 +71,7 @@ export async function readResult(requestId: string): Promise<RewardResult | null
     const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}`, {
       method: "GET",
       credentials: "include",
+      headers: getRewardAuthHeaders(),
       cache: "no-store",
       signal: controller.signal,
     });
@@ -96,6 +107,7 @@ export async function acknowledgeRewardResult(requestId: string): Promise<boolea
       const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}/consume`, {
         method: "POST",
         credentials: "include",
+        headers: getRewardAuthHeaders(),
         cache: "no-store",
         signal: controller.signal,
       });
