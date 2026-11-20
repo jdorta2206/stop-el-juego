@@ -1387,7 +1387,9 @@ export default function SoloGame() {
               bonus: isBonus,
               scoreTokens: leaderboardScoreTokens,
             });
-            clearBonusRecovery();
+            // Keep the independent bonus outbox until the server accepts the
+            // submission. enqueueScoreOutbox may fail to persist when localStorage
+            // is unavailable/quota-limited, so transferring is not an ACK.
             const offMsg =
               lang === "en" ? "Offline — verified rounds will sync when you're back." :
               lang === "pt" ? "Offline — as rondas verificadas sincronizam quando voltares." :
