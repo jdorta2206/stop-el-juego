@@ -869,7 +869,6 @@ export default function SoloGame() {
     // Guard: never run more than once per round
     if (stoppedRef.current) return;
     stoppedRef.current = true;
-    if (gameOwnerPlayerIdRef.current) clearSoloGameRecovery(gameOwnerPlayerIdRef.current);
 
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -887,6 +886,18 @@ export default function SoloGame() {
     const currentCategories = categoriesRef.current;
     const currentBluffed = bluffedCategoriesRef.current;
     const letter = currentLetterRef.current;
+
+    // Keep a durable zero-time PLAYING snapshot until validation reaches RESULTS.
+    // If Android recreates the WebView during EVALUATING/JUDGING, recovery can
+    // safely resume this same round and run handleStop again instead of losing it.
+    if (gameOwnerPlayerIdRef.current) {
+      saveSoloGameRecovery(
+        gameOwnerPlayerIdRef.current,
+        gameMode,
+        packId,
+        buildSoloGameRecoveryPayload({ state: "PLAYING", timeLeft: 0, responses: currentResponses }),
+      );
+    }
 
     const formattedResponses = currentCategories.map(cat => ({
       category: cat,
