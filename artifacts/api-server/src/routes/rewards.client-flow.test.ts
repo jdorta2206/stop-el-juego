@@ -68,6 +68,31 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(clearPending).toBeGreaterThan(missingHint);
   });
 
+  it("fails closed when the request cannot be persisted before opening the native ad", () => {
+    const requestCallback = bridgeSource.indexOf("onRequestCreated?.(requestId)");
+    const deepLink = bridgeSource.indexOf("window.location.href = deepLink");
+    expect(requestCallback).toBeGreaterThan(-1);
+    expect(deepLink).toBeGreaterThan(requestCallback);
+    expect(rewardedSource).toContain("const saved = saveStoredPendingReward({");
+    expect(rewardedSource).toContain("if (!saved) {");
+    expect(rewardedSource).toContain("no se abrirá el anuncio");
+  });
+
+  it("does not report completion or consume when the applied marker cannot be persisted", () => {
+    const apply = rewardedSource.indexOf("await onCompleteRef.current(amount)");
+    const persist = rewardedSource.indexOf("const persisted = markStoredRewardApplied(requestId, playerId)", apply);
+    const failure = rewardedSource.indexOf("if (!persisted)", persist);
+    const consume = rewardedSource.indexOf("await acknowledgeRewardResult(requestId)", persist);
+    const analytics = rewardedSource.indexOf('trackAnalyticsEvent("rewarded_ad_completed"');
+    expect(apply).toBeGreaterThan(-1);
+    expect(persist).toBeGreaterThan(apply);
+    expect(failure).toBeGreaterThan(persist);
+    expect(consume).toBeGreaterThan(failure);
+    expect(rewardedSource).toContain("if (!rewardAppliedLocally) completedRewardRequestsRef.current.delete(requestId)");
+    expect(rewardedSource).toContain("No se volverá a aplicar automáticamente en esta sesión.");
+    expect(analytics).toBeGreaterThan(persist);
+  });
+
   it("persists an applied marker before consume and retries consume without reapplying", () => {
     const markApplied = rewardedSource.indexOf("const persisted = markStoredRewardApplied(requestId, playerId)");
     const consume = rewardedSource.indexOf("await acknowledgeRewardResult(requestId)", markApplied);
