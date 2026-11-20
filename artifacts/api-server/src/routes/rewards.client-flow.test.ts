@@ -98,6 +98,20 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardsRouteSource).toContain("verifyClaimedIdentity(req, existing.player_id)");
     expect(rewardsRouteSource).toContain("AND player_id = ${existing.player_id}");
   });
+  it("scopes pending rewards to the owning player and checks ownership before applied ACK recovery", () => {
+    expect(rewardedSource).toContain("function pendingRewardStorageKey(playerId?: string): string");
+    expect(rewardedSource).toContain("pendingRewardStorageKey(ownerId)");
+    expect(rewardedSource).toContain("function saveStoredPendingReward(value: StoredPendingReward): boolean");
+    const ownerCheck = rewardedSource.indexOf('if (!stored || stored.playerId !== (playerId || "guest")) return;');
+    const appliedRecovery = rewardedSource.indexOf('if (stored.status === "applied")');
+    expect(ownerCheck).toBeGreaterThan(-1);
+    expect(appliedRecovery).toBeGreaterThan(ownerCheck);
+    expect(rewardedSource).toContain('if (legacy.playerId !== ownerId) return null;');
+    expect(rewardedSource).toContain('if (legacy.playerId === ownerId) window.localStorage.removeItem(PENDING_REWARD_STORAGE_KEY)');
+    expect(rewardedSource).toContain("readStoredPendingReward(playerId)");
+    expect(rewardedSource).toContain("clearStoredPendingReward(playerId)");
+  });
+
   it("counts actual ad_impression events separately from rewarded completions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
