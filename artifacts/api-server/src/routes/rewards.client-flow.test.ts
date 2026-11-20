@@ -407,6 +407,17 @@ describe("rewarded AdMob client safety regressions", () => {
       randomEvent: "speed", activeCard: "lightning", scoreTokens: ["proof-1"],
     };
     expect(isRestorableSoloGameRecovery({ ...base, payload: validPayload }, "normal", "classic")).toBe(true);
+    // Double-reward snapshots intentionally store only the local amount and AI
+    // score; player/submission identity is persisted in the separate outbox.
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, pendingDoubleBonus: { bonus: 35, aiTotalScore: 20 } },
+    }, "normal", "classic")).toBe(true);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, pendingDoubleBonus: { bonus: -1, aiTotalScore: 20 } },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, pendingDoubleBonus: { bonus: 35, aiTotalScore: 20, submissionId: 42 } },
+    }, "normal", "classic")).toBe(false);
     // Older snapshots did not persist all optional fields; they remain resumable.
     expect(isRestorableSoloGameRecovery({
       ...base, payload: { state: "PLAYING", currentLetter: "M", timeLeft: 20, categories: ["Nombre"] },
