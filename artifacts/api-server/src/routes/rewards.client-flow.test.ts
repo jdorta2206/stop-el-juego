@@ -254,7 +254,7 @@ describe("rewarded AdMob client safety regressions", () => {
   it("persists and retries double-score submissions independently of the game snapshot", () => {
     const persist = soloGameSource.indexOf("const persisted = savePendingDoubleBonus(");
     const mutate = soloGameSource.indexOf("submitScoreMutation.mutate({", persist);
-    const clearSuccess = soloGameSource.indexOf("clearPendingDoubleBonus(player.id, submissionId)", mutate);
+    const clearSuccess = soloGameSource.indexOf("clearBonusRecovery()", mutate);
     const retryEffect = soloGameSource.indexOf("readPendingDoubleBonuses(player.id)");
     expect(persist).toBeGreaterThan(-1);
     expect(mutate).toBeGreaterThan(persist);
@@ -262,7 +262,9 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(retryEffect).toBeGreaterThan(-1);
     expect(soloGameSource).toContain("pendingBonusRetriesRef.current.has(entry.submissionId)");
     expect(soloGameSource).toContain("submissionId: entry.submissionId");
-    expect(soloGameSource).toContain("if (isBonus) clearPendingDoubleBonus(player.id, submissionId)");
+    expect(soloGameSource).toContain("clearPendingDoubleBonus(player.id, submissionId)");
+    expect(soloGameSource).toContain("pendingBonusRetriesRef.current.add(submissionId)");
+    expect(soloGameSource).toContain("pendingDoubleBonus: null");
   });
 
   it("counts actual ad_impression events separately from rewarded completions", () => {
