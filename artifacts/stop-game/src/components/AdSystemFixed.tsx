@@ -106,7 +106,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20, canStartReward, onRewardAcknowledged }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number; canStartReward?: () => boolean; onRewardAcknowledged?: (requestId: string) => void }) {
+export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20, canStartReward, onRewardAcknowledged }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number; canStartReward?: () => boolean; onRewardAcknowledged?: (requestId: string) => boolean }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -139,9 +139,16 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         throw new Error("STOP aplicó la recompensa, pero no pudo guardar su confirmación local. No se volverá a aplicar automáticamente en esta sesión.");
       }
       const acknowledged = await acknowledgeRewardResult(requestId);
-      if (acknowledged) clearStoredPendingReward(playerId);
+      if (acknowledged) {
+        const gameMarkerCleared = onRewardAcknowledgedRef.current?.(requestId) !== false;
+        if (gameMarkerCleared) clearStoredPendingReward(playerId);
+        else {
+          setConsumeAckPending(true);
+          setErrorDetail("El servidor confirmó la recompensa, pero STOP todavía no pudo cerrar su registro local. Reintenta el cierre.");
+          setPhase("pending");
+        }
+      }
       setRetryRequestId(null);
-      if (acknowledged) onRewardAcknowledgedRef.current?.(requestId);
       return true;
     } catch (error) {
       if (!rewardAppliedLocally) completedRewardRequestsRef.current.delete(requestId);
@@ -173,13 +180,18 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       setPhase("pending");
       void acknowledgeRewardResult(stored.requestId).then((acknowledged) => {
         if (acknowledged) {
-          clearStoredPendingReward(playerId);
-          if (mountedRef.current) {
-            setConsumeAckPending(false);
-            setErrorDetail("");
-            setPhase("pre");
+          const gameMarkerCleared = onRewardAcknowledgedRef.current?.(stored.requestId) !== false;
+          if (gameMarkerCleared) {
+            clearStoredPendingReward(playerId);
+            if (mountedRef.current) {
+              setConsumeAckPending(false);
+              setErrorDetail("");
+              setPhase("pre");
+            }
+          } else if (mountedRef.current) {
+            setErrorDetail("El servidor confirmó la recompensa, pero STOP todavía no pudo cerrar su registro local. Reintenta el cierre.");
+            setPhase("pending");
           }
-          onRewardAcknowledgedRef.current?.(stored.requestId);
         }
       });
       return;
@@ -343,11 +355,16 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     const acknowledged = await acknowledgeRewardResult(stored.requestId);
     if (!mountedRef.current) return;
     if (acknowledged) {
-      clearStoredPendingReward(playerId);
-      setConsumeAckPending(false);
-      setErrorDetail("");
-      setPhase("pre");
-      onRewardAcknowledgedRef.current?.(stored.requestId);
+      const gameMarkerCleared = onRewardAcknowledgedRef.current?.(stored.requestId) !== false;
+      if (gameMarkerCleared) {
+        clearStoredPendingReward(playerId);
+        setConsumeAckPending(false);
+        setErrorDetail("");
+        setPhase("pre");
+      } else {
+        setErrorDetail("El servidor confirmó la recompensa, pero STOP todavía no pudo cerrar su registro local. Reintenta el cierre.");
+        setPhase("pending");
+      }
     } else {
       setErrorDetail("La recompensa ya está aplicada. No vuelvas a ver otro anuncio todavía; reintenta cerrar la confirmación.");
       setPhase("pending");
