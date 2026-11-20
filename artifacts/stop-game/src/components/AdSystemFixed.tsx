@@ -215,18 +215,18 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       if (bridgeReady || knownTwa) {
         const result = await requestRewardedAd(placement, (requestId) => {
           void trackAnalyticsEvent("rewarded_ad_request_created", { metadata: { placement, requestId, phase: "native_request_created" } });
-          try {
-            const saved = saveStoredPendingReward({
-              requestId,
-              playerId,
-              rewardType,
-              rewardAmount,
-              createdAt: Date.now(),
-            });
-            if (!saved) {
-              throw new Error("No se pudo guardar la solicitud del anuncio en este dispositivo. Por seguridad, no se abrirá el anuncio.");
-            }
-          } catch {}
+          const saved = saveStoredPendingReward({
+            requestId,
+            playerId,
+            rewardType,
+            rewardAmount,
+            createdAt: Date.now(),
+          });
+          if (!saved) {
+            // Let the error propagate to requestRewardedAd's caller. Its
+            // callback runs before the native deep link is opened.
+            throw new Error("No se pudo guardar la solicitud del anuncio en este dispositivo. Por seguridad, no se abrirá el anuncio.");
+          }
         });
         // The server only reports source=admob after validating Google's signed SSV callback.
         if (result.rewarded === true && result.source === "admob") {
