@@ -185,6 +185,30 @@ export function isRestorableSoloGameRecovery(
     || !snapshot.playerId.trim() || !snapshot.gameMode.trim() || !snapshot.packId.trim()
     || !Number.isFinite(snapshot.savedAt)) return false;
   const payload = snapshot.payload;
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === "object" && !Array.isArray(value);
+  const optionalFinite = (key: string, min = 0) =>
+    payload[key] === undefined || (typeof payload[key] === "number"
+      && Number.isFinite(payload[key]) && (payload[key] as number) >= min);
+  const optionalStringArray = (key: string) =>
+    payload[key] === undefined || (Array.isArray(payload[key])
+      && payload[key].every(item => typeof item === "string"));
+  const validRandomEvents = ["double_xp", "easy_letter", "speed", "hidden_category", "time_bomb", null];
+  const validCards = ["oracle", "sabotage", "double_or_nothing", "steal", "lightning", "shield", null];
+  const responsesValid = payload.responses === undefined || (isRecord(payload.responses)
+    && Object.values(payload.responses).every(answer => typeof answer === "string"));
+  const roundResultsValid = payload.roundResults === undefined || payload.roundResults === null
+    || isRecord(payload.roundResults);
+  const pendingHintValid = payload.pendingHint === undefined || payload.pendingHint === null
+    || (isRecord(payload.pendingHint) && typeof payload.pendingHint.category === "string"
+      && typeof payload.pendingHint.word === "string");
+  const pendingBonusValid = payload.pendingDoubleBonus === undefined || payload.pendingDoubleBonus === null
+    || (isRecord(payload.pendingDoubleBonus)
+      && typeof payload.pendingDoubleBonus.playerId === "string"
+      && typeof payload.pendingDoubleBonus.submissionId === "string"
+      && typeof payload.pendingDoubleBonus.bonus === "number"
+      && Number.isFinite(payload.pendingDoubleBonus.bonus)
+      && payload.pendingDoubleBonus.bonus > 0);
   return (payload.state === "PLAYING" || payload.state === "RESULTS")
     && typeof payload.currentLetter === "string"
     && payload.currentLetter.trim().length > 0
@@ -193,5 +217,20 @@ export function isRestorableSoloGameRecovery(
     && payload.timeLeft >= 0
     && Array.isArray(payload.categories)
     && payload.categories.length > 0
-    && payload.categories.every(category => typeof category === "string" && category.trim().length > 0);
+    && payload.categories.every(category => typeof category === "string" && category.trim().length > 0)
+    && (payload.round === undefined || (Number.isInteger(payload.round)
+      && (payload.round as number) >= 1 && (payload.round as number) <= 3))
+    && optionalFinite("totalScore")
+    && optionalFinite("aiTotalScore")
+    && optionalFinite("spyUsesLeft")
+    && optionalFinite("spyUsesThisRound")
+    && responsesValid
+    && roundResultsValid
+    && pendingHintValid
+    && pendingBonusValid
+    && (payload.randomEvent === undefined || validRandomEvents.includes(payload.randomEvent as string | null))
+    && (payload.activeCard === undefined || validCards.includes(payload.activeCard as string | null))
+    && optionalStringArray("scoreTokens")
+    && optionalStringArray("rankingScoreTokens")
+    && optionalStringArray("appliedRewardRequestIds");
 }
