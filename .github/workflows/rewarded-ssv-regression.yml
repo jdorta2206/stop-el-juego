@@ -8,6 +8,7 @@ on:
       - "artifacts/api-server/src/lib/admobRewardPoll.ts"
       - "artifacts/api-server/src/routes/rewards.ts"
       - "artifacts/api-server/src/routes/rewards.admob-poll.test.ts"
+      - "artifacts/api-server/src/routes/rewards.client-flow.test.ts"
       - "artifacts/api-server/package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -34,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run rewarded SSV regression tests
-        run: pnpm --filter @workspace/api-server exec vitest run src/lib/admobSsv.test.ts src/routes/rewards.admob-poll.test.ts
+        run: pnpm --filter @workspace/api-server exec vitest run src/lib/admobSsv.test.ts src/routes/rewards.admob-poll.test.ts src/routes/rewards.client-flow.test.ts
       - name: Build workspace TypeScript references
         run: pnpm run typecheck:libs
       - name: Typecheck changed SSV helper and regression tests
