@@ -265,6 +265,8 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("clearPendingDoubleBonus(player.id, submissionId)");
     expect(soloGameSource).toContain("pendingBonusRetriesRef.current.add(submissionId)");
     expect(soloGameSource).toContain("pendingDoubleBonus: null");
+    expect(soloGameSource).toContain("Never discard the active-game snapshot while its double-score submission");
+    expect(soloGameSource).toContain("until saving the pending double score");
   });
 
   it("counts actual ad_impression events separately from rewarded completions", () => {
