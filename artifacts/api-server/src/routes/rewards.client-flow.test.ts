@@ -153,6 +153,22 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardedSource).toContain("if (!playerId?.trim()) {");
   });
 
+  it("persists the complete active round before applying a rewarded effect and records request ids", () => {
+    expect(soloGameSource).toContain("saveSoloGameRecovery(player.id, gameMode, packId, next)");
+    expect(soloGameSource).toContain("appliedRewardRequestIds: nextAppliedIds");
+    expect(soloGameSource).toContain("readSoloGameRecovery(player.id)");
+    expect(soloGameSource).toContain('setGameState("PLAYING")');
+    expect(soloGameSource).toContain("pendingDoubleBonusRef.current");
+    expect(rewardedSource).toContain("onCompleteRef.current(amount, requestId)");
+  });
+
+  it("restores a player-owned active round and resumes its timer after a WebView restart", () => {
+    expect(soloGameSource).toContain("recoveryInitializedForPlayerRef.current = player.id");
+    expect(soloGameSource).toContain("scoreTokensRef.current = Array.isArray(saved.scoreTokens)");
+    expect(soloGameSource).toContain("void handleStop()");
+    expect(soloGameSource).toContain("clearSoloGameRecovery(player.id)");
+  });
+
   it("counts actual ad_impression events separately from rewarded completions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
