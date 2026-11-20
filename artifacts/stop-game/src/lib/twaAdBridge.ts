@@ -53,7 +53,8 @@ function makeRequestId(): string {
   return `${Date.now()}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
 }
 
-async function readResult(requestId: string): Promise<RewardResult | null> {
+/** @internal Exported to exercise the real request timeout in regression tests. */
+export async function readResult(requestId: string): Promise<RewardResult | null> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), RESULT_REQUEST_TIMEOUT_MS);
   try {
