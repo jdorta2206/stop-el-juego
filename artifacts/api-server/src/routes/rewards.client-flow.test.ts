@@ -193,6 +193,8 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("readSoloGameRecovery(player.id)");
     expect(soloGameSource).toContain('setGameState("PLAYING")');
     expect(soloGameSource).toContain("pendingDoubleBonusRef.current");
+    expect(soloGameSource).toContain('{ bonus: true, letter: saved.currentLetter }');
+    expect(soloGameSource).toContain('letter: opts?.letter || currentLetter || "?",');
     expect(soloGameSource).toContain("rewardedAdType,");
     expect(soloGameSource).toContain("setRewardedAdType(saved.rewardedAdType");
     expect(rewardedSource).toContain("onCompleteRef.current(amount, requestId)");
