@@ -496,6 +496,7 @@ export default function SoloGame() {
   // transitions and is replaced only when a genuinely new game starts.
   const gameSubmissionIdRef = useRef<string | null>(null);
   const recoveryInitializedForPlayerRef = useRef<string | null>(null);
+  const gameOwnerPlayerIdRef = useRef<string | null>(null);
   const appliedRewardRequestIdsRef = useRef<string[]>([]);
   const pendingDoubleBonusRef = useRef<{ bonus: number; aiTotalScore: number } | null>(null);
   const reportedHalloweenScareRef = useRef<string | null>(null);
@@ -548,7 +549,7 @@ export default function SoloGame() {
   // synchronous so a confirmed reward can update this same snapshot before
   // changing React state.
   useEffect(() => {
-    if (!player?.id || recoveryInitializedForPlayerRef.current !== player.id || gameState !== "PLAYING") return;
+    if (!player?.id || gameOwnerPlayerIdRef.current !== player.id || recoveryInitializedForPlayerRef.current !== player.id || gameState !== "PLAYING") return;
     saveSoloGameRecovery(player.id, gameMode, packId, buildSoloGameRecoveryPayload());
   });
 
@@ -629,6 +630,7 @@ export default function SoloGame() {
 
   const startGame = (newGame = true) => {
     if (newGame) {
+      gameOwnerPlayerIdRef.current = player?.id ?? null;
       if (player?.id) clearSoloGameRecovery(player.id);
       appliedRewardRequestIdsRef.current = [];
       pendingDoubleBonusRef.current = null;
@@ -1431,6 +1433,7 @@ export default function SoloGame() {
       // Never block the replay transition on an ad. The player must always
       // return to the lobby even if the native TWA bridge/ad fails or times out.
       if (player?.id) clearSoloGameRecovery(player.id);
+      gameOwnerPlayerIdRef.current = null;
       appliedRewardRequestIdsRef.current = [];
       pendingDoubleBonusRef.current = null;
       setGameState("LOBBY");
@@ -1501,7 +1504,7 @@ export default function SoloGame() {
   };
 
   const handleRewardedComplete = async (reward: number, requestId: string) => {
-    if (!player?.id || !requestId) {
+    if (!player?.id || gameOwnerPlayerIdRef.current !== player.id || !requestId) {
       throw new Error("No se puede recuperar la partida sin identificar al jugador y la recompensa.");
     }
     const existing = readSoloGameRecovery(player.id);
@@ -1602,6 +1605,7 @@ export default function SoloGame() {
       return;
     }
 
+    gameOwnerPlayerIdRef.current = player.id;
     setCurrentLetter(saved.currentLetter);
     currentLetterRef.current = saved.currentLetter;
     setTimeLeft(Math.max(0, saved.timeLeft));
