@@ -88,7 +88,7 @@ export async function readResult(requestId: string): Promise<RewardResult | null
   }
 }
 
-export async function acknowledgeRewardResult(requestId: string): Promise<void> {
+export async function acknowledgeRewardResult(requestId: string): Promise<boolean> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), RESULT_REQUEST_TIMEOUT_MS);
@@ -99,12 +99,13 @@ export async function acknowledgeRewardResult(requestId: string): Promise<void> 
         cache: "no-store",
         signal: controller.signal,
       });
-      if (response.ok) return;
+      if (response.ok) return true;
     } catch {} finally {
       window.clearTimeout(timeout);
     }
-    await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+    if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
   }
+  return false;
 }
 
 function pollRewardResult(requestId: string): Promise<RewardResult> {
