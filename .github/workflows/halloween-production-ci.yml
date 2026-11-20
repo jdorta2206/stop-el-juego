@@ -14,7 +14,7 @@ on:
       - ".github/workflows/validate-pgs-origin-bridge.yml"
       - ".github/workflows/halloween-production-ci.yml"
   push:
-    branches: [fix/halloween-production-ready, halloween-2026-final]
+    branches: [fix/halloween-production-ready, halloween-2026-final, fix/rewarded-game-state-recovery]
   workflow_dispatch:
 
 concurrency:
