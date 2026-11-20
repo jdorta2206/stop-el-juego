@@ -10,6 +10,10 @@ const readClientSource = (path: string) => readFileSync(resolve(currentDir, path
 const bridgeSource = readClientSource("../../../stop-game/src/lib/twaAdBridge.ts");
 const rewardedSource = readClientSource("../../../stop-game/src/components/AdSystemFixed.tsx");
 const soloGameSource = readClientSource("../../../stop-game/src/pages/SoloGame.tsx");
+const roomSource = readClientSource("../../../stop-game/src/pages/Room.tsx");
+const achievementsSource = readClientSource("../../../stop-game/src/hooks/useAchievements.ts");
+const reviewPromptSource = readClientSource("../../../stop-game/src/hooks/useReviewPrompt.ts");
+const interstitialSource = readClientSource("../../../stop-game/src/lib/interstitialAd.ts");
 const adminAnalyticsSource = readFileSync(resolve(currentDir, "./adminAnalytics.ts"), "utf8");
 const rewardsRouteSource = readFileSync(resolve(currentDir, "./rewards.ts"), "utf8");
 
@@ -277,6 +281,25 @@ describe("rewarded AdMob client safety regressions", () => {
       soloGameSource.indexOf("const offMsg =", soloGameSource.indexOf("await enqueueScoreOutbox({", soloGameSource.indexOf("const submitToLeaderboard"))),
     );
     expect(offlineBonusTransfer).not.toContain("clearBonusRecovery()");
+  });
+
+  it("deduplicates recovered game counters and separates review cadence from interstitial cadence", () => {
+    expect(achievementsSource).toContain("interface AchievementStatsRecord");
+    expect(achievementsSource).toContain("processedRoundIds");
+    expect(achievementsSource).toContain("if (roundId && record.processedRoundIds.includes(roundId)) return;");
+    expect(achievementsSource).toContain("saveStatsLocal(playerId, next, processedRoundIds)");
+    expect(soloGameSource).toContain("${gameSubmissionIdRef.current}:round:${round}");
+    expect(reviewPromptSource).toContain("interface GameCounterRecord");
+    expect(reviewPromptSource).toContain("if (gameId && current.processedIds.includes(gameId)) return;");
+    expect(reviewPromptSource).toContain("recordScoreAndPercentile(score: number, gameId?: string)");
+    expect(soloGameSource).toContain("recordGamePlayed(completedGameId)");
+    expect(soloGameSource).toContain("recordScoreAndPercentile(finalPlayerScore, completedGameId)");
+    expect(interstitialSource).toContain('const GAMES_KEY = "stop_interstitial_games_completed_v1"');
+    expect(interstitialSource).toContain('const CONSUMED_KEY = "stop_interstitial_consumed_games_v2"');
+    expect(interstitialSource).toContain("recordInterstitialGameCompleted(gameId?: string)");
+    expect(soloGameSource).toContain("recordInterstitialGameCompleted(gameSubmissionIdRef.current ?? undefined)");
+    expect(roomSource).toContain('recordInterstitialGameCompleted(roomCode ? `room:${roomCode.toUpperCase()}` : undefined)');
+    expect(roomSource).toContain('recordGamePlayed(roomCode ? `room:${roomCode.toUpperCase()}` : undefined)');
   });
 
   it("counts actual ad_impression events separately from rewarded completions", () => {
