@@ -196,6 +196,9 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("rewardedAdType,");
     expect(soloGameSource).toContain("setRewardedAdType(saved.rewardedAdType");
     expect(rewardedSource).toContain("onCompleteRef.current(amount, requestId)");
+    expect(rewardedSource).toContain("if (canStartReward && !canStartReward())");
+    expect(soloGameSource).toContain("canStartReward={() => Boolean");
+    expect(soloGameSource).toContain("if (previouslyApplied.includes(requestId))");
   });
 
   it("restores a player-owned active round and resumes its timer after a WebView restart", () => {
