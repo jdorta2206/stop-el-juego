@@ -139,11 +139,9 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         throw new Error("STOP aplicó la recompensa, pero no pudo guardar su confirmación local. No se volverá a aplicar automáticamente en esta sesión.");
       }
       const acknowledged = await acknowledgeRewardResult(requestId);
-      if (acknowledged) {
-        clearStoredPendingReward(playerId);
-        onRewardAcknowledgedRef.current?.(requestId);
-      }
+      if (acknowledged) clearStoredPendingReward(playerId);
       setRetryRequestId(null);
+      if (acknowledged) onRewardAcknowledgedRef.current?.(requestId);
       return true;
     } catch (error) {
       if (!rewardAppliedLocally) completedRewardRequestsRef.current.delete(requestId);
@@ -176,12 +174,12 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       void acknowledgeRewardResult(stored.requestId).then((acknowledged) => {
         if (acknowledged) {
           clearStoredPendingReward(playerId);
-          onRewardAcknowledgedRef.current?.(stored.requestId);
           if (mountedRef.current) {
             setConsumeAckPending(false);
             setErrorDetail("");
             setPhase("pre");
           }
+          onRewardAcknowledgedRef.current?.(stored.requestId);
         }
       });
       return;
@@ -346,10 +344,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     if (!mountedRef.current) return;
     if (acknowledged) {
       clearStoredPendingReward(playerId);
-      onRewardAcknowledgedRef.current?.(stored.requestId);
       setConsumeAckPending(false);
       setErrorDetail("");
       setPhase("pre");
+      onRewardAcknowledgedRef.current?.(stored.requestId);
     } else {
       setErrorDetail("La recompensa ya está aplicada. No vuelvas a ver otro anuncio todavía; reintenta cerrar la confirmación.");
       setPhase("pending");
