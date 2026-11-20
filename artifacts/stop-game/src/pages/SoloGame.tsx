@@ -636,6 +636,22 @@ export default function SoloGame() {
   }, [halloweenScare?.id, player?.id, round]);
 
   const startGame = (newGame = true) => {
+    // Never discard the active-game snapshot while its double-score submission
+    // has not been copied into the independent durable outbox.
+    if (newGame && pendingDoubleBonusRef.current && player?.id && player.loginMethod !== "guest" && gameSubmissionIdRef.current) {
+      const persisted = savePendingDoubleBonus({
+        playerId: player.id,
+        submissionId: `${gameSubmissionIdRef.current}:bonus`,
+        bonus: pendingDoubleBonusRef.current.bonus,
+        aiTotalScore: pendingDoubleBonusRef.current.aiTotalScore,
+        letter: currentLetter || "?",
+        scoreTokens: [...scoreTokensRef.current],
+      });
+      if (!persisted) {
+        toast({ title: "⚠️ No se puede iniciar otra partida hasta guardar el doble de puntos pendiente.", variant: "destructive" });
+        return;
+      }
+    }
     if (newGame) {
       gameOwnerPlayerIdRef.current = player?.id ?? null;
       if (player?.id) clearSoloGameRecovery(player.id);
@@ -1290,6 +1306,7 @@ export default function SoloGame() {
     const clearBonusRecovery = () => {
       if (!isBonus) return;
       clearPendingDoubleBonus(player.id, submissionId);
+      pendingBonusRetriesRef.current.delete(submissionId);
       const gameId = submissionId.endsWith(":bonus") ? submissionId.slice(0, -6) : "";
       const snapshot = readSoloGameRecovery(player.id);
       if (gameId && snapshot?.payload.gameSubmissionId === gameId && snapshot.payload.pendingDoubleBonus) {
