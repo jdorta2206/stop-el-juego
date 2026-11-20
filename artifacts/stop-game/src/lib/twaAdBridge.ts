@@ -17,10 +17,10 @@ export type RewardResult = {
 };
 
 let initialized = false;
-let pendingPlayerId = "guest";
+let pendingPlayerId = "";
 
 export function setRewardedAdPlayerId(playerId: string | undefined): void {
-  pendingPlayerId = playerId || "guest";
+  pendingPlayerId = playerId?.trim() || "";
 }
 
 function installResumeListener(): void {
@@ -214,12 +214,13 @@ export function retryRewardedResult(requestId: string): Promise<RewardResult> {
 export async function requestRewardedAd(placement: RewardedPlacement, onRequestCreated?: (requestId: string) => void): Promise<RewardResult> {
   installResumeListener();
   if (typeof window === "undefined") return { rewarded: false, source: "error", errorMessage: "Window unavailable" };
+  if (!pendingPlayerId) return { rewarded: false, source: "error", errorMessage: "No se ha podido identificar al jugador para esta recompensa." };
 
   const requestId = makeRequestId();
   // Persist the identity before handing control to the native fullscreen ad.
   // The web page may be recreated while Android is showing the ad.
   onRequestCreated?.(requestId);
-  const playerId = pendingPlayerId || "guest";
+  const playerId = pendingPlayerId;
   const origin = window.location.origin;
   const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}&playerId=${encodeURIComponent(playerId)}&origin=${encodeURIComponent(origin)}`;
   const resultPromise = pollRewardResult(requestId);
