@@ -17,7 +17,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
 import { isGameTimerPaused, resumeGameTimer } from "@/lib/timerPauseGuard";
-import { clearPendingDoubleBonus, clearSoloGameRecovery, readPendingDoubleBonuses, readSoloGameRecovery, savePendingDoubleBonus, saveSoloGameRecovery } from "@/lib/soloGameRecovery";
+import { clearPendingDoubleBonus, clearSoloGameRecovery, readPendingDoubleBonuses, readSoloGameRecovery, savePendingDoubleBonus, saveSoloGameRecovery, isRestorableSoloGameRecovery } from "@/lib/soloGameRecovery";
 import { ContextualPremiumPrompt } from "@/components/ContextualPremiumPrompt";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
@@ -1742,16 +1742,11 @@ export default function SoloGame() {
       if (!gameOwnerPlayerIdRef.current && gameState === "PLAYING") gameOwnerPlayerIdRef.current = player.id;
       return;
     }
-    if (snapshot.gameMode !== gameMode || snapshot.packId !== packId
-      || (snapshot.payload.state !== "PLAYING" && snapshot.payload.state !== "RESULTS")) {
+    if (!isRestorableSoloGameRecovery(snapshot, gameMode, packId)) {
       clearSoloGameRecovery(player.id);
       return;
     }
     const saved = snapshot.payload as Record<string, any>;
-    if (typeof saved.currentLetter !== "string" || typeof saved.timeLeft !== "number" || !Array.isArray(saved.categories)) {
-      clearSoloGameRecovery(player.id);
-      return;
-    }
 
     gameOwnerPlayerIdRef.current = player.id;
     setCurrentLetter(saved.currentLetter);
