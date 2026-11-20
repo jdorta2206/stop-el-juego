@@ -134,6 +134,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         // The server only reports source=admob after validating Google's signed SSV callback.
         if (result.rewarded === true && result.source === "admob") {
           if (!mountedRef.current) return;
+          void trackAnalyticsEvent("rewarded_ad_ssv_confirmed", { metadata: { placement, requestId: result.requestId ?? null } });
           timeoutRef.current = window.setTimeout(async () => {
             timeoutRef.current = null;
             if (mountedRef.current) {
@@ -233,6 +234,8 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     const result = await retryRewardedResult(retryRequestId);
     if (!mountedRef.current) return;
     if (result.rewarded === true && result.source === "admob") {
+      const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
+      void trackAnalyticsEvent("rewarded_ad_ssv_confirmed", { metadata: { placement, retry: true, requestId: retryRequestId } });
       timeoutRef.current = window.setTimeout(async () => {
         timeoutRef.current = null;
         if (mountedRef.current) {
