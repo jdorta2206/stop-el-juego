@@ -99,10 +99,12 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardsRouteSource).toContain("AND player_id = ${existing.player_id}");
   });
   it("scopes pending rewards to the owning player and checks ownership before applied ACK recovery", () => {
-    expect(rewardedSource).toContain("function pendingRewardStorageKey(playerId?: string): string");
+    expect(rewardedSource).toContain("function pendingRewardStorageKey(playerId: string): string");
+    expect(rewardedSource).toContain("if (!playerId?.trim()) return null;");
+    expect(rewardedSource).toContain("if (!value.playerId?.trim()) return false;");
     expect(rewardedSource).toContain("pendingRewardStorageKey(ownerId)");
     expect(rewardedSource).toContain("function saveStoredPendingReward(value: StoredPendingReward): boolean");
-    const ownerCheck = rewardedSource.indexOf('if (!stored || stored.playerId !== (playerId || "guest")) return;');
+    const ownerCheck = rewardedSource.indexOf('if (!playerId || !stored || stored.playerId !== playerId) return;');
     const appliedRecovery = rewardedSource.indexOf('if (stored.status === "applied")');
     expect(ownerCheck).toBeGreaterThan(-1);
     expect(appliedRecovery).toBeGreaterThan(ownerCheck);
@@ -110,6 +112,12 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardedSource).toContain('if (legacy.playerId === ownerId) window.localStorage.removeItem(PENDING_REWARD_STORAGE_KEY)');
     expect(rewardedSource).toContain("readStoredPendingReward(playerId)");
     expect(rewardedSource).toContain("clearStoredPendingReward(playerId)");
+  });
+
+  it("refuses rewarded requests without a unique player identity", () => {
+    expect(bridgeSource).toContain('let pendingPlayerId = "";');
+    expect(bridgeSource).toContain("if (!pendingPlayerId)");
+    expect(rewardedSource).toContain("if (!playerId?.trim()) {");
   });
 
   it("counts actual ad_impression events separately from rewarded completions", () => {
