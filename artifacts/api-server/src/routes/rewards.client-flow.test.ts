@@ -206,6 +206,9 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardedSource).toContain("onRewardAcknowledgedRef.current?.(requestId)");
     expect(rewardedSource).toContain("onRewardAcknowledged?: (requestId: string) => boolean");
     expect(rewardedSource).toContain("const gameMarkerCleared = onRewardAcknowledgedRef.current?.(requestId) !== false");
+    expect(rewardedSource).toContain('throw new Error("REWARDED_ACK_PENDING")');
+    expect(rewardedSource).toContain("if (!consumeAckPending) clearStoredPendingReward(playerId)");
+    expect(soloGameSource).not.toContain("setRewardedAdType(null);\n      return;");
     expect(soloGameSource).toContain("const handleRewardAcknowledged = (requestId: string): boolean =>");
   });
 
