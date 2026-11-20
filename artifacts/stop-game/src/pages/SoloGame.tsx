@@ -1337,7 +1337,7 @@ export default function SoloGame() {
               playerName: player.name,
               avatarColor: player.avatarColor,
               score: finalScore,
-              letter: currentLetter || "?",
+              letter: opts?.letter || currentLetter || "?",
               mode: isDailyMode ? "daily" : "solo",
               won,
               bonus: isBonus,
@@ -1703,7 +1703,7 @@ export default function SoloGame() {
     setGameState("PLAYING");
 
     if (pendingDoubleBonusRef.current) {
-      submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true });
+      submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true, letter: saved.currentLetter });
     }
 
     if (timerRef.current) clearInterval(timerRef.current);
