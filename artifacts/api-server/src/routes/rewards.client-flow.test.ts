@@ -215,6 +215,7 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardedSource).toContain("{!consumeAckPending && <button onClick={continueWithoutReward}");
     expect(soloGameSource).not.toContain("setRewardedAdType(null);\n      return;");
     expect(soloGameSource).toContain("const handleRewardAcknowledged = (requestId: string): boolean =>");
+    expect(soloGameSource).toContain("saveSoloGameRecovery(player.id, snapshot.gameMode, snapshot.packId");
   });
 
   it("restores a player-owned active round and resumes its timer after a WebView restart", () => {
