@@ -20,7 +20,8 @@ export function saveSoloGameRecovery(
   packId: string,
   payload: Record<string, unknown>,
 ): boolean {
-  if (!playerId.trim() || !gameMode.trim() || !packId.trim()) return false;
+  if (!playerId.trim() || !gameMode.trim() || !packId.trim()
+    || !payload || typeof payload !== "object" || Array.isArray(payload)) return false;
   try {
     const snapshot: SoloGameRecoverySnapshot = {
       version: 1,
@@ -41,27 +42,34 @@ export function readSoloGameRecovery(
   playerId: string,
 ): SoloGameRecoverySnapshot | null {
   if (!playerId.trim()) return null;
+  const key = storageKey(playerId);
   try {
-    const raw = window.localStorage.getItem(storageKey(playerId));
+    const raw = window.localStorage.getItem(key);
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<SoloGameRecoverySnapshot>;
+    const now = Date.now();
     if (
       value.version !== 1
       || value.playerId !== playerId
       || typeof value.gameMode !== "string"
+      || !value.gameMode.trim()
       || typeof value.packId !== "string"
+      || !value.packId.trim()
       || typeof value.savedAt !== "number"
+      || !Number.isFinite(value.savedAt)
       || !value.payload
       || typeof value.payload !== "object"
       || Array.isArray(value.payload)
-      || Date.now() - value.savedAt > MAX_AGE_MS
-      || value.savedAt > Date.now() + 60_000
+      || now - value.savedAt > MAX_AGE_MS
+      || value.savedAt > now + 60_000
     ) {
-      window.localStorage.removeItem(storageKey(playerId));
+      window.localStorage.removeItem(key);
       return null;
     }
     return value as SoloGameRecoverySnapshot;
   } catch {
+    // A corrupt or inaccessible snapshot must never block a fresh game.
+    try { window.localStorage.removeItem(key); } catch { /* best effort */ }
     return null;
   }
 }
@@ -173,11 +181,17 @@ export function isRestorableSoloGameRecovery(
   gameMode: string,
   packId: string,
 ): snapshot is SoloGameRecoverySnapshot {
-  if (!snapshot || snapshot.gameMode !== gameMode || snapshot.packId !== packId) return false;
+  if (!snapshot || snapshot.gameMode !== gameMode || snapshot.packId !== packId
+    || !snapshot.playerId.trim() || !snapshot.gameMode.trim() || !snapshot.packId.trim()
+    || !Number.isFinite(snapshot.savedAt)) return false;
   const payload = snapshot.payload;
   return (payload.state === "PLAYING" || payload.state === "RESULTS")
     && typeof payload.currentLetter === "string"
+    && payload.currentLetter.trim().length > 0
     && typeof payload.timeLeft === "number"
     && Number.isFinite(payload.timeLeft)
-    && Array.isArray(payload.categories);
+    && payload.timeLeft >= 0
+    && Array.isArray(payload.categories)
+    && payload.categories.length > 0
+    && payload.categories.every(category => typeof category === "string" && category.trim().length > 0);
 }
