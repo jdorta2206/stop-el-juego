@@ -134,14 +134,16 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         // The server only reports source=admob after validating Google's signed SSV callback.
         if (result.rewarded === true && result.source === "admob") {
           if (!mountedRef.current) return;
-          setPhase("done");
-          void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob", requestId: result.requestId ?? null } });
-          void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "admob" } });
           timeoutRef.current = window.setTimeout(async () => {
             timeoutRef.current = null;
             if (mountedRef.current) {
               try {
-                await applyConfirmedRewardOnce(result.requestId!, rewardAmount);
+                const applied = await applyConfirmedRewardOnce(result.requestId!, rewardAmount);
+                if (applied) {
+                  void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob", requestId: result.requestId ?? null } });
+                  void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "admob", requestId: result.requestId ?? null } });
+                }
+                setPhase("done");
               } catch {
                 setRetryRequestId(result.requestId!);
                 setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
@@ -231,13 +233,17 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     const result = await retryRewardedResult(retryRequestId);
     if (!mountedRef.current) return;
     if (result.rewarded === true && result.source === "admob") {
-      setPhase("done");
-      void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement: rewardType, source: "admob", retry: true, requestId: retryRequestId } });
       timeoutRef.current = window.setTimeout(async () => {
         timeoutRef.current = null;
         if (mountedRef.current) {
           try {
-            await applyConfirmedRewardOnce(retryRequestId, rewardAmount);
+            const applied = await applyConfirmedRewardOnce(retryRequestId, rewardAmount);
+            if (applied) {
+              const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
+              void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob", retry: true, requestId: retryRequestId } });
+              void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "admob", retry: true, requestId: retryRequestId } });
+            }
+            setPhase("done");
           } catch {
             setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
             setPhase("pending");
