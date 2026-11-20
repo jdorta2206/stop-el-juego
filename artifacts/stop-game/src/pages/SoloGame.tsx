@@ -503,7 +503,9 @@ export default function SoloGame() {
   const pendingRewardAckTypeRef = useRef<null | "extraTime" | "hint" | "double">(null);
   const reportedHalloweenScareRef = useRef<string | null>(null);
   const buildSoloGameRecoveryPayload = (overrides: Record<string, unknown> = {}) => ({
-    state: "PLAYING",
+    state: gameState,
+    roundResults,
+    resultsApplied: resultsAppliedRef.current,
     currentLetter,
     timeLeft,
     responses,
@@ -553,7 +555,7 @@ export default function SoloGame() {
   // synchronous so a confirmed reward can update this same snapshot before
   // changing React state.
   useEffect(() => {
-    if (!player?.id || gameOwnerPlayerIdRef.current !== player.id || recoveryInitializedForPlayerRef.current !== player.id || gameState !== "PLAYING") return;
+    if (!player?.id || gameOwnerPlayerIdRef.current !== player.id || recoveryInitializedForPlayerRef.current !== player.id || (gameState !== "PLAYING" && gameState !== "RESULTS")) return;
     saveSoloGameRecovery(player.id, gameMode, packId, buildSoloGameRecoveryPayload());
   });
 
@@ -1527,7 +1529,8 @@ export default function SoloGame() {
       pendingRewardAckTypeRef.current = savedType === "extraTime" || savedType === "hint" || savedType === "double" ? savedType : null;
       return;
     }
-    if (!existing || existing.gameMode !== gameMode || existing.packId !== packId || existing.payload.state !== "PLAYING") {
+    if (!existing || existing.gameMode !== gameMode || existing.packId !== packId
+      || (existing.payload.state !== "PLAYING" && existing.payload.state !== "RESULTS")) {
       throw new Error("No existe una partida recuperable para aplicar esta recompensa. La recompensa no se marcará como completada.");
     }
 
@@ -1535,6 +1538,9 @@ export default function SoloGame() {
     // recreate the WebView before the parent component has restored React state.
     const saved = existing.payload as Record<string, any>;
     const rewardType = rewardedAdType ?? saved.rewardedAdType;
+    if (saved.state === "RESULTS" && rewardType !== "double") {
+      throw new Error("Solo se puede aplicar el doble de puntos a una partida ya finalizada.");
+    }
     const nextAppliedIds = [...previouslyApplied, requestId];
     const next: Record<string, unknown> = {
       ...saved,
@@ -1596,16 +1602,19 @@ export default function SoloGame() {
       setTotalScore(Number(next.totalScore));
       setDoubleUsed(true);
     }
-    resumeGameTimer();
-    window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
+    if (saved.state === "PLAYING") {
+      resumeGameTimer();
+      window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
+    }
   };
 
   const handleRewardAcknowledged = (requestId: string): boolean => {
     if (!player?.id || (gameOwnerPlayerIdRef.current && gameOwnerPlayerIdRef.current !== player.id)) return false;
     if (pendingRewardAckRequestIdRef.current && pendingRewardAckRequestIdRef.current !== requestId) return false;
     const snapshot = readSoloGameRecovery(player.id);
-    if (snapshot && Array.isArray(snapshot.payload.appliedRewardRequestIds)
-      && snapshot.payload.appliedRewardRequestIds.includes(requestId)) {
+    if (snapshot && (!Array.isArray(snapshot.payload.appliedRewardRequestIds)
+      || !snapshot.payload.appliedRewardRequestIds.includes(requestId))) return false;
+    if (snapshot) {
       const saved = saveSoloGameRecovery(player.id, gameMode, packId, {
         ...snapshot.payload,
         rewardedAdType: null,
@@ -1617,8 +1626,10 @@ export default function SoloGame() {
     pendingRewardAckRequestIdRef.current = null;
     pendingRewardAckTypeRef.current = null;
     setRewardedAdType(null);
-    resumeGameTimer();
-    window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
+    if (!snapshot || snapshot.payload.state === "PLAYING") {
+      resumeGameTimer();
+      window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
+    }
     return true;
   };
 
@@ -1632,7 +1643,8 @@ export default function SoloGame() {
       if (!gameOwnerPlayerIdRef.current && gameState === "PLAYING") gameOwnerPlayerIdRef.current = player.id;
       return;
     }
-    if (snapshot.gameMode !== gameMode || snapshot.packId !== packId || snapshot.payload.state !== "PLAYING") {
+    if (snapshot.gameMode !== gameMode || snapshot.packId !== packId
+      || (snapshot.payload.state !== "PLAYING" && snapshot.payload.state !== "RESULTS")) {
       clearSoloGameRecovery(player.id);
       return;
     }
@@ -1649,6 +1661,7 @@ export default function SoloGame() {
     setResponses(saved.responses && typeof saved.responses === "object" ? saved.responses : {});
     responsesRef.current = saved.responses && typeof saved.responses === "object" ? saved.responses : {};
     setRound(Number.isInteger(saved.round) ? saved.round : 1);
+    setRoundResults(saved.roundResults && typeof saved.roundResults === "object" ? saved.roundResults : null);
     setTotalScore(Number(saved.totalScore) || 0);
     setAiTotalScore(Number(saved.aiTotalScore) || 0);
     setRewardedAdType(saved.rewardedAdType === "extraTime" || saved.rewardedAdType === "hint" || saved.rewardedAdType === "double" ? saved.rewardedAdType : null);
@@ -1694,18 +1707,19 @@ export default function SoloGame() {
       : null;
     pendingRewardAckRequestIdRef.current = typeof saved.pendingRewardAckRequestId === "string" ? saved.pendingRewardAckRequestId : null;
     pendingRewardAckTypeRef.current = saved.pendingRewardAckType === "extraTime" || saved.pendingRewardAckType === "hint" || saved.pendingRewardAckType === "double" ? saved.pendingRewardAckType : null;
-    if (saved.rewardedAdType) window.dispatchEvent(new Event("stop:rewarded-ad-pause"));
-    setRoundResults(null);
-    stoppedRef.current = false;
-    resultsAppliedRef.current = false;
-    setGameState("PLAYING");
+    if (saved.rewardedAdType && saved.state === "PLAYING") window.dispatchEvent(new Event("stop:rewarded-ad-pause"));
+    stoppedRef.current = saved.state === "RESULTS";
+    resultsAppliedRef.current = saved.resultsApplied === true || saved.state === "RESULTS";
+    setGameState(saved.state === "RESULTS" ? "RESULTS" : "PLAYING");
 
     if (pendingDoubleBonusRef.current) {
       submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true, letter: saved.currentLetter });
     }
 
     if (timerRef.current) clearInterval(timerRef.current);
-    if (saved.timeLeft <= 0) {
+    if (saved.state === "RESULTS") {
+      timerRef.current = null;
+    } else if (saved.timeLeft <= 0) {
       stopTimeoutRef.current = window.setTimeout(() => {
         stopTimeoutRef.current = null;
         void handleStop();
