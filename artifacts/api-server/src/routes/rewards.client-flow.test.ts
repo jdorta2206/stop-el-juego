@@ -481,4 +481,43 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(startGame).toContain("if (!persisted)");
   });
 
+
+  it("survives a simulated WebView destruction and module recreation without losing reward state", async () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    const interruptedRound = {
+      state: "PLAYING",
+      currentLetter: "M",
+      timeLeft: 0,
+      round: 2,
+      categories: ["Nombre", "Ciudad"],
+      responses: { Nombre: "María" },
+      totalScore: 35,
+      aiTotalScore: 28,
+      rewardedAdType: "extraTime",
+      appliedRewardRequestIds: ["ssv-request-already-applied"],
+      pendingRewardAckRequestId: "ssv-request-awaiting-ack",
+    };
+
+    const firstInstance = await import("../../../stop-game/src/lib/soloGameRecovery.ts");
+    expect(firstInstance.saveSoloGameRecovery("player-recreated", "normal", "classic", interruptedRound)).toBe(true);
+
+    // A WebView process restart destroys module memory; localStorage survives.
+    vi.resetModules();
+    const recreatedInstance = await import("../../../stop-game/src/lib/soloGameRecovery.ts");
+    const restored = recreatedInstance.readSoloGameRecovery("player-recreated");
+
+    expect(restored?.payload).toMatchObject(interruptedRound);
+    expect(recreatedInstance.isRestorableSoloGameRecovery(restored, "normal", "classic")).toBe(true);
+    expect(recreatedInstance.readSoloGameRecovery("another-player")).toBeNull();
+    expect((restored?.payload.appliedRewardRequestIds as string[])).toContain("ssv-request-already-applied");
+    expect(restored?.payload.pendingRewardAckRequestId).toBe("ssv-request-awaiting-ack");
+  });
+
 });
