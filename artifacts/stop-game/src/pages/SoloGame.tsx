@@ -500,6 +500,8 @@ export default function SoloGame() {
   const appliedRewardRequestIdsRef = useRef<string[]>([]);
   const pendingDoubleBonusRef = useRef<{ bonus: number; aiTotalScore: number } | null>(null);
   const pendingBonusRetriesRef = useRef(new Set<string>());
+  const pendingBonusRetryAttemptsRef = useRef(new Map<string, number>());
+  const pendingBonusRetryTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const pendingRewardAckRequestIdRef = useRef<string | null>(null);
   const pendingRewardAckTypeRef = useRef<null | "extraTime" | "hint" | "double">(null);
   const reportedHalloweenScareRef = useRef<string | null>(null);
@@ -1319,6 +1321,10 @@ export default function SoloGame() {
       if (!isBonus) return;
       clearPendingDoubleBonus(player.id, submissionId);
       pendingBonusRetriesRef.current.delete(submissionId);
+      const retryTimer = pendingBonusRetryTimersRef.current.get(submissionId);
+      if (retryTimer) clearTimeout(retryTimer);
+      pendingBonusRetryTimersRef.current.delete(submissionId);
+      pendingBonusRetryAttemptsRef.current.delete(submissionId);
       const gameId = submissionId.endsWith(":bonus") ? submissionId.slice(0, -6) : "";
       const snapshot = readSoloGameRecovery(player.id);
       if (gameId && snapshot?.payload.gameSubmissionId === gameId && snapshot.payload.pendingDoubleBonus) {
@@ -1375,7 +1381,34 @@ export default function SoloGame() {
         }
       },
       onError: async () => {
-        if (isBonus) pendingBonusRetriesRef.current.delete(submissionId);
+        if (isBonus) {
+          pendingBonusRetriesRef.current.delete(submissionId);
+          // A transient HTTP/server failure can happen while the browser still
+          // reports online. Keep the durable bonus and retry with bounded
+          // backoff instead of waiting indefinitely for a later online event.
+          if (typeof navigator === "undefined" || navigator.onLine !== false) {
+            const attempts = pendingBonusRetryAttemptsRef.current.get(submissionId) ?? 0;
+            const delays = [5_000, 15_000, 30_000, 60_000];
+            const delay = delays[Math.min(attempts, delays.length - 1)];
+            pendingBonusRetryAttemptsRef.current.set(submissionId, attempts + 1);
+            const previousTimer = pendingBonusRetryTimersRef.current.get(submissionId);
+            if (previousTimer) clearTimeout(previousTimer);
+            const timer = setTimeout(() => {
+              pendingBonusRetryTimersRef.current.delete(submissionId);
+              if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+              const pending = readPendingDoubleBonuses(player.id).find((entry) => entry.submissionId === submissionId);
+              if (!pending || pendingBonusRetriesRef.current.has(submissionId)) return;
+              pendingBonusRetriesRef.current.add(submissionId);
+              submitToLeaderboard(pending.bonus, pending.aiTotalScore, {
+                bonus: true,
+                letter: pending.letter,
+                submissionId: pending.submissionId,
+                scoreTokens: pending.scoreTokens,
+              });
+            }, delay);
+            pendingBonusRetryTimersRef.current.set(submissionId, timer);
+          }
+        }
         // 📡 Sin conexión: aparcamos la puntuación en la outbox para
         // reenviarla cuando vuelva la red (evento `online` o próximo
         // arranque). Sólo lo hacemos cuando el navegador reporta offline,
