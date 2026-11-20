@@ -640,7 +640,7 @@ export default function SoloGame() {
   const startGame = (newGame = true) => {
     // Never discard the active-game snapshot while its double-score submission
     // has not been copied into the independent durable outbox.
-    if (newGame && pendingDoubleBonusRef.current && player?.id && gameSubmissionIdRef.current) {
+    if (newGame && pendingDoubleBonusRef.current && player?.id && player.loginMethod !== "guest" && gameSubmissionIdRef.current) {
       const persisted = savePendingDoubleBonus({
         playerId: player.id,
         submissionId: `${gameSubmissionIdRef.current}:bonus`,
