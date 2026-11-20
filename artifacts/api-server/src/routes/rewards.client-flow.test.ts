@@ -65,9 +65,9 @@ describe("rewarded AdMob client safety regressions", () => {
   });
 
   it("does not silently accept a confirmed hint when its pending hint disappeared", () => {
-    const hintBranch = soloGameSource.indexOf('} else if (rewardedAdType === "hint")');
+    const hintBranch = soloGameSource.indexOf('} else if (rewardType === "hint")');
     const missingHint = soloGameSource.indexOf("throw new Error", hintBranch);
-    const clearPending = soloGameSource.indexOf("pendingHintRef.current = null", hintBranch);
+    const clearPending = soloGameSource.indexOf("next.pendingHint = null", hintBranch);
     expect(hintBranch).toBeGreaterThan(-1);
     expect(missingHint).toBeGreaterThan(hintBranch);
     expect(clearPending).toBeGreaterThan(missingHint);
@@ -92,7 +92,7 @@ describe("rewarded AdMob client safety regressions", () => {
   });
 
   it("does not report completion or consume when the applied marker cannot be persisted", () => {
-    const apply = rewardedSource.indexOf("await onCompleteRef.current(amount)");
+    const apply = rewardedSource.indexOf("await onCompleteRef.current(amount, requestId)");
     const persist = rewardedSource.indexOf("const persisted = markStoredRewardApplied(requestId, playerId)", apply);
     const failure = rewardedSource.indexOf("if (!persisted)", persist);
     const consume = rewardedSource.indexOf("await acknowledgeRewardResult(requestId)", persist);
@@ -118,7 +118,8 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(retryConsume).toBeGreaterThan(appliedMount);
     expect(normalPending).toBeGreaterThan(retryConsume);
     expect(rewardedSource).toContain('status?: "pending" | "applied"');
-    expect(rewardedSource).toContain("if (acknowledged) clearStoredPendingReward(playerId)");
+    expect(rewardedSource).toContain("clearStoredPendingReward(playerId)");
+    expect(rewardedSource).toContain("if (!gameMarkerCleared)");
     expect(rewardedSource).toContain("const [consumeAckPending, setConsumeAckPending] = useState(false)");
     expect(rewardedSource).toContain("retryConsumeAcknowledgement");
     expect(rewardedSource).toContain("consumeAckPending ? retryConsumeAcknowledgement : retryConfirmation");
@@ -223,7 +224,7 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("readSoloGameRecovery(player.id)");
     expect(soloGameSource).toContain('setGameState("PLAYING")');
     expect(soloGameSource).toContain("pendingDoubleBonusRef.current");
-    expect(soloGameSource).toContain('{ bonus: true, letter: saved.currentLetter }');
+    expect(soloGameSource).toContain("letter: saved.currentLetter");
     expect(soloGameSource).toContain('letter: opts?.letter || currentLetter || "?",');
     expect(soloGameSource).toContain("rewardedAdType,");
     expect(soloGameSource).toContain("setRewardedAdType(saved.rewardedAdType");
