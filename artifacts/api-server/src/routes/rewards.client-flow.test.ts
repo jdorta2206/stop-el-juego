@@ -10,6 +10,7 @@ const bridgeSource = readClientSource("../../../stop-game/src/lib/twaAdBridge.ts
 const rewardedSource = readClientSource("../../../stop-game/src/components/AdSystemFixed.tsx");
 const soloGameSource = readClientSource("../../../stop-game/src/pages/SoloGame.tsx");
 const adminAnalyticsSource = readFileSync(resolve(currentDir, "./adminAnalytics.ts"), "utf8");
+const rewardsRouteSource = readFileSync(resolve(currentDir, "./rewards.ts"), "utf8");
 
 
 afterEach(() => {
@@ -88,6 +89,15 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(bridgeSource).toContain("return false");
   });
 
+  it("sends the signed session token and binds result reads/consume to the request owner", () => {
+    expect(bridgeSource).toContain('function getRewardAuthHeaders(): Record<string, string>');
+    expect(bridgeSource).toContain('window.localStorage.getItem("stop_session_token")');
+    expect(bridgeSource.match(/headers: getRewardAuthHeaders\(\)/g)).toHaveLength(2);
+    expect(rewardsRouteSource).toContain('import { verifyClaimedIdentity } from "../lib/playerAuth";');
+    expect(rewardsRouteSource).toContain("verifyClaimedIdentity(req, row.player_id)");
+    expect(rewardsRouteSource).toContain("verifyClaimedIdentity(req, existing.player_id)");
+    expect(rewardsRouteSource).toContain("AND player_id = ${existing.player_id}");
+  });
   it("counts actual ad_impression events separately from rewarded completions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
