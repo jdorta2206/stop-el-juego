@@ -17,7 +17,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
 import { isGameTimerPaused, resumeGameTimer } from "@/lib/timerPauseGuard";
-import { clearSoloGameRecovery, readSoloGameRecovery, saveSoloGameRecovery } from "@/lib/soloGameRecovery";
+import { clearPendingDoubleBonus, clearSoloGameRecovery, readPendingDoubleBonuses, readSoloGameRecovery, savePendingDoubleBonus, saveSoloGameRecovery } from "@/lib/soloGameRecovery";
 import { ContextualPremiumPrompt } from "@/components/ContextualPremiumPrompt";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
@@ -499,6 +499,7 @@ export default function SoloGame() {
   const gameOwnerPlayerIdRef = useRef<string | null>(null);
   const appliedRewardRequestIdsRef = useRef<string[]>([]);
   const pendingDoubleBonusRef = useRef<{ bonus: number; aiTotalScore: number } | null>(null);
+  const pendingBonusRetriesRef = useRef(new Set<string>());
   const pendingRewardAckRequestIdRef = useRef<string | null>(null);
   const pendingRewardAckTypeRef = useRef<null | "extraTime" | "hint" | "double">(null);
   const reportedHalloweenScareRef = useRef<string | null>(null);
@@ -1262,11 +1263,19 @@ export default function SoloGame() {
     }
   }, [gameState, results]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean; letter?: string }) => {
+  const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean; letter?: string; submissionId?: string; scoreTokens?: string[] }) => {
     if (!player || player.loginMethod === "guest") return;
     if (finalScore <= 0) return;
     const isBonus = opts?.bonus === true;
-    const leaderboardScoreTokens = isDailyMode ? rankingScoreTokensRef.current : scoreTokensRef.current;
+    const leaderboardScoreTokens = opts?.scoreTokens ?? (isDailyMode ? rankingScoreTokensRef.current : scoreTokensRef.current);
+    const submissionId = opts?.submissionId ?? `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`;
+    if (isBonus) {
+      const persisted = savePendingDoubleBonus({ playerId: player.id, submissionId, bonus: finalScore, aiTotalScore: finalAiScore, letter: opts?.letter || currentLetter || "?", scoreTokens: [...leaderboardScoreTokens] });
+      if (!persisted) {
+        toast({ title: "⚠️ No se pudo guardar el doble de puntos para reintentar.", variant: "destructive" });
+        return;
+      }
+    }
     if (!isBonus && leaderboardScoreTokens.length === 0) {
       const offMsg =
         lang === "en" ? "Offline — this score stays on this device and won't enter the ranking." :
@@ -1279,7 +1288,7 @@ export default function SoloGame() {
     const won = finalScore > finalAiScore;
     submitScoreMutation.mutate({
       data: {
-        submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
+        submissionId,
         playerId: player.id,
         playerName: player.name,
         avatarColor: player.avatarColor,
@@ -1292,6 +1301,7 @@ export default function SoloGame() {
       }
     }, {
       onSuccess: (response: any) => {
+        if (isBonus) clearPendingDoubleBonus(player.id, submissionId);
         queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
         // The server updates the streak on score submit; refresh the calendar
         // query so Home / Daily show the new authoritative streak right away.
@@ -1334,7 +1344,7 @@ export default function SoloGame() {
           const hasServerProof = leaderboardScoreTokens.length > 0;
           if (hasServerProof) {
             await enqueueScoreOutbox({
-              submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
+              submissionId,
               playerId: player.id,
               playerName: player.name,
               avatarColor: player.avatarColor,
@@ -1345,6 +1355,7 @@ export default function SoloGame() {
               bonus: isBonus,
               scoreTokens: leaderboardScoreTokens,
             });
+            if (isBonus) clearPendingDoubleBonus(player.id, submissionId);
             const offMsg =
               lang === "en" ? "Offline — verified rounds will sync when you're back." :
               lang === "pt" ? "Offline — as rondas verificadas sincronizam quando voltares." :
@@ -1597,7 +1608,7 @@ export default function SoloGame() {
       setHintUsed(true);
     } else if (rewardType === "double") {
       if (pendingDoubleBonusRef.current && gameSubmissionIdRef.current) {
-        submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true, letter: saved.currentLetter });
+        submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true, letter: saved.currentLetter, submissionId: `${gameSubmissionIdRef.current}:bonus` });
       }
       setTotalScore(Number(next.totalScore));
       setDoubleUsed(true);
@@ -1718,7 +1729,7 @@ export default function SoloGame() {
     setGameState(saved.state === "RESULTS" ? "RESULTS" : "PLAYING");
 
     if (pendingDoubleBonusRef.current) {
-      submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true, letter: saved.currentLetter });
+      submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true, letter: saved.currentLetter, submissionId: `${gameSubmissionIdRef.current}:bonus` });
     }
 
     if (timerRef.current) clearInterval(timerRef.current);
@@ -1747,6 +1758,22 @@ export default function SoloGame() {
       }, 1000);
     }
   }, [player?.id, customPacksLoading, gameMode, packId, gameState]);
+
+  // Retry double-score submissions independently of the active-game snapshot.
+  // The queue survives a new game clearing the previous round's recovery state.
+  useEffect(() => {
+    if (!player?.id) return;
+    for (const entry of readPendingDoubleBonuses(player.id)) {
+      if (pendingBonusRetriesRef.current.has(entry.submissionId)) continue;
+      pendingBonusRetriesRef.current.add(entry.submissionId);
+      submitToLeaderboard(entry.bonus, entry.aiTotalScore, {
+        bonus: true,
+        letter: entry.letter,
+        submissionId: entry.submissionId,
+        scoreTokens: entry.scoreTokens,
+      });
+    }
+  }, [player?.id]);
 
   // Bluff reveal sounds — play as each result animates in (1.4s per card)
   const bluffSoundFiredRef = useRef(false);
