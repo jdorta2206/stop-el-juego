@@ -844,7 +844,7 @@ export default function SoloGame() {
     // Guard: never run more than once per round
     if (stoppedRef.current) return;
     stoppedRef.current = true;
-    if (player?.id) clearSoloGameRecovery(player.id);
+    if (gameOwnerPlayerIdRef.current) clearSoloGameRecovery(gameOwnerPlayerIdRef.current);
 
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -1432,7 +1432,7 @@ export default function SoloGame() {
 
       // Never block the replay transition on an ad. The player must always
       // return to the lobby even if the native TWA bridge/ad fails or times out.
-      if (player?.id) clearSoloGameRecovery(player.id);
+      if (gameOwnerPlayerIdRef.current) clearSoloGameRecovery(gameOwnerPlayerIdRef.current);
       gameOwnerPlayerIdRef.current = null;
       appliedRewardRequestIdsRef.current = [];
       pendingDoubleBonusRef.current = null;
