@@ -76,6 +76,14 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardedSource).toContain("const saved = saveStoredPendingReward({");
     expect(rewardedSource).toContain("if (!saved) {");
     expect(rewardedSource).toContain("no se abrirá el anuncio");
+    const callbackStart = rewardedSource.indexOf("requestRewardedAd(placement, (requestId) => {");
+    const callbackEnd = rewardedSource.indexOf("\n        });", callbackStart);
+    const callbackBody = rewardedSource.slice(callbackStart, callbackEnd);
+    expect(callbackStart).toBeGreaterThan(-1);
+    expect(callbackEnd).toBeGreaterThan(callbackStart);
+    // The persistence error must escape the callback; swallowing it would
+    // allow requestRewardedAd to continue and launch the native ad.
+    expect(callbackBody).not.toContain("catch");
   });
 
   it("does not report completion or consume when the applied marker cannot be persisted", () => {
