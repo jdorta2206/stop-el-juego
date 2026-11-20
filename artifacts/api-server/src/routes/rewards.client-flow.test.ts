@@ -201,6 +201,10 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardedSource).toContain("if (canStartReward && !canStartReward())");
     expect(soloGameSource).toContain("canStartReward={() => Boolean");
     expect(soloGameSource).toContain("if (previouslyApplied.includes(requestId))");
+    expect(soloGameSource).toContain("state: gameState,");
+    expect(soloGameSource).toContain("roundResults,");
+    expect(soloGameSource).toContain('setGameState(saved.state === "RESULTS" ? "RESULTS" : "PLAYING")');
+    expect(soloGameSource).toContain('if (saved.state === "RESULTS" && rewardType !== "double")');
     expect(soloGameSource).toContain("pendingRewardAckRequestIdRef.current");
     expect(soloGameSource).toContain("pendingRewardAckTypeRef.current ?? rewardedAdType");
     expect(rewardedSource).toContain("onRewardAcknowledgedRef.current?.(requestId)");
