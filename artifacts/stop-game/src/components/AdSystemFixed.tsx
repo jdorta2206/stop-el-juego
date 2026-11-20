@@ -81,9 +81,11 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       // Persist that the local reward was applied before asking the server to
       // consume the SSV result. If the acknowledgement fails or the app closes,
       // the next mount retries consumption without applying the reward again.
-      markStoredRewardApplied(requestId);
-      const acknowledged = await acknowledgeRewardResult(requestId);
-      if (acknowledged) clearStoredPendingReward();
+      const persisted = markStoredRewardApplied(requestId);
+      if (persisted) {
+        const acknowledged = await acknowledgeRewardResult(requestId);
+        if (acknowledged) clearStoredPendingReward();
+      }
       setRetryRequestId(null);
       return true;
     } catch (error) {
