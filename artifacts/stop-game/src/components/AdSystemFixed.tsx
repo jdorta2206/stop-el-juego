@@ -106,7 +106,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20, canStartReward }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number; canStartReward?: () => boolean }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -198,6 +198,11 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     // Premium and unmounted overlays must never request or grant an ad reward.
     if (!ADMOB_ADS_ENABLED || isPremium || !mountedRef.current) {
       if (mountedRef.current) onSkipRef.current();
+      return;
+    }
+    if (canStartReward && !canStartReward()) {
+      setErrorDetail("No se pudo guardar la partida para proteger esta recompensa. No se abrirá el anuncio.");
+      setPhase("error");
       return;
     }
     setRewardedAdPlayerId(playerId);
