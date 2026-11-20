@@ -16,6 +16,7 @@ const reviewPromptSource = readClientSource("../../../stop-game/src/hooks/useRev
 const interstitialSource = readClientSource("../../../stop-game/src/lib/interstitialAd.ts");
 const adminAnalyticsSource = readFileSync(resolve(currentDir, "./adminAnalytics.ts"), "utf8");
 const rewardsRouteSource = readFileSync(resolve(currentDir, "./rewards.ts"), "utf8");
+const rankingSource = readFileSync(resolve(currentDir, "./ranking.ts"), "utf8");
 
 
 afterEach(() => {
