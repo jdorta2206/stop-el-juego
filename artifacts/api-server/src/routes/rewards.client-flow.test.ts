@@ -256,6 +256,12 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("clearSoloGameRecovery(player.id)");
     expect(soloGameSource).toContain("resultsAppliedRef.current = saved.resultsApplied === true;");
     expect(soloGameSource).not.toContain("saved.resultsApplied === true || saved.state === \"RESULTS\"");
+    const handleStopStart = soloGameSource.indexOf("const handleStop = async () => {");
+    const zeroTimeSnapshot = soloGameSource.indexOf('buildSoloGameRecoveryPayload({ state: "PLAYING", timeLeft: 0, responses: currentResponses })', handleStopStart);
+    const validationStart = soloGameSource.indexOf("validateMutation.mutateAsync({", handleStopStart);
+    expect(zeroTimeSnapshot).toBeGreaterThan(handleStopStart);
+    expect(validationStart).toBeGreaterThan(zeroTimeSnapshot);
+    expect(soloGameSource).not.toContain("if (gameOwnerPlayerIdRef.current) clearSoloGameRecovery(gameOwnerPlayerIdRef.current)");
   });
 
   it("persists and retries double-score submissions independently of the game snapshot", () => {
