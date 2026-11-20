@@ -1525,7 +1525,6 @@ export default function SoloGame() {
       const savedType = existing?.payload.pendingRewardAckType ?? existing?.payload.rewardedAdType;
       pendingRewardAckRequestIdRef.current = requestId;
       pendingRewardAckTypeRef.current = savedType === "extraTime" || savedType === "hint" || savedType === "double" ? savedType : null;
-      setRewardedAdType(null);
       return;
     }
     if (!existing || existing.gameMode !== gameMode || existing.packId !== packId || existing.payload.state !== "PLAYING") {
@@ -1597,7 +1596,6 @@ export default function SoloGame() {
       setTotalScore(Number(next.totalScore));
       setDoubleUsed(true);
     }
-    setRewardedAdType(null);
     resumeGameTimer();
     window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
   };
