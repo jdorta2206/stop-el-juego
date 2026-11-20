@@ -449,6 +449,22 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
   });
+
+  it("rolls back a bonus submission claim when a concurrent request already consumed its reward claim", () => {
+    const transactionStart = rankingSource.indexOf("bonusResult = await db.transaction(async (tx) =>");
+    const submissionClaim = rankingSource.indexOf('.insert(scoreSubmissionClaimsTable)', transactionStart);
+    const consumeRewardClaim = rankingSource.indexOf('.delete(scoreBonusClaimsTable)', transactionStart);
+    const rollbackSignal = rankingSource.indexOf('throw new Error("BONUS_CLAIM_ALREADY_CONSUMED")', consumeRewardClaim);
+    const transactionCatch = rankingSource.indexOf('error.message === "BONUS_CLAIM_ALREADY_CONSUMED"', rollbackSignal);
+    expect(transactionStart).toBeGreaterThan(-1);
+    expect(submissionClaim).toBeGreaterThan(transactionStart);
+    expect(consumeRewardClaim).toBeGreaterThan(submissionClaim);
+    expect(rollbackSignal).toBeGreaterThan(consumeRewardClaim);
+    expect(transactionCatch).toBeGreaterThan(rollbackSignal);
+    expect(rankingSource.slice(consumeRewardClaim, rollbackSignal)).not.toContain("return null");
+    expect(rankingSource.slice(transactionCatch, transactionCatch + 220)).toContain('res.status(422).json({ error: "INVALID_BONUS_SCORE" })');
+  });
+
   it("keeps server-only double-score recovery limited to registered players", () => {
     const startGame = soloGameSource.slice(
       soloGameSource.indexOf("const startGame = (newGame = true) =>"),
