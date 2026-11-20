@@ -1182,10 +1182,11 @@ export default function SoloGame() {
         // Record this finished game for the review-prompt eligibility counter,
         // then try to show the prompt at a happy moment. Delayed so it doesn't
         // collide with first-win, share, or new-record celebrations.
-        recordGamePlayed();
+        const completedGameId = gameSubmissionIdRef.current ?? undefined;
+        recordGamePlayed(completedGameId);
         // Compute percentile against the player's last 50 solo scores so
         // the "top 20%" happy-moment trigger is real, not a fixed proxy.
-        const percentile = recordScoreAndPercentile(finalPlayerScore);
+        const percentile = recordScoreAndPercentile(finalPlayerScore, completedGameId);
         const reviewDelay = showFirstWinNow ? 9000 : (br.isNew ? 7500 : 5500);
         if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
         reviewTimerRef.current = setTimeout(() => {
@@ -1211,7 +1212,7 @@ export default function SoloGame() {
         // Count completion as soon as the final results are produced. Do not
         // depend on the player pressing "Jugar de nuevo" or leaving RESULTS.
         void trackAnalyticsEvent("game_complete", { metadata: { mode: gameMode, rounds: maxRounds } });
-        if (!isDailyMode) recordInterstitialGameCompleted();
+        if (!isDailyMode) recordInterstitialGameCompleted(gameSubmissionIdRef.current ?? undefined);
         // The private /test panel tracks guest games separately from registered
         // game_history. Only anonymous players must increment that aggregate.
         if (!player || player.loginMethod === "guest") trackGuestGame();
@@ -1248,7 +1249,7 @@ export default function SoloGame() {
         xpGained: 0, // will be counted in nextRound
         aiZeroWin: won && as_ === 0,
         usedCustomPack: isCustomPackActive,
-      });
+      }, gameSubmissionIdRef.current ? `${gameSubmissionIdRef.current}:round:${round}` : undefined);
 
       if (wonAfterBonus) {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
