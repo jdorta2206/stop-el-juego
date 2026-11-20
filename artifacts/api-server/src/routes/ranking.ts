@@ -639,7 +639,9 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   let duplicateSubmission = false;
   if (isBonus) {
     let bonusAccountDeleted = false;
-    const bonusResult = await db.transaction(async (tx) => {
+    let bonusResult;
+    try {
+      bonusResult = await db.transaction(async (tx) => {
       const revoked = await tx.execute(sql`
         SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1
       `);
@@ -672,7 +674,10 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
           tokenSetHash: scoreBonusClaimsTable.tokenSetHash,
           maxScore: scoreBonusClaimsTable.maxScore,
         });
-      if (!claimed || rawScore <= 0 || rawScore > claimed.maxScore) return null;
+      // Throwing rolls back the submission claim inserted above. Returning
+      // null here would commit that claim and make every retry look successful.
+      if (!claimed) throw new Error("BONUS_CLAIM_ALREADY_CONSUMED");
+      if (rawScore <= 0 || rawScore > claimed.maxScore) return null;
 
       if (existing.length > 0) {
         const [updated] = await tx
@@ -739,7 +744,14 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         won: effectiveWon,
       });
       return created;
-    });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "BONUS_CLAIM_ALREADY_CONSUMED") {
+        res.status(422).json({ error: "INVALID_BONUS_SCORE" });
+        return;
+      }
+      throw error;
+    }
 
     if (bonusAccountDeleted) {
       res.status(401).json({ error: "Account deleted" });
