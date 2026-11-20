@@ -67,7 +67,7 @@ describe("AdMob rewarded result consumption", () => {
     expect(consumeHandler).toContain("AND rewarded = true");
     expect(consumeHandler).toContain("AND consumed_at IS NULL");
     expect(consumeHandler).toContain("RETURNING request_id");
-    expect(consumeHandler).toContain("existing.rewarded && existing.consumed_at");
+    expect(consumeHandler).toContain("latest?.rewarded && latest.consumed_at");
   });
 
   it("does not acknowledge missing or unverified requests as consumed", () => {
