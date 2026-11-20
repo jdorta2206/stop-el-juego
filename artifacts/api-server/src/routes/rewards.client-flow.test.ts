@@ -359,13 +359,17 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
   });
-  it("preserves pending double-score bonuses for guest profiles before starting a new game", () => {
+  it("keeps server-only double-score recovery limited to registered players", () => {
     const startGame = soloGameSource.slice(
       soloGameSource.indexOf("const startGame = (newGame = true) =>"),
       soloGameSource.indexOf("const handleStop = async () =>"),
     );
-    expect(startGame).toContain("if (newGame && pendingDoubleBonusRef.current && player?.id && gameSubmissionIdRef.current)");
-    expect(startGame).not.toContain('player.loginMethod !== "guest"');
+    const submit = soloGameSource.slice(
+      soloGameSource.indexOf("const submitToLeaderboard ="),
+      soloGameSource.indexOf("const submittedRef ="),
+    );
+    expect(startGame).toContain('player.loginMethod !== "guest"');
+    expect(submit).toContain('if (!player || player.loginMethod === "guest") return;');
     expect(startGame).toContain("savePendingDoubleBonus({");
     expect(startGame).toContain("if (!persisted)");
   });
