@@ -20,12 +20,14 @@ type StoredPendingReward = {
   status?: "pending" | "applied";
 };
 
-function pendingRewardStorageKey(playerId?: string): string {
-  return `${PENDING_REWARD_STORAGE_KEY}:${encodeURIComponent(playerId || "guest")}`;
+function pendingRewardStorageKey(playerId: string): string {
+  return `${PENDING_REWARD_STORAGE_KEY}:${encodeURIComponent(playerId)}`;
 }
 
 function readStoredPendingReward(playerId?: string): StoredPendingReward | null {
-  const ownerId = playerId || "guest";
+  // Never use a shared guest bucket: each guest profile has its own UUID.
+  if (!playerId?.trim()) return null;
+  const ownerId = playerId;
   const storageKey = pendingRewardStorageKey(ownerId);
   try {
     let raw = window.localStorage.getItem(storageKey);
@@ -54,8 +56,9 @@ function readStoredPendingReward(playerId?: string): StoredPendingReward | null 
 }
 
 function saveStoredPendingReward(value: StoredPendingReward): boolean {
+  if (!value.playerId?.trim()) return false;
   try {
-    const ownerId = value.playerId || "guest";
+    const ownerId = value.playerId;
     window.localStorage.setItem(pendingRewardStorageKey(ownerId), JSON.stringify(value));
     const legacyRaw = window.localStorage.getItem(PENDING_REWARD_STORAGE_KEY);
     if (legacyRaw) {
@@ -71,6 +74,7 @@ function saveStoredPendingReward(value: StoredPendingReward): boolean {
 }
 
 function markStoredRewardApplied(requestId: string, playerId?: string): boolean {
+  if (!playerId?.trim()) return false;
   try {
     const stored = readStoredPendingReward(playerId);
     if (!stored || stored.requestId !== requestId) return false;
@@ -81,7 +85,8 @@ function markStoredRewardApplied(requestId: string, playerId?: string): boolean 
 }
 
 function clearStoredPendingReward(playerId?: string): void {
-  const ownerId = playerId || "guest";
+  if (!playerId?.trim()) return;
+  const ownerId = playerId;
   try {
     window.localStorage.removeItem(pendingRewardStorageKey(ownerId));
     const legacyRaw = window.localStorage.getItem(PENDING_REWARD_STORAGE_KEY);
@@ -152,7 +157,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
   useEffect(() => {
     const stored = readStoredPendingReward(playerId);
-    if (!stored || stored.playerId !== (playerId || "guest")) return;
+    if (!playerId || !stored || stored.playerId !== playerId) return;
     if (stored.status === "applied") {
       // The reward was already delivered in the previous session. Block new
       // ads until its server acknowledgement is completed; never reapply it.
@@ -171,7 +176,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       });
       return;
     }
-    if (stored.playerId !== (playerId || "guest")
+    if (!playerId || stored.playerId !== playerId
       || stored.rewardType !== rewardType
       || stored.rewardAmount !== rewardAmount) return;
     setRetryRequestId(stored.requestId);
@@ -180,6 +185,12 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   }, [playerId, rewardType, rewardAmount]);
 
   const startWatching = async () => {
+    // Never request or recover a reward without the unique profile identity.
+    if (!playerId?.trim()) {
+      setErrorDetail("No se ha podido identificar al jugador. Vuelve a intentarlo.");
+      setPhase("error");
+      return;
+    }
     // Premium and unmounted overlays must never request or grant an ad reward.
     if (!ADMOB_ADS_ENABLED || isPremium || !mountedRef.current) {
       if (mountedRef.current) onSkipRef.current();
@@ -203,7 +214,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
           try {
             saveStoredPendingReward({
               requestId,
-              playerId: playerId || "guest",
+              playerId,
               rewardType,
               rewardAmount,
               createdAt: Date.now(),
