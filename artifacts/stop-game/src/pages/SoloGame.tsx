@@ -1859,7 +1859,17 @@ export default function SoloGame() {
     };
     retryPendingBonuses();
     window.addEventListener("online", retryPendingBonuses);
-    return () => window.removeEventListener("online", retryPendingBonuses);
+    window.addEventListener("focus", retryPendingBonuses);
+    window.addEventListener("pageshow", retryPendingBonuses);
+    document.addEventListener("visibilitychange", retryPendingBonuses);
+    return () => {
+      window.removeEventListener("online", retryPendingBonuses);
+      window.removeEventListener("focus", retryPendingBonuses);
+      window.removeEventListener("pageshow", retryPendingBonuses);
+      document.removeEventListener("visibilitychange", retryPendingBonuses);
+      for (const timer of pendingBonusRetryTimersRef.current.values()) clearTimeout(timer);
+      pendingBonusRetryTimersRef.current.clear();
+    };
   }, [player?.id]);
 
   // Bluff reveal sounds — play as each result animates in (1.4s per card)
