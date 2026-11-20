@@ -1,7 +1,7 @@
 import { isTwaInterstitialAvailable, requestInterstitialAd } from "@/lib/twaInterstitialBridge";
 import { ADMOB_ADS_ENABLED } from "@/lib/admobPolicy";
 
-const GAMES_KEY = "stop_games_played_v1";
+const GAMES_KEY = "stop_interstitial_games_completed_v1";
 const CONSUMED_KEY = "stop_interstitial_consumed_games_v1";
 const EVERY_N_GAMES = 3;
 
@@ -14,13 +14,32 @@ function readNumber(key: string): number {
   }
 }
 
-export function recordInterstitialGameCompleted(): void {
-  const games = readNumber(GAMES_KEY);
-  try { localStorage.setItem(GAMES_KEY, String(games + 1)); } catch {}
+interface InterstitialCounterRecord { count: number; processedIds: string[]; }
+function readInterstitialCounter(): InterstitialCounterRecord {
+  try {
+    const raw = localStorage.getItem(GAMES_KEY);
+    if (!raw) return { count: 0, processedIds: [] };
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return {
+      count: Number.isFinite(Number(parsed.count)) ? Number(parsed.count) : 0,
+      processedIds: Array.isArray(parsed.processedIds) ? parsed.processedIds.filter((id: unknown): id is string => typeof id === "string").slice(-500) : [],
+    };
+    return { count: Number.isFinite(Number(raw)) ? Number(raw) : 0, processedIds: [] };
+  } catch { return { count: 0, processedIds: [] }; }
+}
+export function recordInterstitialGameCompleted(gameId?: string): void {
+  try {
+    const current = readInterstitialCounter();
+    if (gameId && current.processedIds.includes(gameId)) return;
+    localStorage.setItem(GAMES_KEY, JSON.stringify({
+      count: current.count + 1,
+      processedIds: gameId ? [...current.processedIds, gameId].slice(-500) : current.processedIds,
+    }));
+  } catch {}
 }
 
 export function interstitialEligible(): boolean {
-  const games = readNumber(GAMES_KEY);
+  const games = readInterstitialCounter().count;
   const consumedGames = readNumber(CONSUMED_KEY);
   // Keep a due ad pending if the player leaves the results screen and returns
   // after starting another game; don't lose the 3-game slot on a non-multiple.
@@ -28,7 +47,7 @@ export function interstitialEligible(): boolean {
 }
 
 export function consumeInterstitialSlot(): void {
-  const games = readNumber(GAMES_KEY);
+  const games = readInterstitialCounter().count;
   if (games < EVERY_N_GAMES) return;
   try { localStorage.setItem(CONSUMED_KEY, String(games)); } catch {}
 }
