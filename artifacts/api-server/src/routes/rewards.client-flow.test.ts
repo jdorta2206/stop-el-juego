@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { readResult } from "../../../stop-game/src/lib/twaAdBridge.ts";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +11,38 @@ const rewardedSource = readClientSource("../../../stop-game/src/components/AdSys
 const soloGameSource = readClientSource("../../../stop-game/src/pages/SoloGame.tsx");
 const adminAnalyticsSource = readFileSync(resolve(currentDir, "./adminAnalytics.ts"), "utf8");
 
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
 describe("rewarded AdMob client safety regressions", () => {
+  it("aborts a genuinely stalled result request after ten seconds", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", globalThis);
+
+    let requestSignal: AbortSignal | undefined;
+    const stalledFetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal as AbortSignal;
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal?.addEventListener("abort", () => {
+          reject(new DOMException("The operation was aborted", "AbortError"));
+        }, { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", stalledFetch);
+
+    const resultPromise = readResult("timeout-regression");
+    expect(stalledFetch).toHaveBeenCalledTimes(1);
+    expect(requestSignal?.aborted).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await expect(resultPromise).resolves.toBeNull();
+    expect(requestSignal?.aborted).toBe(true);
+  });
+
   it("bounds result polling and acknowledgement fetches with AbortController", () => {
     expect(bridgeSource).toContain("const RESULT_REQUEST_TIMEOUT_MS = 10_000");
     expect(bridgeSource.match(/controller\.abort\(\)/g)).toHaveLength(2);
