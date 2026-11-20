@@ -145,15 +145,34 @@ function defaultStats(): AchievementStats {
   };
 }
 
-function loadStats(playerId?: string): AchievementStats {
+interface AchievementStatsRecord { stats: AchievementStats; processedRoundIds: string[]; }
+function loadStatsRecord(playerId?: string): AchievementStatsRecord {
   try {
-    const s = localStorage.getItem(playerStorageKey(STATS_KEY, playerId));
-    return s ? { ...defaultStats(), ...JSON.parse(s) } : defaultStats();
-  } catch { return defaultStats(); }
+    const raw = localStorage.getItem(playerStorageKey(STATS_KEY, playerId));
+    if (!raw) return { stats: defaultStats(), processedRoundIds: [] };
+    const parsed = JSON.parse(raw);
+    // Backward-compatible migration from the original flat stats object.
+    if (parsed && parsed.stats && typeof parsed.stats === "object") {
+      return {
+        stats: { ...defaultStats(), ...parsed.stats },
+        processedRoundIds: Array.isArray(parsed.processedRoundIds)
+          ? parsed.processedRoundIds.filter((id: unknown): id is string => typeof id === "string").slice(-500)
+          : [],
+      };
+    }
+    return { stats: { ...defaultStats(), ...parsed }, processedRoundIds: [] };
+  } catch { return { stats: defaultStats(), processedRoundIds: [] }; }
 }
-
-function saveStatsLocal(playerId: string | undefined, stats: AchievementStats) {
-  try { localStorage.setItem(playerStorageKey(STATS_KEY, playerId), JSON.stringify(stats)); } catch {}
+function loadStats(playerId?: string): AchievementStats { return loadStatsRecord(playerId).stats; }
+function saveStatsLocal(playerId: string | undefined, stats: AchievementStats, processedRoundIds?: string[]): boolean {
+  try {
+    const current = loadStatsRecord(playerId);
+    localStorage.setItem(playerStorageKey(STATS_KEY, playerId), JSON.stringify({
+      stats,
+      processedRoundIds: (processedRoundIds ?? current.processedRoundIds).slice(-500),
+    }));
+    return true;
+  } catch { return false; }
 }
 
 function loadUnlocked(playerId?: string): Set<string> {
@@ -318,8 +337,10 @@ export function useAchievements(playerId?: string) {
     };
   }, [playerId]);
 
-  const afterRound = useCallback((result: RoundResult) => {
-    const current = loadStats(playerId);
+  const afterRound = useCallback((result: RoundResult, roundId?: string) => {
+    const record = loadStatsRecord(playerId);
+    if (roundId && record.processedRoundIds.includes(roundId)) return;
+    const current = record.stats;
     const next: AchievementStats = {
       totalWins: current.totalWins + (result.won ? 1 : 0),
       totalGames: current.totalGames + 1,
@@ -333,7 +354,11 @@ export function useAchievements(playerId?: string) {
       timesShared: current.timesShared,
       aiZeroWin: current.aiZeroWin || Boolean(result.aiZeroWin),
     };
-    saveStatsLocal(playerId, next);
+    const processedRoundIds = roundId
+      ? [...record.processedRoundIds, roundId].slice(-500)
+      : record.processedRoundIds;
+    // Persist the increment and its idempotency key in one localStorage write.
+    if (!saveStatsLocal(playerId, next, processedRoundIds)) return;
     setStats(next);
 
     const currentUnlocked = loadUnlocked(playerId);
