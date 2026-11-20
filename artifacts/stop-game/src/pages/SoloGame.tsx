@@ -1252,7 +1252,7 @@ export default function SoloGame() {
     }
   }, [gameState, results]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean }) => {
+  const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean; letter?: string }) => {
     if (!player || player.loginMethod === "guest") return;
     if (finalScore <= 0) return;
     const isBonus = opts?.bonus === true;
@@ -1274,7 +1274,7 @@ export default function SoloGame() {
         playerName: player.name,
         avatarColor: player.avatarColor,
         score: finalScore,
-        letter: currentLetter || "?",
+        letter: opts?.letter || currentLetter || "?",
         mode: "solo",
         won,
         bonus: isBonus,
@@ -1575,7 +1575,7 @@ export default function SoloGame() {
       setHintUsed(true);
     } else if (rewardType === "double") {
       if (pendingDoubleBonusRef.current && gameSubmissionIdRef.current) {
-        submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true });
+        submitToLeaderboard(pendingDoubleBonusRef.current.bonus, pendingDoubleBonusRef.current.aiTotalScore, { bonus: true, letter: saved.currentLetter });
       }
       setTotalScore(Number(next.totalScore));
       setDoubleUsed(true);
