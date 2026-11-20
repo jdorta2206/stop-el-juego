@@ -396,6 +396,44 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(saveSoloGameRecovery("player-a", "normal", "classic", [] as unknown as Record<string, unknown>)).toBe(false);
   });
 
+  it("rejects malformed optional recovery fields but keeps legacy snapshots with omitted fields", () => {
+    const base = {
+      version: 1 as const, playerId: "player-a", gameMode: "normal", packId: "classic",
+      savedAt: Date.now(),
+    };
+    const validPayload = {
+      state: "PLAYING", currentLetter: "M", timeLeft: 20, categories: ["Nombre"],
+      responses: { Nombre: "Maria" }, round: 2, totalScore: 35, aiTotalScore: 20,
+      randomEvent: "speed", activeCard: "lightning", scoreTokens: ["proof-1"],
+    };
+    expect(isRestorableSoloGameRecovery({ ...base, payload: validPayload }, "normal", "classic")).toBe(true);
+    // Older snapshots did not persist all optional fields; they remain resumable.
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { state: "PLAYING", currentLetter: "M", timeLeft: 20, categories: ["Nombre"] },
+    }, "normal", "classic")).toBe(true);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, responses: ["not", "a", "record"] },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, responses: { Nombre: 42 } },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, randomEvent: "unknown-event" },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, activeCard: "unknown-card" },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, round: 99 },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, scoreTokens: [null] },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, pendingHint: { category: "Nombre" } },
+    }, "normal", "classic")).toBe(false);
+  });
+
   it("counts actual ad_impression events separately from rewarded completions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
