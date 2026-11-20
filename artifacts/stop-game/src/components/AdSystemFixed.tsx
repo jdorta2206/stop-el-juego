@@ -106,7 +106,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20, canStartReward }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number; canStartReward?: () => boolean }) {
+export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20, canStartReward, onRewardAcknowledged }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number; canStartReward?: () => boolean; onRewardAcknowledged?: (requestId: string) => void }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -116,8 +116,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   const mountedRef = useRef(true);
   const onCompleteRef = useRef(onComplete);
   const onSkipRef = useRef(onSkip);
+  const onRewardAcknowledgedRef = useRef(onRewardAcknowledged);
   onCompleteRef.current = onComplete;
   onSkipRef.current = onSkip;
+  onRewardAcknowledgedRef.current = onRewardAcknowledged;
   // A rapid double tap / overlapping SSV retry must never apply the same
   // confirmed request twice during this mounted game session.
   const completedRewardRequestsRef = useRef(new Set<string>());
@@ -137,7 +139,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         throw new Error("STOP aplicó la recompensa, pero no pudo guardar su confirmación local. No se volverá a aplicar automáticamente en esta sesión.");
       }
       const acknowledged = await acknowledgeRewardResult(requestId);
-      if (acknowledged) clearStoredPendingReward(playerId);
+      if (acknowledged) {
+        clearStoredPendingReward(playerId);
+        onRewardAcknowledgedRef.current?.(requestId);
+      }
       setRetryRequestId(null);
       return true;
     } catch (error) {
@@ -171,6 +176,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       void acknowledgeRewardResult(stored.requestId).then((acknowledged) => {
         if (acknowledged) {
           clearStoredPendingReward(playerId);
+          onRewardAcknowledgedRef.current?.(stored.requestId);
           if (mountedRef.current) {
             setConsumeAckPending(false);
             setErrorDetail("");
@@ -340,6 +346,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     if (!mountedRef.current) return;
     if (acknowledged) {
       clearStoredPendingReward(playerId);
+      onRewardAcknowledgedRef.current?.(stored.requestId);
       setConsumeAckPending(false);
       setErrorDetail("");
       setPhase("pre");
