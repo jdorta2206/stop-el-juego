@@ -106,7 +106,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -126,7 +126,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     completedRewardRequestsRef.current.add(requestId);
     let rewardAppliedLocally = false;
     try {
-      await onCompleteRef.current(amount);
+      await onCompleteRef.current(amount, requestId);
       rewardAppliedLocally = true;
       // Never report success or consume the server result unless the durable
       // applied marker was actually written. Keep the in-memory guard if the
