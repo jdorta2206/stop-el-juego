@@ -1800,6 +1800,7 @@ export default function SoloGame() {
               setRewardedAdType(null);
             }}
             playerId={player?.id}
+            canStartReward={() => Boolean(player?.id && gameOwnerPlayerIdRef.current === player.id && saveSoloGameRecovery(player.id, gameMode, packId, buildSoloGameRecoveryPayload()))}
             isPremium={adsBlocked}
           />
         )}
