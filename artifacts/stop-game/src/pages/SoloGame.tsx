@@ -1444,15 +1444,15 @@ export default function SoloGame() {
       setRewardedUsed(true);
     } else if (rewardedAdType === "hint") {
       const pending = pendingHintRef.current;
-      pendingHintRef.current = null;
-      if (pending) {
-        setResponses(prev => ({ ...prev, [pending.category]: pending.word }));
-        setHintReveal({ category: pending.category, word: pending.word });
-        setTimeout(() => setHintReveal(null), 3500);
-        setHintUsed(true);
-      } else {
+      if (!pending) {
         toast({ title: lang === "en" ? "Hint unavailable" : lang === "pt" ? "Pista indisponível" : lang === "fr" ? "Indice indisponible" : "Pista no disponible", variant: "destructive" });
+        throw new Error("La pista ya no está disponible; la recompensa no se ha aplicado.");
       }
+      pendingHintRef.current = null;
+      setResponses(prev => ({ ...prev, [pending.category]: pending.word }));
+      setHintReveal({ category: pending.category, word: pending.word });
+      setTimeout(() => setHintReveal(null), 3500);
+      setHintUsed(true);
     } else if (rewardedAdType === "double") {
       // Capture the current score once. The bonus is a second leaderboard write;
       // the server must not consume the round vouchers a second time.
