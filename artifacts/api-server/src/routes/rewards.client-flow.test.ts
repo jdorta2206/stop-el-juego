@@ -187,6 +187,22 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardedSource).toContain("if (!playerId?.trim()) {");
   });
 
+  it("waits for double-points leaderboard persistence before applying the local bonus", () => {
+    const submitStart = soloGameSource.indexOf("const submitToLeaderboard =");
+    const submitEnd = soloGameSource.indexOf("// 💾 Auto-submit final score", submitStart);
+    const submitBlock = soloGameSource.slice(submitStart, submitEnd);
+    const doubleBranch = soloGameSource.indexOf('} else if (rewardedAdType === "double")');
+    const doubleEnd = soloGameSource.indexOf("\n    }\n    setRewardedAdType(null);", doubleBranch);
+    const doubleBlock = soloGameSource.slice(doubleBranch, doubleEnd);
+    expect(submitBlock).toContain("Promise<boolean>");
+    expect(submitBlock).toContain("resolve(true)");
+    expect(submitBlock).toContain("resolve(false)");
+    expect(doubleBlock).toContain("const saved = await submitToLeaderboard");
+    expect(doubleBlock.indexOf("if (!saved)")).toBeGreaterThan(doubleBlock.indexOf("await submitToLeaderboard"));
+    expect(doubleBlock.indexOf("setTotalScore")).toBeGreaterThan(doubleBlock.indexOf("if (!saved)"));
+    expect(doubleBlock.indexOf("setDoubleUsed")).toBeGreaterThan(doubleBlock.indexOf("if (!saved)"));
+  });
+
   it("counts actual ad_impression events separately from rewarded completions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
