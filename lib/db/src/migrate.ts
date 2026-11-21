@@ -143,8 +143,11 @@ export async function ensureIndexes(): Promise<void> {
           OR (a.window_start = b.window_start AND a.hits = b.hits AND a.ctid < b.ctid)
         )
     `);
+    // A previous interrupted CONCURRENTLY build can leave an invalid
+    // same-name index behind; IF NOT EXISTS would otherwise skip rebuilding it.
+    await client.query(`DROP INDEX CONCURRENTLY IF EXISTS public.api_rate_limits_bucket_key_uidx`);
     await client.query(`
-      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS api_rate_limits_bucket_key_uidx
+      CREATE UNIQUE INDEX CONCURRENTLY api_rate_limits_bucket_key_uidx
       ON public.api_rate_limits (bucket_key)
     `);
   }
