@@ -8,6 +8,7 @@ import { initTwaAdBridge } from "./lib/twaAdBridge";
 import { initTwaPlayGamesBridge } from "./lib/twaPlayGamesBridge";
 import { captureInstalledAppVersion, getInstalledAppVersion, getAnalyticsClientVersion } from "./lib/appVersion";
 import { trackClientError } from "./lib/analyticsClient";
+import { sanitizeDiagnosticText } from "./lib/diagnosticPrivacy";
 
 // Record unexpected network failures without retrying requests or changing gameplay.
 const reportedNetworkFailures = new Set<string>();
@@ -23,7 +24,11 @@ function reportUnexpectedNetworkFailure(error: unknown, context: Record<string, 
     if (oldest) reportedNetworkFailures.delete(oldest);
   }
 
-  trackClientError(value, null, {
+  const safeValue = new Error(sanitizeDiagnosticText(value.message) ?? value.message);
+  safeValue.name = value.name;
+  safeValue.stack = sanitizeDiagnosticText(value.stack) ?? undefined;
+
+  trackClientError(safeValue, null, {
     phase: "global_network_failure",
     error_kind: "fetch_or_resource_load",
     ...context,
@@ -38,7 +43,7 @@ window.addEventListener("error", (event) => {
   if (event.error) {
     reportUnexpectedNetworkFailure(event.error, {
       source: "window_error",
-      filename: event.filename || null,
+      filename: sanitizeDiagnosticText(event.filename),
       line: event.lineno || null,
       column: event.colno || null,
     });
