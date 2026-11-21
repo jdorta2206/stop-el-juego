@@ -24,4 +24,10 @@ describe("daily status timezone consistency", () => {
   it("keeps the Daily Challenge timezone header in place", () => {
     expect(dailyChallengeSource).toContain('"X-Stop-Timezone": getPlayerTimeZone()');
   });
+  it("records HTTP status and request ID when Daily Challenge status lookup fails", () => {
+    expect(dailyChallengeSource).toContain('error.status = r.status');
+    expect(dailyChallengeSource).toContain('error.requestId = r.headers.get("X-Request-Id")');
+    expect(dailyChallengeSource).toContain('endpoint: "/api/daily/status"');
+    expect(dailyChallengeSource).toContain('phase: "daily_challenge_status"');
+  });
 });
