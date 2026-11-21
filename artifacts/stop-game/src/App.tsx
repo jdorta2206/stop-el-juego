@@ -116,6 +116,20 @@ function Router() {
   );
 }
 
+function ChunkRecoveryReset() {
+  // A lazy route has committed successfully. The one-shot guards have done
+  // their job and can be cleared so a later deployment can recover too.
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem("stop_chunk_recovery_once");
+      sessionStorage.removeItem("stop_lazy_default_boundary_recovery_once");
+    } catch {
+      // Session storage may be unavailable in restricted browser contexts.
+    }
+  }, []);
+  return null;
+}
+
 function PackClaimHandler() {
   const { player } = usePlayer();
   useEffect(() => {
@@ -243,6 +257,7 @@ function App() {
                 </div>
               }>
                 <Router />
+                <ChunkRecoveryReset />
               </Suspense>
           </WouterRouter>
           <PlayUpdateBanner />
