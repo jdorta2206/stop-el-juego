@@ -9,6 +9,7 @@ on:
       - "artifacts/api-server/src/routes/rewards.ts"
       - "artifacts/api-server/src/routes/rewards.admob-poll.test.ts"
       - "artifacts/api-server/src/routes/rewards.client-flow.test.ts"
+      - "artifacts/stop-game/src/lib/twaAdBridge.ts"
       - "artifacts/api-server/package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
