@@ -12,6 +12,10 @@ const adminAnalyticsRouteSource = readFileSync(
   resolve(currentDir, "adminAnalytics.ts"),
   "utf8",
 );
+const soloGameSource = readFileSync(
+  resolve(currentDir, "../../../stop-game/src/pages/SoloGame.tsx"),
+  "utf8",
+);
 const allowlistMatch = analyticsRouteSource.match(
   /const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set\(([\s\S]*?)\);/,
 );
@@ -73,4 +77,11 @@ describe("STOP gameplay telemetry allowlist", () => {
     );
   });
 
+});
+
+describe("STOP solo completion analytics", () => {
+  it("stores the solo game mode in the indexed analytics mode column", () => {
+    expect(soloGameSource).toContain('trackAnalyticsEvent("game_complete", { mode: gameMode, metadata: { rounds: maxRounds } })');
+    expect(soloGameSource).not.toContain('trackAnalyticsEvent("game_complete", { metadata: { mode: gameMode, rounds: maxRounds } })');
+  });
 });
