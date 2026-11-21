@@ -145,7 +145,11 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       checkInFlight = true;
       try {
         const result = await readResult(requestId);
-        if (result?.rewarded || result?.source === "skipped") {
+        if (result?.rewarded || result?.source === "skipped" || result?.pendingSsv) {
+          // The native Activity has already reported that the ad was earned.
+          // Stop showing the loading state immediately while SSV reconciliation
+          // remains available through the pending request's explicit retry flow.
+          // Never treat this client signal as a verified reward.
           finish(result);
           return;
         }
