@@ -27,13 +27,16 @@ describe("api_rate_limits legacy schema repair", () => {
 
   it("deduplicates legacy buckets without weakening the newest active limit", () => {
     const repairStart = migrationSource.indexOf("DELETE FROM public.api_rate_limits a");
-    const repairEnd = migrationSource.indexOf("CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS api_rate_limits_bucket_key_uidx", repairStart);
+    const repairEnd = migrationSource.indexOf("DROP INDEX CONCURRENTLY IF EXISTS public.api_rate_limits_bucket_key_uidx", repairStart);
     expect(repairStart).toBeGreaterThan(-1);
     expect(repairEnd).toBeGreaterThan(repairStart);
     const repairSql = migrationSource.slice(repairStart, repairEnd);
     expect(repairSql).toContain("a.window_start < b.window_start");
     expect(repairSql).toContain("a.hits < b.hits");
     expect(repairSql).toContain("a.ctid < b.ctid");
+    expect(migrationSource).toContain(
+      "CREATE UNIQUE INDEX CONCURRENTLY api_rate_limits_bucket_key_uidx",
+    );
     expect(migrationSource).toContain(
       "DROP INDEX CONCURRENTLY IF EXISTS public.api_rate_limits_bucket_key_uidx",
     );
