@@ -47,9 +47,17 @@ window.addEventListener("error", (event) => {
 
   const target = event.target;
   if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement) {
+    const rawUrl = target instanceof HTMLScriptElement ? target.src : target.href;
+    let resourcePath: string | null = null;
+    try {
+      const parsed = new URL(rawUrl, window.location.origin);
+      resourcePath = parsed.origin + parsed.pathname;
+    } catch {
+      // Do not record an unparseable URL or any query-string data.
+    }
     reportUnexpectedNetworkFailure(new Error("Failed to fetch resource"), {
       source: "resource_load",
-      resource_url: target instanceof HTMLScriptElement ? target.src : target.href,
+      resource_url: resourcePath,
       resource_tag: target.tagName.toLowerCase(),
     });
   }
