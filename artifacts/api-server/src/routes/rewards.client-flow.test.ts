@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readResult } from "../../../stop-game/src/lib/twaAdBridge.ts";
+import { readResult, retryRewardedResult } from "../../../stop-game/src/lib/twaAdBridge.ts";
 import { clearPendingDoubleBonus, clearSoloGameRecovery, readPendingDoubleBonuses, readSoloGameRecovery, savePendingDoubleBonus, saveSoloGameRecovery, isRestorableSoloGameRecovery } from "../../../stop-game/src/lib/soloGameRecovery.ts";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -48,6 +48,40 @@ describe("rewarded AdMob client safety regressions", () => {
 
     await expect(resultPromise).resolves.toBeNull();
     expect(requestSignal?.aborted).toBe(true);
+  });
+
+  it("leaves the loading state immediately when Android reports earned but SSV is pending", async () => {
+    vi.useFakeTimers();
+    const fakeWindow = {
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
+      setInterval: globalThis.setInterval,
+      clearInterval: globalThis.clearInterval,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal("window", fakeWindow);
+    vi.stubGlobal("document", {
+      visibilityState: "visible",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    const pendingFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ready: false, clientState: "earned" }),
+    }));
+    vi.stubGlobal("fetch", pendingFetch);
+
+    const result = await retryRewardedResult("pending-earned-regression-1234567890");
+
+    expect(result).toMatchObject({
+      rewarded: false,
+      pendingSsv: true,
+      requestId: "pending-earned-regression-1234567890",
+    });
+    expect(result.rewarded).toBe(false);
+    expect(pendingFetch).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("bounds result polling and acknowledgement fetches with AbortController", () => {
