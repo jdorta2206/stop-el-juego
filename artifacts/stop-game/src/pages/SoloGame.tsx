@@ -1744,6 +1744,10 @@ export default function SoloGame() {
     }
     if (!isRestorableSoloGameRecovery(snapshot, gameMode, packId)) {
       clearSoloGameRecovery(player.id);
+      // The old snapshot belongs to another mode/pack (or is no longer valid).
+      // The current game now owns this player's recovery slot, so allow its
+      // state to be persisted and rewarded ads to start safely.
+      gameOwnerPlayerIdRef.current = player.id;
       return;
     }
     const saved = snapshot.payload as Record<string, any>;
