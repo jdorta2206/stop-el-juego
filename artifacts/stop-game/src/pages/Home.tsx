@@ -180,7 +180,7 @@ export default function Home() {
     const dailyStatusStartedAt = performance.now();
     trackAnalyticsEvent("lobby_daily_status_started", { metadata: { endpoint: "/api/daily/status", method: "GET", phase: "daily_status_request" } });
     fetch(`${getApiUrl()}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
-      headers: { ...authHeaders() },
+      headers: { ...authHeaders(), "X-Stop-Timezone": timeZone },
       credentials: "include",
       signal: controller.signal,
     })

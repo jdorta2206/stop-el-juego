@@ -158,18 +158,35 @@ export default function DailyChallenge() {
         credentials: "include",
         signal: controller.signal,
       })
-        .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
+        .then(r => {
+          if (r.ok) return r.json();
+          const error = new Error("daily-status") as Error & { status?: number; requestId?: string };
+          error.status = r.status;
+          error.requestId = r.headers.get("X-Request-Id") || undefined;
+          throw error;
+        })
         .then(d => {
           if (d.played) {
             setPlayedToday(true);
             setMyScore(typeof d.score === "number" ? d.score : null);
           }
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (controller.signal.aborted) return;
           // Do not block a logged-in player based on stale local state.
           setPlayedToday(false);
           setMyScore(null);
+          const status = error && typeof error === "object" && "status" in error
+            ? Number((error as { status?: unknown }).status)
+            : null;
+          const requestId = error && typeof error === "object" && "requestId" in error
+            ? String((error as { requestId?: unknown }).requestId ?? "")
+            : "";
+          trackClientError(
+            error instanceof Error ? error : new Error("daily-status"),
+            null,
+            { endpoint: "/api/daily/status", method: "GET", phase: "daily_challenge_status", status, requestId: requestId || null },
+          );
         });
       // NOTE: do NOT increment the games-played counter here. The daily
       // match itself already runs through SoloGame.tsx (which calls
