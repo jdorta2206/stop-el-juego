@@ -112,6 +112,43 @@ export async function ensureIndexes(): Promise<void> {
     }
   }
 
+  // Older installations may already have api_rate_limits without the
+  // primary key declared by CREATE TABLE IF NOT EXISTS. In that case the
+  // rate limiter's ON CONFLICT (bucket_key) has no matching unique index.
+  // Preserve the strictest active bucket while removing legacy duplicates,
+  // then add the unique index before marking the database ready.
+  const rateLimitUnique = await client.query(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_index i
+      JOIN pg_attribute a
+        ON a.attrelid = i.indrelid
+       AND a.attnum = i.indkey[0]
+      WHERE i.indrelid = 'public.api_rate_limits'::regclass
+        AND i.indisunique
+        AND i.indisvalid
+        AND i.indpred IS NULL
+        AND i.indnkeyatts = 1
+        AND a.attname = 'bucket_key'
+    ) AS ready
+  `);
+  if (!rateLimitUnique.rows[0]?.ready) {
+    await client.query(`
+      DELETE FROM public.api_rate_limits a
+      USING public.api_rate_limits b
+      WHERE a.bucket_key = b.bucket_key
+        AND (
+          a.window_start < b.window_start
+          OR (a.window_start = b.window_start AND a.hits < b.hits)
+          OR (a.window_start = b.window_start AND a.hits = b.hits AND a.ctid < b.ctid)
+        )
+    `);
+    await client.query(`
+      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS api_rate_limits_bucket_key_uidx
+      ON public.api_rate_limits (bucket_key)
+    `);
+  }
+
   // One-time data repair. The marker and both deduplication deletes commit
   // together, so a failed migration can be retried safely on the next boot.
   try {
