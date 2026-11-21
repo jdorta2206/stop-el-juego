@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readResult, retryRewardedResult } from "../../../stop-game/src/lib/twaAdBridge.ts";
+import { clearPendingDoubleBonus, clearSoloGameRecovery, readPendingDoubleBonuses, readSoloGameRecovery, savePendingDoubleBonus, saveSoloGameRecovery, isRestorableSoloGameRecovery } from "../../../stop-game/src/lib/soloGameRecovery.ts";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,8 +10,13 @@ const readClientSource = (path: string) => readFileSync(resolve(currentDir, path
 const bridgeSource = readClientSource("../../../stop-game/src/lib/twaAdBridge.ts");
 const rewardedSource = readClientSource("../../../stop-game/src/components/AdSystemFixed.tsx");
 const soloGameSource = readClientSource("../../../stop-game/src/pages/SoloGame.tsx");
+const roomSource = readClientSource("../../../stop-game/src/pages/Room.tsx");
+const achievementsSource = readClientSource("../../../stop-game/src/hooks/useAchievements.ts");
+const reviewPromptSource = readClientSource("../../../stop-game/src/hooks/useReviewPrompt.ts");
+const interstitialSource = readClientSource("../../../stop-game/src/lib/interstitialAd.ts");
 const adminAnalyticsSource = readFileSync(resolve(currentDir, "./adminAnalytics.ts"), "utf8");
 const rewardsRouteSource = readFileSync(resolve(currentDir, "./rewards.ts"), "utf8");
+const rankingSource = readFileSync(resolve(currentDir, "./ranking.ts"), "utf8");
 
 
 afterEach(() => {
@@ -94,9 +100,9 @@ describe("rewarded AdMob client safety regressions", () => {
   });
 
   it("does not silently accept a confirmed hint when its pending hint disappeared", () => {
-    const hintBranch = soloGameSource.indexOf('} else if (rewardedAdType === "hint")');
+    const hintBranch = soloGameSource.indexOf('} else if (rewardType === "hint")');
     const missingHint = soloGameSource.indexOf("throw new Error", hintBranch);
-    const clearPending = soloGameSource.indexOf("pendingHintRef.current = null", hintBranch);
+    const clearPending = soloGameSource.indexOf("next.pendingHint = null", hintBranch);
     expect(hintBranch).toBeGreaterThan(-1);
     expect(missingHint).toBeGreaterThan(hintBranch);
     expect(clearPending).toBeGreaterThan(missingHint);
@@ -121,7 +127,7 @@ describe("rewarded AdMob client safety regressions", () => {
   });
 
   it("does not report completion or consume when the applied marker cannot be persisted", () => {
-    const apply = rewardedSource.indexOf("await onCompleteRef.current(amount)");
+    const apply = rewardedSource.indexOf("await onCompleteRef.current(amount, requestId)");
     const persist = rewardedSource.indexOf("const persisted = markStoredRewardApplied(requestId, playerId)", apply);
     const failure = rewardedSource.indexOf("if (!persisted)", persist);
     const consume = rewardedSource.indexOf("await acknowledgeRewardResult(requestId)", persist);
@@ -147,7 +153,8 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(retryConsume).toBeGreaterThan(appliedMount);
     expect(normalPending).toBeGreaterThan(retryConsume);
     expect(rewardedSource).toContain('status?: "pending" | "applied"');
-    expect(rewardedSource).toContain("if (acknowledged) clearStoredPendingReward(playerId)");
+    expect(rewardedSource).toContain("clearStoredPendingReward(playerId)");
+    expect(rewardedSource).toContain("if (!gameMarkerCleared)");
     expect(rewardedSource).toContain("const [consumeAckPending, setConsumeAckPending] = useState(false)");
     expect(rewardedSource).toContain("retryConsumeAcknowledgement");
     expect(rewardedSource).toContain("consumeAckPending ? retryConsumeAcknowledgement : retryConfirmation");
@@ -187,8 +194,378 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(rewardedSource).toContain("if (!playerId?.trim()) {");
   });
 
+
+  it("stores recovery snapshots per player and rejects a different owner", () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", { state: "PLAYING", timeLeft: 24 })).toBe(true);
+    expect(readSoloGameRecovery("player-a")?.payload.timeLeft).toBe(24);
+    expect(readSoloGameRecovery("player-b")).toBeNull();
+    clearSoloGameRecovery("player-a");
+    expect(readSoloGameRecovery("player-a")).toBeNull();
+  });
+
+  it("keeps double-score submissions in a separate player-scoped durable outbox", () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    const entry = {
+      playerId: "player-a",
+      submissionId: "game-123:bonus",
+      bonus: 42,
+      aiTotalScore: 18,
+      letter: "M",
+      scoreTokens: ["proof-a"],
+    };
+    expect(savePendingDoubleBonus(entry)).toBe(true);
+    expect(savePendingDoubleBonus({ ...entry, bonus: 42 })).toBe(true);
+    expect(readPendingDoubleBonuses("player-a")).toHaveLength(1);
+    expect(readPendingDoubleBonuses("player-b")).toHaveLength(0);
+    expect(readPendingDoubleBonuses("player-a")[0]).toMatchObject(entry);
+    expect(clearPendingDoubleBonus("player-a", entry.submissionId)).toBe(true);
+    expect(readPendingDoubleBonuses("player-a")).toHaveLength(0);
+  });
+
+  it("expires an interrupted game snapshot after 24 hours", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-20T10:00:00.000Z"));
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    saveSoloGameRecovery("player-a", "normal", "classic", { state: "PLAYING" });
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000 + 1);
+    expect(readSoloGameRecovery("player-a")).toBeNull();
+  });
+
+  it("persists the complete active round before applying a rewarded effect and records request ids", () => {
+    expect(soloGameSource).toContain("saveSoloGameRecovery(player.id, gameMode, packId, next)");
+    expect(soloGameSource).toContain("appliedRewardRequestIds: nextAppliedIds");
+    expect(soloGameSource).toContain("readSoloGameRecovery(player.id)");
+    expect(soloGameSource).toContain('setGameState("PLAYING")');
+    expect(soloGameSource).toContain("pendingDoubleBonusRef.current");
+    expect(soloGameSource).toContain("letter: saved.currentLetter");
+    expect(soloGameSource).toContain('letter: opts?.letter || currentLetter || "?",');
+    expect(soloGameSource).toContain("rewardedAdType,");
+    expect(soloGameSource).toContain("setRewardedAdType(saved.rewardedAdType");
+    expect(rewardedSource).toContain("onCompleteRef.current(amount, requestId)");
+    expect(rewardedSource).toContain("if (canStartReward && !canStartReward())");
+    expect(soloGameSource).toContain("canStartReward={() => Boolean");
+    expect(soloGameSource).toContain("if (previouslyApplied.includes(requestId))");
+    expect(soloGameSource).toContain("state: gameState,");
+    expect(soloGameSource).toContain("roundResults,");
+    expect(soloGameSource).toContain('setGameState(saved.state === "RESULTS" ? "RESULTS" : "PLAYING")');
+    expect(soloGameSource).toContain('if (saved.state === "RESULTS" && rewardType !== "double")');
+    expect(soloGameSource).toContain("pendingRewardAckRequestIdRef.current");
+    expect(soloGameSource).toContain("pendingRewardAckTypeRef.current ?? rewardedAdType");
+    expect(rewardedSource).toContain("onRewardAcknowledgedRef.current?.(requestId)");
+    expect(rewardedSource).toContain("onRewardAcknowledged?: (requestId: string) => boolean");
+    expect(rewardedSource).toContain("const gameMarkerCleared = onRewardAcknowledgedRef.current?.(requestId) !== false");
+    expect(rewardedSource).toContain('throw new Error("REWARDED_ACK_PENDING")');
+    expect(rewardedSource).toContain("if (consumeAckPending) return;");
+    expect(rewardedSource).toContain("{!consumeAckPending && <button onClick={continueWithoutReward}");
+    expect(soloGameSource).not.toContain("setRewardedAdType(null);\n      return;");
+    expect(soloGameSource).toContain("const handleRewardAcknowledged = (requestId: string): boolean =>");
+    expect(soloGameSource).toContain("saveSoloGameRecovery(player.id, snapshot.gameMode, snapshot.packId");
+  });
+
+  it("assigns the current player after discarding an incompatible recovery snapshot", () => {
+    const recoveryStart = soloGameSource.indexOf("// Restore an interrupted PLAYING round");
+    const retryStart = soloGameSource.indexOf("// Retry double-score submissions independently", recoveryStart);
+    const recoveryEffect = soloGameSource.slice(recoveryStart, retryStart);
+    const incompatibleSnapshot = recoveryEffect.indexOf("if (!isRestorableSoloGameRecovery(snapshot, gameMode, packId))");
+    const clearSnapshot = recoveryEffect.indexOf("clearSoloGameRecovery(player.id);", incompatibleSnapshot);
+    const assignOwner = recoveryEffect.indexOf("gameOwnerPlayerIdRef.current = player.id;", clearSnapshot);
+    const returnAfterClear = recoveryEffect.indexOf("return;", clearSnapshot);
+    expect(incompatibleSnapshot).toBeGreaterThanOrEqual(0);
+    expect(clearSnapshot).toBeGreaterThan(incompatibleSnapshot);
+    expect(assignOwner).toBeGreaterThan(clearSnapshot);
+    expect(returnAfterClear).toBeGreaterThan(assignOwner);
+  });
+
+  it("restores a player-owned active round and resumes its timer after a WebView restart", () => {
+    expect(soloGameSource).toContain("recoveryInitializedForPlayerRef.current = player.id");
+    expect(soloGameSource).toContain("scoreTokensRef.current = Array.isArray(saved.scoreTokens)");
+    expect(soloGameSource).toContain("void handleStop()");
+    expect(soloGameSource).toContain("clearSoloGameRecovery(player.id)");
+    expect(soloGameSource).toContain("resultsAppliedRef.current = saved.resultsApplied === true;");
+    expect(soloGameSource).not.toContain("saved.resultsApplied === true || saved.state === \"RESULTS\"");
+    const handleStopStart = soloGameSource.indexOf("const handleStop = async () => {");
+    const zeroTimeSnapshot = soloGameSource.indexOf('buildSoloGameRecoveryPayload({ state: "PLAYING", timeLeft: 0, responses: currentResponses })', handleStopStart);
+    const validationStart = soloGameSource.indexOf("validateMutation.mutateAsync({", handleStopStart);
+    expect(zeroTimeSnapshot).toBeGreaterThan(handleStopStart);
+    expect(validationStart).toBeGreaterThan(zeroTimeSnapshot);
+    const handleStopResolution = soloGameSource.slice(handleStopStart, validationStart);
+    expect(handleStopResolution).not.toContain("clearSoloGameRecovery(");
+  });
+
+  it("persists and retries double-score submissions independently of the game snapshot", () => {
+    const persist = soloGameSource.indexOf("const persisted = savePendingDoubleBonus(");
+    const mutate = soloGameSource.indexOf("submitScoreMutation.mutate({", persist);
+    const clearSuccess = soloGameSource.indexOf("clearBonusRecovery()", mutate);
+    const retryEffect = soloGameSource.indexOf("readPendingDoubleBonuses(player.id)");
+    expect(persist).toBeGreaterThan(-1);
+    expect(mutate).toBeGreaterThan(persist);
+    expect(clearSuccess).toBeGreaterThan(mutate);
+    expect(retryEffect).toBeGreaterThan(-1);
+    expect(soloGameSource).toContain("pendingBonusRetriesRef.current.has(entry.submissionId)");
+    expect(soloGameSource).toContain("submissionId: entry.submissionId");
+    expect(soloGameSource).toContain("clearPendingDoubleBonus(player.id, submissionId)");
+    expect(soloGameSource).toContain("pendingBonusRetriesRef.current.add(submissionId)");
+    expect(soloGameSource).toContain("pendingDoubleBonus: null");
+    expect(soloGameSource).toContain('window.addEventListener("online", retryPendingBonuses)');
+    expect(soloGameSource).toContain('window.addEventListener("focus", retryPendingBonuses)');
+    expect(soloGameSource).toContain('window.addEventListener("pageshow", retryPendingBonuses)');
+    expect(soloGameSource).toContain('document.addEventListener("visibilitychange", retryPendingBonuses)');
+    expect(soloGameSource).toContain("pendingBonusRetryTimersRef.current.clear()");
+    expect(soloGameSource).toContain("pendingBonusRetryAttemptsRef.current");
+    expect(soloGameSource).toContain("pendingBonusRetryTimersRef.current");
+    expect(soloGameSource).toContain("const delays = [5_000, 15_000, 30_000, 60_000]");
+    expect(soloGameSource).toContain("if (attempts < delays.length)");
+    expect(soloGameSource).toContain("The durable\n            // outbox remains available for the next app-resume/online event.");
+    expect(soloGameSource).toContain("readPendingDoubleBonuses(player.id).find((entry) => entry.submissionId === submissionId)");
+    expect(soloGameSource).toContain("pendingBonusRetriesRef.current.delete(submissionId)");
+    expect(soloGameSource).toContain("pendingBonusRetriesRef.current.add(submissionId)");
+    expect(soloGameSource).toContain("Never discard the active-game snapshot while its double-score submission");
+    expect(soloGameSource).toContain("if (newGame && pendingDoubleBonusRef.current");
+    expect(soloGameSource).toContain("const persisted = savePendingDoubleBonus({");
+    const offlineBonusTransfer = soloGameSource.slice(
+      soloGameSource.indexOf("await enqueueScoreOutbox({", soloGameSource.indexOf("const submitToLeaderboard")),
+      soloGameSource.indexOf("const offMsg =", soloGameSource.indexOf("await enqueueScoreOutbox({", soloGameSource.indexOf("const submitToLeaderboard"))),
+    );
+    expect(offlineBonusTransfer).not.toContain("clearBonusRecovery()");
+  });
+
+  it("deduplicates recovered game counters and separates review cadence from interstitial cadence", () => {
+    expect(achievementsSource).toContain("interface AchievementStatsRecord");
+    expect(achievementsSource).toContain("processedRoundIds");
+    expect(achievementsSource).toContain("if (roundId && record.processedRoundIds.includes(roundId)) return;");
+    expect(achievementsSource).toContain("saveStatsLocal(playerId, next, processedRoundIds)");
+    expect(soloGameSource).toContain("${gameSubmissionIdRef.current}:round:${round}");
+    expect(reviewPromptSource).toContain("interface GameCounterRecord");
+    expect(reviewPromptSource).toContain("if (gameId && current.processedIds.includes(gameId)) return;");
+    expect(reviewPromptSource).toContain("recordScoreAndPercentile(score: number, gameId?: string)");
+    expect(soloGameSource).toContain("recordGamePlayed(completedGameId)");
+    expect(soloGameSource).toContain("recordScoreAndPercentile(finalPlayerScore, completedGameId)");
+    expect(interstitialSource).toContain('const GAMES_KEY = "stop_interstitial_games_completed_v1"');
+    expect(interstitialSource).toContain('const CONSUMED_KEY = "stop_interstitial_consumed_games_v2"');
+    expect(interstitialSource).toContain("recordInterstitialGameCompleted(gameId?: string)");
+    expect(soloGameSource).toContain("recordInterstitialGameCompleted(gameSubmissionIdRef.current ?? undefined)");
+    expect(roomSource).toContain('recordInterstitialGameCompleted(roomCode ? `room:${roomCode.toUpperCase()}` : undefined)');
+    expect(roomSource).toContain('recordGamePlayed(roomCode ? `room:${roomCode.toUpperCase()}` : undefined)');
+  });
+
+
+  it("accepts only complete snapshots for the selected mode and pack", () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "PLAYING", currentLetter: "M", timeLeft: 31, categories: ["Nombre", "País"],
+    })).toBe(true);
+    const active = readSoloGameRecovery("player-a");
+    expect(isRestorableSoloGameRecovery(active, "normal", "classic")).toBe(true);
+    expect(isRestorableSoloGameRecovery(active, "daily", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery(active, "normal", "animals")).toBe(false);
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "JUDGING", currentLetter: "M", timeLeft: 0, categories: ["Nombre"],
+    })).toBe(true);
+    expect(isRestorableSoloGameRecovery(readSoloGameRecovery("player-a"), "normal", "classic")).toBe(false);
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "RESULTS", currentLetter: "M", timeLeft: 0, categories: ["Nombre"],
+    })).toBe(true);
+    expect(isRestorableSoloGameRecovery(readSoloGameRecovery("player-a"), "normal", "classic")).toBe(true);
+
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "PLAYING", currentLetter: "M", timeLeft: Number.NaN, categories: ["Nombre"],
+    })).toBe(true);
+    expect(isRestorableSoloGameRecovery(readSoloGameRecovery("player-a"), "normal", "classic")).toBe(false);
+  });
+
+  it("discards corrupt recovery JSON without preventing a fresh game", () => {
+    const values = new Map<string, string>([["stop_solo_game_recovery_v1:player-a", "{broken-json"]]);
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    expect(readSoloGameRecovery("player-a")).toBeNull();
+    expect(values.has("stop_solo_game_recovery_v1:player-a")).toBe(false);
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", {
+      state: "PLAYING", currentLetter: "M", timeLeft: 20, categories: ["Nombre"],
+    })).toBe(true);
+    expect(readSoloGameRecovery("player-a")).not.toBeNull();
+  });
+
+  it("rejects incomplete or unsafe recovery payloads before restoring a round", () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    expect(isRestorableSoloGameRecovery({
+      version: 1, playerId: "player-a", gameMode: "normal", packId: "classic",
+      savedAt: Date.now(), payload: { state: "PLAYING", currentLetter: "", timeLeft: 20, categories: ["Nombre"] },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      version: 1, playerId: "player-a", gameMode: "normal", packId: "classic",
+      savedAt: Date.now(), payload: { state: "PLAYING", currentLetter: "M", timeLeft: -1, categories: ["Nombre"] },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      version: 1, playerId: "player-a", gameMode: "normal", packId: "classic",
+      savedAt: Date.now(), payload: { state: "RESULTS", currentLetter: "M", timeLeft: 0, categories: [] },
+    }, "normal", "classic")).toBe(false);
+    expect(saveSoloGameRecovery("player-a", "normal", "classic", [] as unknown as Record<string, unknown>)).toBe(false);
+  });
+
+  it("rejects malformed optional recovery fields but keeps legacy snapshots with omitted fields", () => {
+    const base = {
+      version: 1 as const, playerId: "player-a", gameMode: "normal", packId: "classic",
+      savedAt: Date.now(),
+    };
+    const validPayload = {
+      state: "PLAYING", currentLetter: "M", timeLeft: 20, categories: ["Nombre"],
+      responses: { Nombre: "Maria" }, round: 2, totalScore: 35, aiTotalScore: 20,
+      randomEvent: "speed", activeCard: "lightning", scoreTokens: ["proof-1"],
+    };
+    expect(isRestorableSoloGameRecovery({ ...base, payload: validPayload }, "normal", "classic")).toBe(true);
+    // Double-reward snapshots intentionally store only the local amount and AI
+    // score; player/submission identity is persisted in the separate outbox.
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, pendingDoubleBonus: { bonus: 35, aiTotalScore: 20 } },
+    }, "normal", "classic")).toBe(true);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, pendingDoubleBonus: { bonus: -1, aiTotalScore: 20 } },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, pendingDoubleBonus: { bonus: 35, aiTotalScore: 20, submissionId: 42 } },
+    }, "normal", "classic")).toBe(false);
+    // Older snapshots did not persist all optional fields; they remain resumable.
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { state: "PLAYING", currentLetter: "M", timeLeft: 20, categories: ["Nombre"] },
+    }, "normal", "classic")).toBe(true);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, responses: ["not", "a", "record"] },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, responses: { Nombre: 42 } },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, randomEvent: "unknown-event" },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, activeCard: "unknown-card" },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, round: 99 },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, scoreTokens: [null] },
+    }, "normal", "classic")).toBe(false);
+    expect(isRestorableSoloGameRecovery({
+      ...base, payload: { ...validPayload, pendingHint: { category: "Nombre" } },
+    }, "normal", "classic")).toBe(false);
+  });
+
   it("counts actual ad_impression events separately from rewarded completions", () => {
     expect(adminAnalyticsSource).toContain("COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions");
     expect(adminAnalyticsSource).not.toContain("event_name IN ('ad_impression','rewarded_ad_completed')");
   });
+
+  it("rolls back a bonus submission claim when a concurrent request already consumed its reward claim", () => {
+    const transactionStart = rankingSource.indexOf("bonusResult = await db.transaction(async (tx) =>");
+    const submissionClaim = rankingSource.indexOf('.insert(scoreSubmissionClaimsTable)', transactionStart);
+    const consumeRewardClaim = rankingSource.indexOf('.delete(scoreBonusClaimsTable)', transactionStart);
+    const rollbackSignal = rankingSource.indexOf('throw new Error("BONUS_CLAIM_ALREADY_CONSUMED")', consumeRewardClaim);
+    const transactionCatch = rankingSource.indexOf('error.message === "BONUS_CLAIM_ALREADY_CONSUMED"', rollbackSignal);
+    expect(transactionStart).toBeGreaterThan(-1);
+    expect(submissionClaim).toBeGreaterThan(transactionStart);
+    expect(consumeRewardClaim).toBeGreaterThan(submissionClaim);
+    expect(rollbackSignal).toBeGreaterThan(consumeRewardClaim);
+    expect(transactionCatch).toBeGreaterThan(rollbackSignal);
+    expect(rankingSource.slice(consumeRewardClaim, rollbackSignal)).not.toContain("return null");
+    expect(rankingSource.slice(transactionCatch, transactionCatch + 220)).toContain('res.status(422).json({ error: "INVALID_BONUS_SCORE" })');
+  });
+
+  it("keeps server-only double-score recovery limited to registered players", () => {
+    const startGame = soloGameSource.slice(
+      soloGameSource.indexOf("const startGame = (newGame = true) =>"),
+      soloGameSource.indexOf("const handleStop = async () =>"),
+    );
+    const submit = soloGameSource.slice(
+      soloGameSource.indexOf("const submitToLeaderboard ="),
+      soloGameSource.indexOf("const submittedRef ="),
+    );
+    expect(startGame).toContain('player.loginMethod !== "guest"');
+    expect(submit).toContain('if (!player || player.loginMethod === "guest") return;');
+    expect(startGame).toContain("savePendingDoubleBonus({");
+    expect(startGame).toContain("if (!persisted)");
+  });
+
+
+  it("survives a simulated WebView destruction and module recreation without losing reward state", async () => {
+    const values = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal("window", { localStorage });
+
+    const interruptedRound = {
+      state: "PLAYING",
+      currentLetter: "M",
+      timeLeft: 0,
+      round: 2,
+      categories: ["Nombre", "Ciudad"],
+      responses: { Nombre: "María" },
+      totalScore: 35,
+      aiTotalScore: 28,
+      rewardedAdType: "extraTime",
+      appliedRewardRequestIds: ["ssv-request-already-applied"],
+      pendingRewardAckRequestId: "ssv-request-awaiting-ack",
+    };
+
+    const firstInstance = await import("../../../stop-game/src/lib/soloGameRecovery.ts");
+    expect(firstInstance.saveSoloGameRecovery("player-recreated", "normal", "classic", interruptedRound)).toBe(true);
+
+    // A WebView process restart destroys module memory; localStorage survives.
+    vi.resetModules();
+    const recreatedInstance = await import("../../../stop-game/src/lib/soloGameRecovery.ts");
+    const restored = recreatedInstance.readSoloGameRecovery("player-recreated");
+
+    expect(restored?.payload).toMatchObject(interruptedRound);
+    expect(recreatedInstance.isRestorableSoloGameRecovery(restored, "normal", "classic")).toBe(true);
+    expect(recreatedInstance.readSoloGameRecovery("another-player")).toBeNull();
+    expect((restored?.payload.appliedRewardRequestIds as string[])).toContain("ssv-request-already-applied");
+    expect(restored?.payload.pendingRewardAckRequestId).toBe("ssv-request-awaiting-ack");
+  });
+
 });

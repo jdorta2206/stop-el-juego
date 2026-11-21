@@ -106,7 +106,7 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20, canStartReward, onRewardAcknowledged }: { onComplete: (reward: number, requestId: string) => void | Promise<void>; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number; canStartReward?: () => boolean; onRewardAcknowledged?: (requestId: string) => boolean }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -116,8 +116,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   const mountedRef = useRef(true);
   const onCompleteRef = useRef(onComplete);
   const onSkipRef = useRef(onSkip);
+  const onRewardAcknowledgedRef = useRef(onRewardAcknowledged);
   onCompleteRef.current = onComplete;
   onSkipRef.current = onSkip;
+  onRewardAcknowledgedRef.current = onRewardAcknowledged;
   // A rapid double tap / overlapping SSV retry must never apply the same
   // confirmed request twice during this mounted game session.
   const completedRewardRequestsRef = useRef(new Set<string>());
@@ -126,7 +128,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     completedRewardRequestsRef.current.add(requestId);
     let rewardAppliedLocally = false;
     try {
-      await onCompleteRef.current(amount);
+      await onCompleteRef.current(amount, requestId);
       rewardAppliedLocally = true;
       // Never report success or consume the server result unless the durable
       // applied marker was actually written. Keep the in-memory guard if the
@@ -137,7 +139,20 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         throw new Error("STOP aplicó la recompensa, pero no pudo guardar su confirmación local. No se volverá a aplicar automáticamente en esta sesión.");
       }
       const acknowledged = await acknowledgeRewardResult(requestId);
-      if (acknowledged) clearStoredPendingReward(playerId);
+      if (!acknowledged) {
+        setConsumeAckPending(true);
+        setErrorDetail("La recompensa ya se aplicó, pero falta confirmar su cierre con el servidor. Reintenta el cierre; no se volverá a aplicar.");
+        setPhase("pending");
+        throw new Error("REWARDED_ACK_PENDING");
+      }
+      const gameMarkerCleared = onRewardAcknowledgedRef.current?.(requestId) !== false;
+      if (!gameMarkerCleared) {
+        setConsumeAckPending(true);
+        setErrorDetail("El servidor confirmó la recompensa, pero STOP todavía no pudo cerrar su registro local. Reintenta el cierre.");
+        setPhase("pending");
+        throw new Error("GAME_RECOVERY_MARKER_PENDING");
+      }
+      clearStoredPendingReward(playerId);
       setRetryRequestId(null);
       return true;
     } catch (error) {
@@ -170,11 +185,17 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       setPhase("pending");
       void acknowledgeRewardResult(stored.requestId).then((acknowledged) => {
         if (acknowledged) {
-          clearStoredPendingReward(playerId);
-          if (mountedRef.current) {
-            setConsumeAckPending(false);
-            setErrorDetail("");
-            setPhase("pre");
+          const gameMarkerCleared = onRewardAcknowledgedRef.current?.(stored.requestId) !== false;
+          if (gameMarkerCleared) {
+            clearStoredPendingReward(playerId);
+            if (mountedRef.current) {
+              setConsumeAckPending(false);
+              setErrorDetail("");
+              setPhase("pre");
+            }
+          } else if (mountedRef.current) {
+            setErrorDetail("El servidor confirmó la recompensa, pero STOP todavía no pudo cerrar su registro local. Reintenta el cierre.");
+            setPhase("pending");
           }
         }
       });
@@ -198,6 +219,11 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     // Premium and unmounted overlays must never request or grant an ad reward.
     if (!ADMOB_ADS_ENABLED || isPremium || !mountedRef.current) {
       if (mountedRef.current) onSkipRef.current();
+      return;
+    }
+    if (canStartReward && !canStartReward()) {
+      setErrorDetail("No se pudo guardar la partida para proteger esta recompensa. No se abrirá el anuncio.");
+      setPhase("error");
       return;
     }
     setRewardedAdPlayerId(playerId);
@@ -246,8 +272,14 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
                   setPhase("pending");
                 }
               } catch {
-                setRetryRequestId(result.requestId!);
-                setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
+                const stored = readStoredPendingReward(playerId);
+                if (stored?.requestId === result.requestId && stored.status === "applied") {
+                  setConsumeAckPending(true);
+                  setErrorDetail("La recompensa ya está aplicada. Solo falta cerrar su confirmación; no se volverá a aplicar.");
+                } else {
+                  setRetryRequestId(result.requestId!);
+                  setErrorDetail("Google confirmó el anuncio, pero STOP no pudo guardar la recompensa. Puedes reintentar la comprobación.");
+                }
                 setPhase("pending");
               }
             }
@@ -334,10 +366,16 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     const acknowledged = await acknowledgeRewardResult(stored.requestId);
     if (!mountedRef.current) return;
     if (acknowledged) {
-      clearStoredPendingReward(playerId);
-      setConsumeAckPending(false);
-      setErrorDetail("");
-      setPhase("pre");
+      const gameMarkerCleared = onRewardAcknowledgedRef.current?.(stored.requestId) !== false;
+      if (gameMarkerCleared) {
+        clearStoredPendingReward(playerId);
+        setConsumeAckPending(false);
+        setErrorDetail("");
+        setPhase("pre");
+      } else {
+        setErrorDetail("El servidor confirmó la recompensa, pero STOP todavía no pudo cerrar su registro local. Reintenta el cierre.");
+        setPhase("pending");
+      }
     } else {
       setErrorDetail("La recompensa ya está aplicada. No vuelvas a ver otro anuncio todavía; reintenta cerrar la confirmación.");
       setPhase("pending");
@@ -368,7 +406,13 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
               setPhase("pending");
             }
           } catch {
-            setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
+            const stored = readStoredPendingReward(playerId);
+            if (stored?.requestId === retryRequestId && stored.status === "applied") {
+              setConsumeAckPending(true);
+              setErrorDetail("La recompensa ya está aplicada. Solo falta cerrar su confirmación; no se volverá a aplicar.");
+            } else {
+              setErrorDetail("Google confirmó el anuncio, pero STOP no pudo guardar la recompensa. Puedes reintentar la comprobación.");
+            }
             setPhase("pending");
           }
         }
@@ -390,11 +434,14 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
   if (isPremium) return null;
   const continueWithoutReward = () => {
+    // An already-applied reward must remain mounted until its server ACK and
+    // game recovery marker are both closed. Never discard that durable record.
+    if (consumeAckPending) return;
     clearStoredPendingReward(playerId);
     setRetryRequestId(null);
     onSkipRef.current();
   };
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : phase === "pending" ? "Confirmación pendiente" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={continueWithoutReward} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar o confirmar el anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={continueWithoutReward} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}
-      {phase === "pending" && <><div className="py-8 text-4xl">⏳</div><p className="text-sm text-gray-700">{consumeAckPending ? "La recompensa anterior ya se aplicó. Solo falta confirmar al servidor que se ha cerrado; no se volverá a aplicar." : "El anuncio se ha visto, pero Google todavía no ha confirmado la recompensa. No se concederá hasta recibir la verificación segura."}</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={consumeAckPending ? retryConsumeAcknowledgement : retryConfirmation} className="w-full py-3 mt-4 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">{consumeAckPending ? "Reintentar cierre" : "Reintentar comprobación"}</button><button onClick={continueWithoutReward} className="w-full py-2 mt-2 text-gray-500">Continuar sin recompensa</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
+      {phase === "pending" && <><div className="py-8 text-4xl">⏳</div><p className="text-sm text-gray-700">{consumeAckPending ? "La recompensa anterior ya se aplicó. Solo falta confirmar al servidor que se ha cerrado; no se volverá a aplicar." : "El anuncio se ha visto, pero Google todavía no ha confirmado la recompensa. No se concederá hasta recibir la verificación segura."}</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={consumeAckPending ? retryConsumeAcknowledgement : retryConfirmation} className="w-full py-3 mt-4 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">{consumeAckPending ? "Reintentar cierre" : "Reintentar comprobación"}</button>{!consumeAckPending && <button onClick={continueWithoutReward} className="w-full py-2 mt-2 text-gray-500">Continuar sin recompensa</button>}</>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
 }
