@@ -250,6 +250,20 @@ describe("rewarded AdMob client safety regressions", () => {
     expect(soloGameSource).toContain("saveSoloGameRecovery(player.id, snapshot.gameMode, snapshot.packId");
   });
 
+  it("assigns the current player after discarding an incompatible recovery snapshot", () => {
+    const recoveryStart = soloGameSource.indexOf("// Restore an interrupted PLAYING round");
+    const retryStart = soloGameSource.indexOf("// Retry double-score submissions independently", recoveryStart);
+    const recoveryEffect = soloGameSource.slice(recoveryStart, retryStart);
+    const incompatibleSnapshot = recoveryEffect.indexOf("if (!isRestorableSoloGameRecovery(snapshot, gameMode, packId))");
+    const clearSnapshot = recoveryEffect.indexOf("clearSoloGameRecovery(player.id);", incompatibleSnapshot);
+    const assignOwner = recoveryEffect.indexOf("gameOwnerPlayerIdRef.current = player.id;", clearSnapshot);
+    const returnAfterClear = recoveryEffect.indexOf("return;", clearSnapshot);
+    expect(incompatibleSnapshot).toBeGreaterThanOrEqual(0);
+    expect(clearSnapshot).toBeGreaterThan(incompatibleSnapshot);
+    expect(assignOwner).toBeGreaterThan(clearSnapshot);
+    expect(returnAfterClear).toBeGreaterThan(assignOwner);
+  });
+
   it("restores a player-owned active round and resumes its timer after a WebView restart", () => {
     expect(soloGameSource).toContain("recoveryInitializedForPlayerRef.current = player.id");
     expect(soloGameSource).toContain("scoreTokensRef.current = Array.isArray(saved.scoreTokens)");
