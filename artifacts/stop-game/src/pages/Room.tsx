@@ -1136,7 +1136,8 @@ export default function Room() {
       // if the finished snapshot is delivered repeatedly by SSE/polling.
       if (interstitialCountedRoomRef.current !== roomCode) {
         interstitialCountedRoomRef.current = roomCode || "";
-        recordInterstitialGameCompleted(roomCode ? `room:${roomCode.toUpperCase()}` : undefined);
+        const completedMatchId = (room as any)?.id ?? roomCode;
+        recordInterstitialGameCompleted(completedMatchId ? `room:${String(completedMatchId).toUpperCase()}` : undefined);
         void maybeShowInterstitial(adsBlocked);
       }
 
@@ -1145,7 +1146,8 @@ export default function Room() {
       // only when the player is happy: ranked top of the room.
       if (!reviewCountedRef.current) {
         reviewCountedRef.current = true;
-        recordGamePlayed(roomCode ? `room:${roomCode.toUpperCase()}` : undefined);
+        const completedMatchId = (room as any)?.id ?? roomCode;
+        recordGamePlayed(completedMatchId ? `room:${String(completedMatchId).toUpperCase()}` : undefined);
         if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
         reviewTimerRef.current = setTimeout(() => {
           reviewPrompt.maybeShow({ won: iWon });
