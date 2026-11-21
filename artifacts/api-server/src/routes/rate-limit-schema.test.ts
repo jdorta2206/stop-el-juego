@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const migrationSource = readFileSync(
-  resolve(currentDir, "../../../../../lib/db/src/migrate.ts"),
+  resolve(currentDir, "../../../../lib/db/src/migrate.ts"),
   "utf8",
 );
 const rateLimitSource = readFileSync(
