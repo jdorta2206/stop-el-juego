@@ -7,6 +7,53 @@ import { consumeAuthHandoff } from "./lib/oauth";
 import { initTwaAdBridge } from "./lib/twaAdBridge";
 import { initTwaPlayGamesBridge } from "./lib/twaPlayGamesBridge";
 import { captureInstalledAppVersion, getInstalledAppVersion, getAnalyticsClientVersion } from "./lib/appVersion";
+import { trackClientError } from "./lib/analyticsClient";
+
+// Record unexpected network failures without retrying requests or changing gameplay.
+const reportedNetworkFailures = new Set<string>();
+function reportUnexpectedNetworkFailure(error: unknown, context: Record<string, unknown>) {
+  const value = error instanceof Error ? error : new Error(String(error ?? ""));
+  if (!/failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(value.message)) return;
+
+  const signature = `${value.message}|${value.stack ?? ""}`;
+  if (reportedNetworkFailures.has(signature)) return;
+  reportedNetworkFailures.add(signature);
+  if (reportedNetworkFailures.size > 50) {
+    const oldest = reportedNetworkFailures.values().next().value;
+    if (oldest) reportedNetworkFailures.delete(oldest);
+  }
+
+  trackClientError(value, null, {
+    phase: "global_network_failure",
+    error_kind: "fetch_or_resource_load",
+    ...context,
+  });
+}
+
+window.addEventListener("unhandledrejection", (event) => {
+  reportUnexpectedNetworkFailure(event.reason, { source: "unhandledrejection" });
+});
+
+window.addEventListener("error", (event) => {
+  if (event.error) {
+    reportUnexpectedNetworkFailure(event.error, {
+      source: "window_error",
+      filename: event.filename || null,
+      line: event.lineno || null,
+      column: event.colno || null,
+    });
+    return;
+  }
+
+  const target = event.target;
+  if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement) {
+    reportUnexpectedNetworkFailure(new Error("Failed to fetch resource"), {
+      source: "resource_load",
+      resource_url: target instanceof HTMLScriptElement ? target.src : target.href,
+      resource_tag: target.tagName.toLowerCase(),
+    });
+  }
+}, true);
 
 // Install the TWA AdMob message listener before React mounts. Native TWA can
 // complete the postMessage handshake very early during page startup; waiting
