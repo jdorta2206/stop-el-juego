@@ -21,7 +21,7 @@ describe("api_rate_limits legacy schema repair", () => {
     expect(migrationSource).toContain("i.indnkeyatts = 1");
     expect(migrationSource).toContain("a.attname = 'bucket_key'");
     expect(migrationSource).toContain(
-      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS api_rate_limits_bucket_key_uidx",
+      "CREATE UNIQUE INDEX CONCURRENTLY api_rate_limits_bucket_key_uidx",
     );
   });
 
@@ -34,5 +34,8 @@ describe("api_rate_limits legacy schema repair", () => {
     expect(repairSql).toContain("a.window_start < b.window_start");
     expect(repairSql).toContain("a.hits < b.hits");
     expect(repairSql).toContain("a.ctid < b.ctid");
+    expect(migrationSource).toContain(
+      "DROP INDEX CONCURRENTLY IF EXISTS public.api_rate_limits_bucket_key_uidx",
+    );
   });
 });
