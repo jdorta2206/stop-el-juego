@@ -180,13 +180,15 @@ export default function Home() {
     const dailyStatusStartedAt = performance.now();
     trackAnalyticsEvent("lobby_daily_status_started", { metadata: { endpoint: "/api/daily/status", method: "GET", phase: "daily_status_request" } });
     fetch(`${getApiUrl()}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
-      headers: { ...authHeaders() },
+      headers: { ...authHeaders(), "X-Stop-Timezone": timeZone },
       credentials: "include",
       signal: controller.signal,
     })
       .then(r => {
         if (r.ok) return r.json();
-        const error = new Error("daily-status") as Error & { status?: number; requestId?: string };
+        // Keep the HTTP status in the message as well as context because the
+        // Control error list currently surfaces the message, not all context.
+        const error = new Error(`daily-status:${r.status}`) as Error & { status?: number; requestId?: string };
         error.status = r.status;
         error.requestId = r.headers.get("X-Request-Id") || undefined;
         throw error;
