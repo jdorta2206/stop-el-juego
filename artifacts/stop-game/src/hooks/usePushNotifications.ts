@@ -160,6 +160,11 @@ export function usePushNotifications(playerId: string | undefined, language: str
           }), 12000, "Subscription backfill timed out");
           if (!res.ok) {
             console.warn("[push] subscription backfill failed", res.status);
+            // Match the explicit activation path: a 503 means this server
+            // cannot store the endpoint, so do not leave a local-only sub.
+            if (res.status === 503) {
+              try { await sub.unsubscribe(); } catch {}
+            }
             if (!cancelled) setIsSubscribed(false);
             return;
           }
