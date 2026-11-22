@@ -232,7 +232,15 @@ export function usePushNotifications(playerId: string | undefined, language: str
       throw new PushActivationFailure("subscription-registration-failed", "Subscription registration request failed");
     }
 
-    if (!res.ok) throw new PushActivationFailure("subscription-registration-failed", `Subscription registration HTTP ${res.status}`);
+    if (!res.ok) {
+      // A 503 means this server instance cannot accept the subscription.
+      // Remove the browser-side endpoint so it is not left looking active
+      // without a corresponding server record; the user can retry later.
+      if (res.status === 503) {
+        try { await sub.unsubscribe(); } catch {}
+      }
+      throw new PushActivationFailure("subscription-registration-failed", `Subscription registration HTTP ${res.status}`);
+    }
     if (currentPlayerIdRef.current !== playerId) return false;
     try { localStorage.removeItem(DISABLED_KEY); } catch {}
     setIsSubscribed(true);
