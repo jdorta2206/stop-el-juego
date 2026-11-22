@@ -99,7 +99,7 @@ router.get("/status", async (req, res) => {
     "Pragma": "no-cache",
     "Expires": "0",
   });
-  res.status(200).end(JSON.stringify({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today }));
+  res.type("application/json").status(200).end(JSON.stringify({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today }));
 });
 
 // POST /api/daily/submit  → save a player's score for today
