@@ -18,9 +18,9 @@ import Room from "@/pages/Room";
 import Ranking from "@/pages/Ranking";
 import NotFound from "@/pages/not-found";
 
-// A successful lazy import proves that the current page bundle can load.
-// Reset both one-shot guards then, so a later deployment/chunk failure in the
-// same tab can recover too instead of leaving the player on the error screen.
+// Recovery guards are reset only after React has successfully committed
+// the requested route. A successful import alone is not enough: another
+// pending lazy page may still fail and must retain its one-shot protection.
 const CHUNK_RECOVERY_KEYS = [
   "stop_chunk_recovery_once",
   "stop_lazy_default_boundary_recovery_once",
@@ -30,11 +30,6 @@ function lazyPage<T extends { default: ComponentType<any> }>(load: () => Promise
   return lazy(async () => {
     const module = await load();
     if (!module?.default) throw new Error("lazy-module-missing-default");
-    try {
-      for (const key of CHUNK_RECOVERY_KEYS) sessionStorage.removeItem(key);
-    } catch {
-      // Recovery guards are best-effort in restricted browser storage.
-    }
     return module;
   });
 }
@@ -72,6 +67,18 @@ const queryClient = new QueryClient({
 
 function Router() {
   const [location] = useLocation();
+
+  // Router's effect runs only after the selected route has rendered and
+  // committed successfully. If a lazy import failed, ErrorBoundary prevents
+  // this reset, preserving the one-reload guard and avoiding recovery loops.
+  useEffect(() => {
+    try {
+      for (const key of CHUNK_RECOVERY_KEYS) sessionStorage.removeItem(key);
+    } catch {
+      // Recovery guards are best-effort in restricted browser storage.
+    }
+  }, [location]);
+
   useEffect(() => {
     const w = window as any;
     w.dataLayer = w.dataLayer || [];
