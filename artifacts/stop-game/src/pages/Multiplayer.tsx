@@ -222,7 +222,12 @@ export default function Multiplayer() {
     if (code === "name_taken") {
       return t.multiplayer.nameTaken ?? "Ese nombre ya está en uso en esta sala. Cambia tu nombre o añade un número.";
     }
-    const serverMessage = err?.data?.message ?? err?.response?.data?.message;
+    // The API commonly puts its human-readable conflict text in `error`,
+    // not `message`. Preserve those details without mislabeling them as
+    // duplicate-name errors.
+    const serverMessage = err?.data?.message
+      ?? err?.response?.data?.message
+      ?? (typeof code === "string" && code !== "name_taken" ? code : "");
     if (typeof serverMessage === "string" && serverMessage.trim()) {
       return serverMessage;
     }
