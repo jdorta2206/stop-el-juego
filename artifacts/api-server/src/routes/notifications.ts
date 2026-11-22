@@ -24,7 +24,9 @@ if (VAPID_PUBLIC && VAPID_PRIVATE) {
 
 // GET /api/notifications/vapid-public-key
 router.get("/vapid-public-key", (_req, res) => {
-  res.json({ key: VAPID_PUBLIC });
+  // Do not advertise a key unless the matching private key is also configured.
+  // Otherwise clients can save subscriptions that this server can never deliver to.
+  res.json({ key: VAPID_PUBLIC && VAPID_PRIVATE ? VAPID_PUBLIC : "" });
 });
 
 // GET /api/notifications/happy-hour?tzOffsetMinutes=120
@@ -45,6 +47,10 @@ router.get("/happy-hour", async (req, res) => {
 // fires at the player's chosen local time instead of a global UTC hour.
 // Falls back to (20:00, 0) if absent for back-compat with older clients.
 router.post("/subscribe", async (req, res) => {
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
+    res.status(503).json({ error: "Push notifications are not configured" });
+    return;
+  }
   const { playerId, subscription, language, hourLocal, tzOffsetMinutes, timeZone: bodyTimeZone, origin: bodyOrigin } = req.body;
   if (!playerId || !subscription?.endpoint) {
     res.status(400).json({ error: "Missing playerId or subscription" });
