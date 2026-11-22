@@ -240,7 +240,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
         SELECT event_name, player_id, session_id, platform, app_version, language,
                CASE
                  WHEN event_name = 'game_start' THEN NULLIF(mode, '')
-                 ELSE NULLIF(metadata_json::jsonb ->> 'mode', '')
+                 ELSE COALESCE(NULLIF(metadata_json::jsonb ->> 'mode', ''), NULLIF(mode, ''))
                END AS game_mode
         FROM public.analytics_events
         WHERE trusted = TRUE
