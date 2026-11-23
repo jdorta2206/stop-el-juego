@@ -16,6 +16,13 @@ function reportUnexpectedNetworkFailure(error: unknown, context: Record<string, 
   const value = error instanceof Error ? error : new Error(String(error ?? ""));
   if (!/failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(value.message)) return;
 
+  // Third-party analytics/ad/beacon requests can reject as unhandled promises
+  // inside their own scripts. They are not STOP API failures and must not
+  // turn the private operational panel red. Keep this filter limited to
+  // explicit third-party origins in the error stack or resource context.
+  const diagnosticSource = (value.stack ?? "") + " " + String(context.resource_url ?? "");
+  if (/googletagmanager\\.com|google-analytics\\.com|googlesyndication\\.com|static\\.cloudflareinsights\\.com/i.test(diagnosticSource)) return;
+
   const signature = `${value.message}|${value.stack ?? ""}|${String(context.resource_url ?? "")}`;
   if (reportedNetworkFailures.has(signature)) return;
   reportedNetworkFailures.add(signature);
