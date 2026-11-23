@@ -87,7 +87,6 @@ export async function reportHalloweenEvent(
 ) {
   if (!playerId || !isHalloweenActive()) return null;
   if (type !== "scare_received" && type !== "scare_provoked") return null;
-
   // Persistent Halloween rewards are intentionally limited to authenticated
   // OAuth accounts by the server. Do not send guest events that are guaranteed
   // to receive HTTP 403, or count those expected rejections as failed reports.
