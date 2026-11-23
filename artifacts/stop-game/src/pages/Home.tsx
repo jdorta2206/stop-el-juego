@@ -51,7 +51,7 @@ export default function Home() {
     };
   }, []);
 
-  const { player, isLoaded } = usePlayer();
+  const { player, isLoaded, authRestoreStatus } = usePlayer();
   const lobbyAuthStartedAtRef = useRef(performance.now());
   const lobbyAuthTelemetryRef = useRef<string>("");
   useEffect(() => {
@@ -177,6 +177,16 @@ export default function Home() {
       return;
     }
 
+    // Do not send a token-bearing daily-status request while usePlayer is
+    // still refreshing a persisted OAuth session. If restoration failed
+    // (for example, offline startup), keep the local banner state and avoid
+    // turning a stale-token race into a visible 401/403 client error.
+    if (authRestoreStatus === "pending") return;
+    if (authRestoreStatus === "unavailable") {
+      setDailyDone(localPlayed);
+      return;
+    }
+
     const dailyStatusStartedAt = performance.now();
     trackAnalyticsEvent("lobby_daily_status_started", { metadata: { endpoint: "/api/daily/status", method: "GET", phase: "daily_status_request" } });
     fetch(`${getApiUrl()}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
@@ -207,7 +217,7 @@ export default function Home() {
         if (status === 401 || status === 403) trackAnalyticsEvent("lobby_auth_failed", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null } });
       });
     return () => controller.abort();
-  }, [player?.id, player?.loginMethod, lang]);
+  }, [player?.id, player?.loginMethod, lang, authRestoreStatus]);
 
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
