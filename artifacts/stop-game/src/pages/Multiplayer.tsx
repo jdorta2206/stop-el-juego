@@ -217,8 +217,19 @@ export default function Multiplayer() {
     };
     const status = err?.status ?? err?.response?.status;
     const code = err?.data?.error ?? err?.response?.data?.error ?? "";
-    if (status === 409 || code === "name_taken") {
+    // A 409 can mean several things (room started/full, invalid challenge, etc.).
+    // Only the explicit name_taken code should be shown as a name collision.
+    if (code === "name_taken") {
       return t.multiplayer.nameTaken ?? "Ese nombre ya está en uso en esta sala. Cambia tu nombre o añade un número.";
+    }
+    // The API commonly puts its human-readable conflict text in `error`,
+    // not `message`. Preserve those details without mislabeling them as
+    // duplicate-name errors.
+    const serverMessage = err?.data?.message
+      ?? err?.response?.data?.message
+      ?? (typeof code === "string" && code !== "name_taken" ? code : "");
+    if (typeof serverMessage === "string" && serverMessage.trim()) {
+      return serverMessage;
     }
     return t.multiplayer.waitingForHost;
   };
