@@ -18,6 +18,15 @@ describe("browser network failure diagnostics", () => {
     expect(mainSource).toContain('phase: "global_network_failure"');
   });
 
+  it("captures rejected fetch URLs without changing the original rejection", () => {
+    expect(mainSource).toContain("const nativeFetch = window.fetch.bind(window)");
+    expect(mainSource).toContain("window.fetch = (input: RequestInfo | URL");
+    expect(mainSource).toContain('source: "fetch_rejection"');
+    expect(mainSource).toContain("resource_url: requestUrl");
+    expect(mainSource).toContain("throw error;");
+    expect(mainSource).toContain('parsed.pathname === "/api/analytics/client-error"');
+  });
+
   it("captures resource load location without recording query strings", () => {
     expect(mainSource).toContain('window.addEventListener("error"');
     expect(mainSource).toContain("parsed.origin + parsed.pathname");
