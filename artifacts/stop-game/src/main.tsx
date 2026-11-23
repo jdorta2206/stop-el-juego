@@ -16,7 +16,7 @@ function reportUnexpectedNetworkFailure(error: unknown, context: Record<string, 
   const value = error instanceof Error ? error : new Error(String(error ?? ""));
   if (!/failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(value.message)) return;
 
-  const signature = `${value.message}|${value.stack ?? ""}`;
+  const signature = `${value.message}|${value.stack ?? ""}|${String(context.resource_url ?? "")}`;
   if (reportedNetworkFailures.has(signature)) return;
   reportedNetworkFailures.add(signature);
   if (reportedNetworkFailures.size > 50) {
@@ -34,6 +34,32 @@ function reportUnexpectedNetworkFailure(error: unknown, context: Record<string, 
     ...context,
   });
 }
+
+// Observe rejected fetch requests without changing their result, retrying, or
+// interfering with the caller. Store only origin + pathname (never query data).
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  let requestUrl: string | null = null;
+  try {
+    const rawUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const parsed = new URL(rawUrl, window.location.origin);
+    const isDiagnosticEndpoint = parsed.pathname === "/api/analytics/client-error";
+    if (!isDiagnosticEndpoint) requestUrl = parsed.origin + parsed.pathname;
+  } catch {
+    // A malformed request URL should not affect the original fetch call.
+  }
+
+  return nativeFetch(input, init).catch((error: unknown) => {
+    if (requestUrl) {
+      reportUnexpectedNetworkFailure(error, {
+        source: "fetch_rejection",
+        resource_url: requestUrl,
+        resource_tag: "fetch",
+      });
+    }
+    throw error;
+  });
+};
 
 window.addEventListener("unhandledrejection", (event) => {
   reportUnexpectedNetworkFailure(event.reason, { source: "unhandledrejection" });
