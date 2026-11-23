@@ -84,4 +84,8 @@ describe("STOP solo completion analytics", () => {
     expect(soloGameSource).toContain('trackAnalyticsEvent("game_complete", { mode: gameMode, metadata: { rounds: maxRounds } })');
     expect(soloGameSource).not.toContain('trackAnalyticsEvent("game_complete", { metadata: { mode: gameMode, rounds: maxRounds } })');
   });
+
+  it("keeps STOP Control compatible with indexed and legacy completion modes", () => {
+    expect(adminAnalyticsRouteSource).toContain("COALESCE(NULLIF(mode, ''), NULLIF(metadata_json::jsonb ->> 'mode', ''))");
+  });
 });
