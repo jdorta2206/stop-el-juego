@@ -65,14 +65,9 @@ try {
   potentiallyStuck = Number(gameplayRow?.potentially_stuck ?? 0);
   checks.push({ name: 'Flujo real de partida', status: startEvents === 0 ? 'warn' : 'ok', value: startEvents === 0 ? 'SIN INICIOS RECIENTES' : `${startEvents} inicios · ${completionEvents} finales`, detail: startEvents === 0 ? 'No se han registrado inicios fiables en las últimas 2 horas; no hay muestra para evaluar el flujo.' : `${startedPlayers} identidades con inicio y ${completedPlayers} con final en las últimas 2 horas. Ventana acotada; no se extrapola al histórico.` });
 } catch (gameplayError: unknown) {
-  const diagnosticError = gameplayError as { name?: unknown; code?: unknown };
+  const diagnosticError = gameplayError as { name?: unknown; code?: unknown; message?: unknown };
   const diagnosticMessage = typeof diagnosticError?.message === "string"
-    ? diagnosticError.message
-        .replace(/https?:\/\/\S+/gi, "[url]")
-        .replace(/\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/gi, "[email]")
-        .replace(/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/g, "[ip]")
-        .replace(/\\s+/g, " ")
-        .slice(0, 180)
+    ? diagnosticError.message.replace(/https?:\\/\\/\\S+/gi, "[url]").split(/\\s+/).join(" ").slice(0, 180)
     : "unavailable";
   console.warn("[admin health] gameplay check unavailable", {
     name: typeof diagnosticError?.name === "string" ? diagnosticError.name : "Error",
