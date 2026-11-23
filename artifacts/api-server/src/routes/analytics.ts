@@ -342,8 +342,8 @@ router.post("/client-error", presenceLimiter, async (req, res) => {
     await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
     const message = redactClientDiagnostic(body.message, 500) ?? "Unknown client error";
-    const stack = redactClientDiagnostic(body.stack, 2500);
-    const componentStack = redactClientDiagnostic(body.componentStack, 2500);
+    const stack = redactClientDiagnostic(body.stack, 1200);
+    const componentStack = redactClientDiagnostic(body.componentStack, 1200);
     const rawContext = body.context && typeof body.context === "object" && !Array.isArray(body.context)
       ? body.context as Record<string, unknown>
       : {};
@@ -359,7 +359,7 @@ router.post("/client-error", presenceLimiter, async (req, res) => {
       if (typeof value === "string" && value.trim()) {
         try {
           const parsed = new URL(value);
-          diagnosticContext[key] = parsed.origin + parsed.pathname;
+          diagnosticContext[key] = (parsed.origin + parsed.pathname).slice(0, 400);
         } catch {
           // Ignore malformed locations rather than persisting arbitrary text.
         }
