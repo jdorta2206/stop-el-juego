@@ -92,7 +92,14 @@ router.get("/status", async (req, res) => {
       eq(dailyResultsTable.language, language),
     ))
     .limit(1);
-  res.json({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today });
+  // This is personalized, frequently changing state. Never let browser/CDN
+  // conditional caching turn a valid response into 304: fetch callers need JSON.
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Pragma": "no-cache",
+    "Expires": "0",
+  });
+  res.type("application/json").status(200).end(JSON.stringify({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today }));
 });
 
 // POST /api/daily/submit  → save a player's score for today

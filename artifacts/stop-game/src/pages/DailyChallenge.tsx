@@ -157,6 +157,7 @@ export default function DailyChallenge() {
         headers: { ...authHeaders(), "X-Stop-Timezone": getPlayerTimeZone() },
         credentials: "include",
         signal: controller.signal,
+        cache: "no-store",
       })
         .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
         .then(d => {
