@@ -75,6 +75,21 @@ describe("STOP gameplay telemetry allowlist", () => {
 
 });
 
+describe("STOP client error resource diagnostics", () => {
+  it("stores bounded resource-load context while stripping URL query strings and fragments", () => {
+    const route = analyticsRouteSource.slice(
+      analyticsRouteSource.indexOf('router.post("/client-error"'),
+      analyticsRouteSource.indexOf('router.post("/event"'),
+    );
+    expect(route).toContain('body.context && typeof body.context === "object"');
+    expect(route).toContain('["resource_url", "filename"]');
+    expect(route).toContain("parsed.origin + parsed.pathname");
+    expect(route).toContain('["source", "error_kind", "phase", "resource_tag"]');
+    expect(route).toContain("context: diagnosticContext");
+    expect(route).not.toContain("JSON.stringify({ message, stack, componentStack })");
+  });
+});
+
 describe("STOP trusted game-start delivery", () => {
   it("retries transient client failures with a stable idempotency key", () => {
     const clientSource = readFileSync(
