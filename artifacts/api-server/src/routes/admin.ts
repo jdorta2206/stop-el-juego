@@ -265,9 +265,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const retentionKpisPromise = (async () => { return (
       await executePanelQuery(sql`
         SELECT
-          COUNT(DISTINCT CASE WHEN s.last_seen >= ${MADRID_TODAY_UTC} THEN COALESCE(s.player_id, s.session_id) END)::int AS dau,
-          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS wau,
-          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '30 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS mau,
+          COUNT(DISTINCT CASE WHEN s.last_seen >= ${MADRID_TODAY_UTC} THEN CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END END)::int AS dau,
+          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' THEN CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END END)::int AS wau,
+          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '30 days' THEN CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END END)::int AS mau,
           COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' AND s.player_id IS NOT NULL THEN s.player_id END)::int AS account_active_7d,
           COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' AND s.player_id IS NULL THEN s.session_id END)::int AS guest_active_7d
         FROM analytics_sessions s
@@ -291,6 +291,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
             MAX(created_at) FILTER (WHERE event_name = 'game_start') AS last_game_start,
             MAX(created_at) FILTER (WHERE event_name = 'game_complete') AS last_game_complete
           FROM recent_events
+          WHERE session_id IS NOT NULL
           GROUP BY session_id
         ),
         player_counts AS (
@@ -479,8 +480,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
              WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
              WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
              WHEN s.player_id IS NOT NULL THEN 'account' ELSE 'guest' END AS method,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
+        COUNT(DISTINCT CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+        COUNT(DISTINCT CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END)::int AS unique_users,
         COUNT(*)::int AS sessions
       FROM analytics_sessions s
       WHERE s.started_at >= NOW() - INTERVAL '24 hours'
@@ -490,8 +491,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const platformTotalsPromise = (async () => { return (await executePanelQuery(sql`
       SELECT
         CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
+        COUNT(DISTINCT CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+        COUNT(DISTINCT CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END)::int AS unique_users,
         COUNT(*)::int AS sessions
       FROM analytics_sessions s
       WHERE s.started_at >= NOW() - INTERVAL '24 hours'
@@ -627,11 +628,15 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const chartCompletions = [...activityByDay].reverse().filter((row) => num(row.starters) > 0).map((row) => ({ label: String(row.d).slice(5), value: Math.round((num(row.completers) / num(row.starters)) * 100) }));
     const modeChart = modeUsage.map((row) => ({ label: String(row.mode), value: num(row.total) }));
     const powerupChart = powerupUsage.map((row) => ({ label: String(row.powerup), value: num(row.total) }));
-    const funnelChart = [
+    // Keep unlike units out of the same funnel: sessions and unique players
+    // are separate populations and must not be read as a single conversion.
+    const sessionFunnelChart = [
       { label: "Sesiones", value: num(funnel?.sessions) },
-      { label: "Lobbies", value: num(funnel?.lobby_sessions) },
-      { label: "Jugadores que iniciaron", value: num(funnel?.game_players) },
-      { label: "Jugadores con resultado", value: num(funnel?.completed_players) },
+      { label: "Lobbies vistos", value: num(funnel?.lobby_sessions) },
+    ];
+    const playerActivityChart = [
+      { label: "Iniciaron", value: num(funnel?.game_players) },
+      { label: "Con resultado", value: num(funnel?.completed_players) },
     ];
 
 
@@ -848,7 +853,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <div class="charts">
     ${svgLineChart(chartActivity, "Jugadores activos por día · 14 días")}
     ${svgLineChart(chartCompletions, "Porcentaje de finalización · 14 días")}
-    ${svgBars(funnelChart, "Embudo · jugadores únicos · 7 días")}
+    ${svgBars(sessionFunnelChart, "Navegación · sesiones · 7 días")}
+    ${svgBars(playerActivityChart, "Actividad · jugadores únicos · 7 días")}
     ${svgBars(adChart, "Publicidad · usuarios únicos · 7 días")}
     ${svgBars(modeChart, "Modos más jugados · 7 días")}
     ${svgBars(powerupChart, "Recompensas más utilizadas · 7 días")}
