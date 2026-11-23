@@ -1,4 +1,4 @@
-const CACHE = "stop-v11";
+const CACHE = "stop-v12";
 const DATA_CACHE = "stop-data-v1";
 const STATIC = ["/", "/manifest.json", "/images/stop-logo.png", "/images/icon-192.png", "/images/icon-512.png"];
 const OFFLINE_BUNDLE_PATH = "/api/game/offline-bundle";
