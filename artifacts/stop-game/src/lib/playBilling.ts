@@ -61,12 +61,19 @@ export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremi
 }
 export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
   if (!playerId) throw new Error("Debes iniciar sesión antes de comprar el Pack Mundial");
-  const { service, response, purchaseToken } = await makePlayPurchase(WORLD_CUP_SKU);
+  const { response, purchaseToken } = await makePlayPurchase(WORLD_CUP_SKU);
   try {
     const res = await fetch("/api/billing/play/verify-pack", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...authHeadersSafe() }, body: JSON.stringify({ playerId, productId: WORLD_CUP_SKU, purchaseToken }) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.granted !== true) throw new Error(data.error || "Error al verificar el Pack Mundial");
-    try { if (typeof service.consume === "function") await service.consume(purchaseToken); } catch {}
+    // The server may return 503 after granting the pack when Google's
+    // acknowledgement is temporarily unavailable. The grant is already
+    // persisted and idempotent, so do not report a failed purchase. The
+    // server acknowledges this permanent (non-consumable) product; do not
+    // call Digital Goods consume(), which would make it purchasable again.
+    if (data.granted !== true) throw new Error(data.error || "Error al verificar el Pack Mundial");
+    if (data.acknowledgementPending === true) {
+      console.warn("[playBilling] Pack granted; Google Play acknowledgement is pending and will be retried on verification.");
+    }
     try { await response.complete("success"); } catch {}
     return { granted: true };
   } catch (e) { try { await response.complete("fail"); } catch {} throw e; }
@@ -76,14 +83,41 @@ export async function restorePlayPurchases(playerId: string): Promise<boolean> {
   try {
     const service = await window.getDigitalGoodsService!(PLAY_BILLING_METHOD);
     const purchases = await (service as any).listPurchases();
+    let hasPremium = false;
     for (const purchase of purchases || []) {
       const itemId = purchase.itemId ?? purchase.productId;
-      if (itemId !== PREMIUM_SKU || !purchase.purchaseToken) continue;
+      if (!purchase.purchaseToken) continue;
+
+      // Re-verify the permanent pack whenever purchases are restored. This
+      // retries a previously failed server-side acknowledgement on the next
+      // app/session restore, without asking the player to buy the pack again.
+      if (itemId === WORLD_CUP_SKU) {
+        try {
+          const packRes = await fetch("/api/billing/play/verify-pack", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json", ...authHeadersSafe() },
+            body: JSON.stringify({ playerId, productId: WORLD_CUP_SKU, purchaseToken: purchase.purchaseToken }),
+          });
+          const packData = await packRes.json().catch(() => ({}));
+          if (packData.granted === true && packData.acknowledgementPending !== true) {
+            console.info("[playBilling] Restored World Cup pack and confirmed Google Play acknowledgement.");
+          } else if (packData.granted === true) {
+            console.warn("[playBilling] World Cup pack remains granted; Google Play acknowledgement is still pending.");
+          }
+        } catch (error) {
+          console.warn("[playBilling] Could not retry World Cup pack acknowledgement during restore:", error);
+        }
+        continue;
+      }
+
+      if (itemId !== PREMIUM_SKU) continue;
       const res = await fetch("/api/billing/play/verify", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...authHeadersSafe() }, body: JSON.stringify({ playerId, productId: PREMIUM_SKU, purchaseToken: purchase.purchaseToken }) });
       if (!res.ok) continue;
       const data = await res.json().catch(() => ({}));
-      if (data.isPremium === true) return true;
+      if (data.isPremium === true) hasPremium = true;
     }
+    return hasPremium;
   } catch {}
   return false;
 }

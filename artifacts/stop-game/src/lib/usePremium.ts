@@ -32,7 +32,7 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
   }, []);
 
   useEffect(() => {
-    if (!playerId || !isPremiumEligibleAccount(playerId)) {
+    if (!playerId) {
       setIsPremium(false);
       setLoading(false);
       setError(null);
@@ -40,18 +40,20 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
       return;
     }
 
+    const premiumEligible = isPremiumEligibleAccount(playerId);
     let cancelled = false;
-    setLoading(true);
+    setLoading(premiumEligible);
     setError(null);
-    setIsPremium(false);
+    if (premiumEligible) setIsPremium(false);
 
     void (async () => {
       try {
-        // Restore first: a TWA can have an active Play subscription whose
-        // purchase token has not yet been linked to this STOP account in the
-        // backend (e.g. after reinstall, login restore or out-of-app renewal).
+        // Restore all Play purchases for every signed-in player. This also
+        // retries acknowledgement of a previously granted permanent pack,
+        // including accounts that are not eligible for a Premium subscription.
         await restorePlayPurchases(playerId);
         if (cancelled) return;
+        if (!premiumEligible) return;
 
         const r = await fetch(
           `${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`,

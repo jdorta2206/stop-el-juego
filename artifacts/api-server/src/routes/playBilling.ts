@@ -199,7 +199,26 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Error al conceder los cosméticos" });
     }
 
-    await acknowledgeProduct(verified.productId, verified.purchaseToken, verified.acknowledgementState === 1);
+    const acknowledged = await acknowledgeProduct(
+      verified.productId,
+      verified.purchaseToken,
+      verified.acknowledgementState === 1,
+    );
+    if (!acknowledged) {
+      // The pack grant is idempotent and the purchase token is already bound
+      // to this player. Return a retryable response so the client can repeat
+      // /verify-pack; the next attempt re-verifies the purchase, safely
+      // re-applies the grant, and retries Google's acknowledgement.
+      res.setHeader("Retry-After", "30");
+      return res.status(503).json({
+        error: "Pack granted, but Google Play acknowledgement is pending. Retry verification.",
+        granted: true,
+        items: grantResult.granted,
+        total: grantResult.total,
+        acknowledgementPending: true,
+      });
+    }
+
     console.log(`✅ Pack Mundial Play concedido a ${claimedPlayerId}`);
     return res.json({ granted: true, items: grantResult.granted, total: grantResult.total });
   } catch (error: any) {
