@@ -244,7 +244,7 @@ router.use(async (req, res, next) => {
     await db.execute(sql`
       INSERT INTO public.analytics_sessions (session_id, platform, app_version, last_seen, started_at)
       VALUES (${sessionId}, ${platform}, ${appVersion}, NOW(), NOW())
-      ON CONFLICT (session_id) DO UPDATE SET platform = EXCLUDED.platform, last_seen = NOW()
+      ON CONFLICT (session_id) DO UPDATE SET platform = EXCLUDED.platform, app_version = EXCLUDED.app_version, last_seen = NOW()
     `);
   } catch (err) {
     console.error("[analytics] passive heartbeat failed; details withheld.");
