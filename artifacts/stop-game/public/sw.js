@@ -28,9 +28,11 @@ self.addEventListener("activate", (e) => {
 
     if (upgradingExistingApp) {
       const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      await Promise.all(
-        clients.map((client) => client.navigate(client.url).catch(() => null))
-      );
+      // Do not await navigation here: a navigation may wait for this
+      // activation event to finish before it can be controlled by the new worker.
+      for (const client of clients) {
+        void client.navigate(client.url).catch(() => null);
+      }
     }
   })());
 });
