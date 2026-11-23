@@ -14,7 +14,7 @@ const LAZY_DEFAULT_RECOVERY_KEY = "stop_lazy_default_boundary_recovery_once";
 
 function isLazyDefaultImportFailure(error: Error | null): boolean {
   const message = error?.message || "";
-  return /cannot read properties of undefined \(reading ['"]default['"]\)|undefined is not an object.*(?:_result\.default|\.default)|_result\.default/i.test(message);
+  return /lazy-module-missing-default|cannot read properties of undefined \(reading ['"]default['"]\)|undefined is not an object.*(?:_result\.default|\.default)|_result\.default/i.test(message);
 }
 
 /**

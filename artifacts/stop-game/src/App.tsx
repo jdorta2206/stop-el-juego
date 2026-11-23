@@ -1,6 +1,6 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, lazy, Suspense } from "react";
+import { useEffect, useLayoutEffect, lazy, Suspense, type ComponentType } from "react";
 import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { SplashScreen } from "@/components/SplashScreen";
@@ -18,30 +18,46 @@ import Room from "@/pages/Room";
 import Ranking from "@/pages/Ranking";
 import NotFound from "@/pages/not-found";
 
-const Privacy = lazy(() => import("@/pages/Privacy"));
-const Terms = lazy(() => import("@/pages/Terms"));
-const FAQ = lazy(() => import("@/pages/FAQ"));
-const About = lazy(() => import("@/pages/About"));
-const HowToPlay = lazy(() => import("@/pages/HowToPlay"));
-const ComoFunciona = lazy(() => import("@/pages/ComoFunciona"));
-const DailyChallenge = lazy(() => import("@/pages/DailyChallenge"));
-const Impossible = lazy(() => import("@/pages/Impossible"));
-const Friends = lazy(() => import("@/pages/Friends"));
-const Strategies = lazy(() => import("@/pages/Strategies"));
-const PlayerProfile = lazy(() => import("@/pages/PlayerProfile"));
-const Tienda = lazy(() => import("@/pages/Tienda"));
-const Tournament = lazy(() => import("@/pages/Tournament"));
-const Live = lazy(() => import("@/pages/Live"));
-const StreamerDirectory = lazy(() => import("@/pages/StreamerDirectory"));
-const Overlay = lazy(() => import("@/pages/Overlay"));
-const DeleteAccount = lazy(() => import("@/pages/DeleteAccount"));
-const SeasonPass = lazy(() => import("@/pages/SeasonPass"));
-const Achievements = lazy(() => import("@/pages/Achievements"));
-const Collection = lazy(() => import("@/pages/Collection"));
-const Notifications = lazy(() => import("@/pages/Notifications"));
-const Blog = lazy(() => import("@/pages/Blog"));
-const BlogPost = lazy(() => import("@/pages/BlogPost"));
-const Contact = lazy(() => import("@/pages/Contact"));
+// Recovery guards are reset only after React has successfully committed
+// the requested route. A successful import alone is not enough: another
+// pending lazy page may still fail and must retain its one-shot protection.
+const CHUNK_RECOVERY_KEYS = [
+  "stop_chunk_recovery_once",
+  "stop_lazy_default_boundary_recovery_once",
+] as const;
+
+function lazyPage<T extends { default: ComponentType<any> }>(load: () => Promise<T>) {
+  return lazy(async () => {
+    const module = await load();
+    if (!module?.default) throw new Error("lazy-module-missing-default");
+    return module;
+  });
+}
+
+const Privacy = lazyPage(() => import("@/pages/Privacy"));
+const Terms = lazyPage(() => import("@/pages/Terms"));
+const FAQ = lazyPage(() => import("@/pages/FAQ"));
+const About = lazyPage(() => import("@/pages/About"));
+const HowToPlay = lazyPage(() => import("@/pages/HowToPlay"));
+const ComoFunciona = lazyPage(() => import("@/pages/ComoFunciona"));
+const DailyChallenge = lazyPage(() => import("@/pages/DailyChallenge"));
+const Impossible = lazyPage(() => import("@/pages/Impossible"));
+const Friends = lazyPage(() => import("@/pages/Friends"));
+const Strategies = lazyPage(() => import("@/pages/Strategies"));
+const PlayerProfile = lazyPage(() => import("@/pages/PlayerProfile"));
+const Tienda = lazyPage(() => import("@/pages/Tienda"));
+const Tournament = lazyPage(() => import("@/pages/Tournament"));
+const Live = lazyPage(() => import("@/pages/Live"));
+const StreamerDirectory = lazyPage(() => import("@/pages/StreamerDirectory"));
+const Overlay = lazyPage(() => import("@/pages/Overlay"));
+const DeleteAccount = lazyPage(() => import("@/pages/DeleteAccount"));
+const SeasonPass = lazyPage(() => import("@/pages/SeasonPass"));
+const Achievements = lazyPage(() => import("@/pages/Achievements"));
+const Collection = lazyPage(() => import("@/pages/Collection"));
+const Notifications = lazyPage(() => import("@/pages/Notifications"));
+const Blog = lazyPage(() => import("@/pages/Blog"));
+const BlogPost = lazyPage(() => import("@/pages/BlogPost"));
+const Contact = lazyPage(() => import("@/pages/Contact"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +67,18 @@ const queryClient = new QueryClient({
 
 function Router() {
   const [location] = useLocation();
+
+  // Router's effect runs only after the selected route has rendered and
+  // committed successfully. If a lazy import failed, ErrorBoundary prevents
+  // this reset, preserving the one-reload guard and avoiding recovery loops.
+  useEffect(() => {
+    try {
+      for (const key of CHUNK_RECOVERY_KEYS) sessionStorage.removeItem(key);
+    } catch {
+      // Recovery guards are best-effort in restricted browser storage.
+    }
+  }, [location]);
+
   useEffect(() => {
     const w = window as any;
     w.dataLayer = w.dataLayer || [];
