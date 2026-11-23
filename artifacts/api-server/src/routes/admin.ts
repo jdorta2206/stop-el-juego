@@ -291,6 +291,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
             MAX(created_at) FILTER (WHERE event_name = 'game_start') AS last_game_start,
             MAX(created_at) FILTER (WHERE event_name = 'game_complete') AS last_game_complete
           FROM recent_events
+          WHERE session_id IS NOT NULL
           GROUP BY session_id
         ),
         player_counts AS (
