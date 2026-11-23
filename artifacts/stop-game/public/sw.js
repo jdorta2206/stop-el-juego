@@ -43,8 +43,8 @@ self.addEventListener("fetch", (e) => {
 
   // HTML/navigation must always prefer the network. The previous service
   // worker cached "/" indefinitely, which could leave index.html pointing at
-  // an old hashed JS bundle after a deployment. Keep a cached copy only as an
-  // offline fallback; never serve it before checking the current deployment.
+  // an old hashed JS bundle after a deployment. Keep a cached copy only as
+  // an offline fallback; never serve it before checking the current deployment.
   if (req.mode === "navigate" || url.pathname === "/" || url.pathname === "/index.html") {
     e.respondWith(
       fetch(req, { cache: "no-store" })
@@ -101,17 +101,31 @@ self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const url = e.notification.data?.url || "/";
 
-  e.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if (client.url.includes(self.location.origin) && "focus" in client) {
-          client.navigate(url);
-          return client.focus();
-        }
+  // Record the click independently of navigation. The analytics endpoint
+  // treats this client-originated event as untrusted telemetry and derives
+  // any player identity only from the server-verified request context.
+  const tracking = fetch("/api/analytics/event", {
+    method: "POST",
+    credentials: "same-origin",
+    keepalive: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      eventName: "push_notification_click",
+      metadata: { source: "service_worker" },
+    }),
+  }).catch(() => undefined);
+
+  const navigation = self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    for (const client of clients) {
+      if (client.url.includes(self.location.origin) && "focus" in client) {
+        client.navigate(url);
+        return client.focus();
       }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
-    })
-  );
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(url);
+  });
+
+  e.waitUntil(Promise.all([tracking, navigation]));
 });
 
 self.addEventListener("message", (e) => {
