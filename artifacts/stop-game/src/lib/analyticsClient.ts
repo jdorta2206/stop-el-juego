@@ -36,6 +36,7 @@ export function trackTrustedGameStart(options?: { mode?: string; language?: stri
         ...(token ? { "X-Stop-Token": token } : {}),
       },
       body: JSON.stringify({
+        sessionId: sessionId(),
         mode: options?.mode ?? null,
         language: options?.language ?? (document.documentElement.lang || null),
       }),
