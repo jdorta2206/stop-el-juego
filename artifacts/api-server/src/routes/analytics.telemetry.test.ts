@@ -86,7 +86,7 @@ describe("STOP client error resource diagnostics", () => {
     expect(route).toContain("(parsed.origin + parsed.pathname).slice(0, 400)");
     expect(route).toContain("redactClientDiagnostic(body.stack, 1200)");
     expect(route).toContain("redactClientDiagnostic(body.componentStack, 1200)");
-    expect(route).toContain('["source", "error_kind", "phase", "resource_tag"]');
+    expect(route).toContain('["source", "error_kind", "phase", "resource_tag", "lazy_page", "module_exports"]');
     expect(route).toContain("context: diagnosticContext");
     expect(route).not.toContain("JSON.stringify({ message, stack, componentStack })");
   });

@@ -31,7 +31,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[ErrorBoundary] Uncaught render error:", error, info.componentStack);
-    trackClientError(error, info.componentStack);
+    const diagnosticContext = (error as Error & { diagnosticContext?: Record<string, unknown> }).diagnosticContext;
+    trackClientError(error, info.componentStack, diagnosticContext);
 
     // React.lazy can surface a stale/rejected module as an undefined
     // ".default" during rendering, before window-level chunk handlers can
