@@ -36,32 +36,43 @@ const dbStarted=Date.now();await db.execute(sql`SELECT 1 AS ok`);const dbMs=Date
 checks.push({name:"Índices / arranque",status:indexesReady()?"ok":"error",value:indexesReady()?"LISTO":"NO LISTO",detail:indexesReady()?"El servicio considera la base preparada.":"El backend todavía no considera terminada la inicialización."});checks.push({name:"Stripe",status:isStripeReady()?"ok":"warn",value:isStripeReady()?"LISTO":"NO LISTO",detail:isStripeReady()?"El cliente de pagos está inicializado.":"Stripe todavía no está listo; comprobar configuración si persiste."});
 const requiredColumns:Record<string,string[]>={player_scores:["player_id"],game_history:["player_id","score","created_at"],analytics_events:["event_name","created_at","metadata_json","trusted","session_id"],analytics_sessions:["session_id","platform","last_seen"],guest_stats:["day","games","conversions"]};const criticalTables=Object.keys(requiredColumns);const columnRows=(await db.execute(sql`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=ANY(ARRAY['player_scores','game_history','analytics_events','analytics_sessions','guest_stats'])`)).rows as Array<{table_name:string;column_name:string}>;const tableSet=new Set(columnRows.map(r=>String(r.table_name)));const columnsByTable=new Map<string,Set<string>>();for(const row of columnRows){const set=columnsByTable.get(String(row.table_name))??new Set<string>();set.add(String(row.column_name));columnsByTable.set(String(row.table_name),set)}const missingSchema:string[]=[];for(const table of criticalTables){if(!tableSet.has(table)){missingSchema.push(`${table} (tabla)`);continue;}for(const column of requiredColumns[table])if(!columnsByTable.get(table)?.has(column))missingSchema.push(`${table}.${column}`)}checks.push({name:"Tablas críticas",status:missingSchema.length===0?"ok":"error",value:missingSchema.length===0?"5/5 + columnas":"ESQUEMA INCOMPLETO",detail:missingSchema.length===0?"Existen las 5 tablas críticas y las columnas mínimas que necesita el diagnóstico.":`Faltan: ${missingSchema.join(", ")}.`});
 const errorRows=(await db.execute(sql`SELECT COUNT(*) FILTER(WHERE event_name='api_error')::int AS api_errors,COUNT(*) FILTER(WHERE event_name='client_error')::int AS client_errors FROM public.analytics_events WHERE trusted=TRUE AND event_name IN ('api_error','client_error') AND created_at>=NOW()-INTERVAL '15 minutes'`)).rows[0] as {api_errors?:number;client_errors?:number}|undefined;const apiErrors=Number(errorRows?.api_errors??0),clientErrors=Number(errorRows?.client_errors??0),totalErrors=apiErrors+clientErrors;checks.push({name:"Errores recientes",status:totalErrors===0?"ok":totalErrors<=5?"warn":"error",value:String(totalErrors),detail:totalErrors===0?"No hay errores registrados en los últimos 15 minutos.":`${apiErrors} API + ${clientErrors} cliente en los últimos 15 minutos.`});
-// Bounded, indexed 2-hour window with a strict timeout for the auto-refreshing health page.
-const gameplayDiagnostics = await db.transaction(async (tx) => {
-  await tx.execute(sql.raw("SET LOCAL statement_timeout = '2500ms'"));
-  return tx.execute(sql.raw(
-    "SELECT COUNT(*) FILTER (WHERE starts > 0)::int AS started_players, " ||
-    "COUNT(*) FILTER (WHERE completes > 0)::int AS completed_players, " ||
-    "COALESCE(SUM(starts), 0)::int AS start_events, COALESCE(SUM(completes), 0)::int AS completion_events, " ||
-    "COUNT(*) FILTER (WHERE last_start >= NOW() - INTERVAL '60 minutes' AND last_start <= NOW() - INTERVAL '20 minutes' " ||
-    "AND (last_complete IS NULL OR last_complete < last_start))::int AS potentially_stuck " ||
-    "FROM (SELECT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END AS identity_key, " ||
-    "COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts, " ||
-    "COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes, " ||
-    "MAX(created_at) FILTER (WHERE event_name = 'game_start') AS last_start, " ||
-    "MAX(created_at) FILTER (WHERE event_name = 'game_complete') AS last_complete " ||
-    "FROM public.analytics_events WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '2 hours' " ||
-    "AND event_name IN ('game_start', 'game_complete') AND (player_id IS NOT NULL OR session_id IS NOT NULL) " ||
-    "GROUP BY 1) AS recent_gameplay"
-  ));
-});
-const gameplayRow = gameplayDiagnostics.rows[0] as { started_players?: number; completed_players?: number; start_events?: number; completion_events?: number; potentially_stuck?: number } | undefined;
-const startedPlayers = Number(gameplayRow?.started_players ?? 0);
-const completedPlayers = Number(gameplayRow?.completed_players ?? 0);
-const startEvents = Number(gameplayRow?.start_events ?? 0);
-const completionEvents = Number(gameplayRow?.completion_events ?? 0);
-const potentiallyStuck = Number(gameplayRow?.potentially_stuck ?? 0);
-checks.push({ name: 'Flujo real de partida', status: startEvents === 0 ? 'warn' : 'ok', value: startEvents === 0 ? 'SIN INICIOS RECIENTES' : `${startEvents} inicios · ${completionEvents} finales`, detail: startEvents === 0 ? 'No se han registrado inicios fiables en las últimas 2 horas; no hay muestra para evaluar el flujo.' : `${startedPlayers} identidades con inicio y ${completedPlayers} con final en las últimas 2 horas. Ventana acotada; no se extrapola al histórico.` });
+// This is a secondary diagnostic: its failure must never hide the rest of the health panel.
+let potentiallyStuck = 0;
+try {
+  const gameplayDiagnostics = await db.transaction(async (tx) => {
+    await tx.execute(sql.raw("SET LOCAL statement_timeout = '1500ms'"));
+    return tx.execute(sql.raw(
+      "SELECT COUNT(*) FILTER (WHERE starts > 0)::int AS started_players, " ||
+      "COUNT(*) FILTER (WHERE completes > 0)::int AS completed_players, " ||
+      "COALESCE(SUM(starts), 0)::int AS start_events, COALESCE(SUM(completes), 0)::int AS completion_events, " ||
+      "COUNT(*) FILTER (WHERE last_start >= NOW() - INTERVAL '60 minutes' AND last_start <= NOW() - INTERVAL '20 minutes' " ||
+      "AND (last_complete IS NULL OR last_complete < last_start))::int AS potentially_stuck " ||
+      "FROM (SELECT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END AS identity_key, " ||
+      "COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts, " ||
+      "COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes, " ||
+      "MAX(created_at) FILTER (WHERE event_name = 'game_start') AS last_start, " ||
+      "MAX(created_at) FILTER (WHERE event_name = 'game_complete') AS last_complete " ||
+      "FROM public.analytics_events WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '2 hours' " ||
+      "AND event_name IN ('game_start', 'game_complete') AND (player_id IS NOT NULL OR session_id IS NOT NULL) " ||
+      "GROUP BY 1) AS recent_gameplay"
+    ));
+  });
+  const gameplayRow = gameplayDiagnostics.rows[0] as { started_players?: number; completed_players?: number; start_events?: number; completion_events?: number; potentially_stuck?: number } | undefined;
+  const startedPlayers = Number(gameplayRow?.started_players ?? 0);
+  const completedPlayers = Number(gameplayRow?.completed_players ?? 0);
+  const startEvents = Number(gameplayRow?.start_events ?? 0);
+  const completionEvents = Number(gameplayRow?.completion_events ?? 0);
+  potentiallyStuck = Number(gameplayRow?.potentially_stuck ?? 0);
+  checks.push({ name: 'Flujo real de partida', status: startEvents === 0 ? 'warn' : 'ok', value: startEvents === 0 ? 'SIN INICIOS RECIENTES' : `${startEvents} inicios · ${completionEvents} finales`, detail: startEvents === 0 ? 'No se han registrado inicios fiables en las últimas 2 horas; no hay muestra para evaluar el flujo.' : `${startedPlayers} identidades con inicio y ${completedPlayers} con final en las últimas 2 horas. Ventana acotada; no se extrapola al histórico.` });
+} catch (gameplayError: unknown) {
+  const diagnosticError = gameplayError as { name?: unknown; code?: unknown };
+  console.warn("[admin health] gameplay check unavailable", {
+    name: typeof diagnosticError?.name === "string" ? diagnosticError.name : "Error",
+    code: typeof diagnosticError?.code === "string" ? diagnosticError.code.slice(0, 40) : "unknown",
+  });
+  checks.push({ name: 'Flujo real de partida', status: 'warn', value: 'NO EVALUADO', detail: 'Esta comprobación secundaria no ha podido completarse; el resto del diagnóstico sigue disponible.' });
+  checks.push({ name: 'Partidas potencialmente atascadas', status: 'warn', value: 'NO EVALUADO', detail: 'No se pudo completar la consulta de flujo; no se infieren partidas atascadas.' });
+}
 const clientErrorDetailRows=(await db.execute(sql`
 SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','DD/MM HH24:MI:SS') AS occurred_at,
 platform, app_version, metadata_json
