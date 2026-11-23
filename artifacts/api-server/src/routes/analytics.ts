@@ -350,7 +350,7 @@ router.post("/client-error", presenceLimiter, async (req, res) => {
     // Persist only bounded diagnostic fields. Resource URLs are reduced to
     // origin + pathname so query strings, fragments and credentials never enter analytics.
     const diagnosticContext: Record<string, unknown> = {};
-    for (const key of ["source", "error_kind", "phase", "resource_tag"] as const) {
+    for (const key of ["source", "error_kind", "phase", "resource_tag", "lazy_page", "module_exports"] as const) {
       const value = rawContext[key];
       if (typeof value === "string" && value.trim()) diagnosticContext[key] = redactClientDiagnostic(value, 80);
     }
