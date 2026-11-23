@@ -40,9 +40,9 @@ function reportUnexpectedNetworkFailure(error: unknown, context: Record<string, 
 const nativeFetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   let requestUrl: string | null = null;
-  let method = String(init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+  const method = String(init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
   let retryInput: RequestInfo | URL = input;
-  let requestSignal: AbortSignal | null = init?.signal ?? (input instanceof Request ? input.signal : null);
+  const requestSignal: AbortSignal | null = init?.signal ?? (input instanceof Request ? input.signal : null);
   try {
     const rawUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const parsed = new URL(rawUrl, window.location.origin);
