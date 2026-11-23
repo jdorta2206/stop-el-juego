@@ -244,7 +244,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
              COUNT(*)::int AS starts,
              COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS starts_with_version
       FROM analytics_events
-      WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '14 days'
+      WHERE trusted = TRUE
+        AND event_name = 'game_start'
+        AND created_at >= NOW() - INTERVAL '14 days'
+        AND metadata_json::jsonb->>'source' = 'client_game_start'
       GROUP BY d ORDER BY d DESC
     `)).rows as Record<string, unknown>[]; })();
     const analyticsVersionCoveragePromise = (async () => { return (await executePanelQuery(sql`
