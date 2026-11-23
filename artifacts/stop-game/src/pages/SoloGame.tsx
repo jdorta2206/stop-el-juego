@@ -1120,7 +1120,7 @@ export default function SoloGame() {
         }
         // Count completion as soon as the final results are produced. Do not
         // depend on the player pressing "Jugar de nuevo" or leaving RESULTS.
-        void trackAnalyticsEvent("game_complete", { metadata: { mode: gameMode, rounds: maxRounds } });
+        void trackAnalyticsEvent("game_complete", { mode: gameMode, metadata: { rounds: maxRounds } });
         if (!isDailyMode) recordInterstitialGameCompleted();
         // The private /test panel tracks guest games separately from registered
         // game_history. Only anonymous players must increment that aggregate.
