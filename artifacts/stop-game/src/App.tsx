@@ -31,13 +31,16 @@ function lazyPage<T extends { default: ComponentType<any> }>(pageName: string, l
     const module = await load();
     if (!module?.default) {
       const exports = module && typeof module === "object" ? Object.keys(module).slice(0, 12) : [];
-      const error = new Error("lazy-module-missing-default");
+      const exportSummary = exports.join(",").slice(0, 160) || "(none)";
+      // Keep page identity in the message itself as a durable fallback:
+      // some React/WebView error wrappers may not preserve custom Error properties.
+      const error = new Error(`lazy-module-missing-default [page=${pageName}; exports=${exportSummary}]`);
       Object.assign(error, {
         diagnosticContext: {
           phase: "lazy_module_resolution",
           error_kind: "missing_default_export",
           lazy_page: pageName,
-          module_exports: exports.join(",").slice(0, 160) || "(none)",
+          module_exports: exportSummary,
         },
       });
       throw error;
