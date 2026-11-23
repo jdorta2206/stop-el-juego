@@ -65,10 +65,14 @@ try {
   potentiallyStuck = Number(gameplayRow?.potentially_stuck ?? 0);
   checks.push({ name: 'Flujo real de partida', status: startEvents === 0 ? 'warn' : 'ok', value: startEvents === 0 ? 'SIN INICIOS RECIENTES' : `${startEvents} inicios · ${completionEvents} finales`, detail: startEvents === 0 ? 'No se han registrado inicios fiables en las últimas 2 horas; no hay muestra para evaluar el flujo.' : `${startedPlayers} identidades con inicio y ${completedPlayers} con final en las últimas 2 horas. Ventana acotada; no se extrapola al histórico.` });
 } catch (gameplayError: unknown) {
-  const diagnosticError = gameplayError as { name?: unknown; code?: unknown };
+  const diagnosticError = gameplayError as { name?: unknown; code?: unknown; message?: unknown };
+  const diagnosticMessage = typeof diagnosticError?.message === "string"
+    ? diagnosticError.message.replace(/https?:\/\/\S+/gi, "[url]").slice(0, 180)
+    : "unavailable";
   console.warn("[admin health] gameplay check unavailable", {
     name: typeof diagnosticError?.name === "string" ? diagnosticError.name : "Error",
     code: typeof diagnosticError?.code === "string" ? diagnosticError.code.slice(0, 40) : "unknown",
+    message: diagnosticMessage,
   });
   checks.push({ name: 'Flujo real de partida', status: 'warn', value: 'NO EVALUADO', detail: 'Esta comprobación secundaria no ha podido completarse; el resto del diagnóstico sigue disponible.' });
   checks.push({ name: 'Partidas potencialmente atascadas', status: 'warn', value: 'NO EVALUADO', detail: 'No se pudo completar la consulta de flujo; no se infieren partidas atascadas.' });
