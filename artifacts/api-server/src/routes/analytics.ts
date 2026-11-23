@@ -62,7 +62,6 @@ function sanitizeClientMetadata(value: unknown, depth = 0): unknown {
 }
 
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
-const CURRENT_TWA_ANALYTICS_VERSION = "1.3.6.9";
 const CURRENT_WEB_ANALYTICS_VERSION = String(process.env.RAILWAY_GIT_COMMIT_SHA ?? "web-dev").slice(0, 12);
 
 function isTwaRequest(req: Request): boolean {
@@ -75,7 +74,9 @@ function isTwaRequest(req: Request): boolean {
 function appVersionFromRequest(req: Request): string | null {
   const clientVersion = String(req.headers["x-client-version"] ?? "").trim().slice(0, 32);
   if (clientVersion) return clientVersion;
-  return isTwaRequest(req) ? CURRENT_TWA_ANALYTICS_VERSION : CURRENT_WEB_ANALYTICS_VERSION;
+  // Never attribute a legacy hard-coded version to a newer TWA build.
+  // If the client omits its version header, keep it unknown in STOP Control.
+  return isTwaRequest(req) ? null : CURRENT_WEB_ANALYTICS_VERSION;
 }
 
 function platformFromRequest(req: Request): "web" | "android" | "ios" {
