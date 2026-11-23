@@ -83,3 +83,10 @@ describe("STOP Control funnel chart units", () => {
     expect(adminRouteSource).not.toContain("funnelChart");
   });
 });
+
+describe("STOP Control distinct actor identity", () => {
+  it("keeps account IDs and guest session IDs in separate namespaces", () => {
+    expect(adminRouteSource).not.toContain("COALESCE(player_id, session_id)");
+    expect(adminRouteSource).toContain("THEN 'player:' || player_id ELSE 'session:' || session_id END");
+  });
+});

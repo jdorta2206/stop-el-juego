@@ -265,9 +265,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const retentionKpisPromise = (async () => { return (
       await executePanelQuery(sql`
         SELECT
-          COUNT(DISTINCT CASE WHEN s.last_seen >= ${MADRID_TODAY_UTC} THEN COALESCE(s.player_id, s.session_id) END)::int AS dau,
-          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS wau,
-          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '30 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS mau,
+          COUNT(DISTINCT CASE WHEN s.last_seen >= ${MADRID_TODAY_UTC} THEN CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END END)::int AS dau,
+          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' THEN CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END END)::int AS wau,
+          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '30 days' THEN CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END END)::int AS mau,
           COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' AND s.player_id IS NOT NULL THEN s.player_id END)::int AS account_active_7d,
           COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' AND s.player_id IS NULL THEN s.session_id END)::int AS guest_active_7d
         FROM analytics_sessions s
@@ -296,12 +296,12 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         ),
         player_counts AS (
           SELECT
-            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS games_started,
-            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
-            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS game_players,
-            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completed_players,
-            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS ad_players,
-            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS ad_failed_players
+            COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_start')::int AS games_started,
+            COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
+            COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_start')::int AS game_players,
+            COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_complete')::int AS completed_players,
+            COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS ad_players,
+            COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS ad_failed_players
           FROM recent_events
         )
         SELECT
@@ -325,8 +325,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       await executePanelQuery(sql`
         SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') AS d,
                COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'session_start')::int AS active,
-               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS starters,
-               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completers
+               COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_start')::int AS starters,
+               COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_complete')::int AS completers
         FROM analytics_events
         WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '14 days'
           AND event_name IN ('session_start','game_start','game_complete')
@@ -352,7 +352,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const platformVersionsPromise = (async () => { return (
       await executePanelQuery(sql`
         SELECT platform, COALESCE(app_version, '—') AS app_version,
-               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE last_seen >= NOW() - INTERVAL '7 days')::int AS active_7d
+               COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE last_seen >= NOW() - INTERVAL '7 days')::int AS active_7d
         FROM analytics_sessions
         WHERE last_seen >= NOW() - INTERVAL '7 days'
         GROUP BY platform, app_version
@@ -408,10 +408,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     ).rows as Record<string, unknown>[]; })();
     const adUniquePromise = (async () => { return (await executePanelQuery(sql`
       SELECT
-        COUNT(DISTINCT CASE WHEN event_name = 'ad_impression' THEN COALESCE(player_id, session_id) END)::int AS impressions,
-        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS requested,
-        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_completed' THEN COALESCE(player_id, session_id) END)::int AS completed,
-        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS failed
+        COUNT(DISTINCT CASE WHEN event_name = 'ad_impression' THEN CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END END)::int AS impressions,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END END)::int AS requested,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_completed' THEN CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END END)::int AS completed,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END END)::int AS failed
       FROM analytics_events
       WHERE trusted = TRUE
         AND created_at >= NOW() - INTERVAL '7 days'
@@ -480,8 +480,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
              WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
              WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
              WHEN s.player_id IS NOT NULL THEN 'account' ELSE 'guest' END AS method,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
+        COUNT(DISTINCT CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+        COUNT(DISTINCT CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END)::int AS unique_users,
         COUNT(*)::int AS sessions
       FROM analytics_sessions s
       WHERE s.started_at >= NOW() - INTERVAL '24 hours'
@@ -491,8 +491,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const platformTotalsPromise = (async () => { return (await executePanelQuery(sql`
       SELECT
         CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
+        COUNT(DISTINCT CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+        COUNT(DISTINCT CASE WHEN s.player_id IS NOT NULL THEN 'player:' || s.player_id ELSE 'session:' || s.session_id END)::int AS unique_users,
         COUNT(*)::int AS sessions
       FROM analytics_sessions s
       WHERE s.started_at >= NOW() - INTERVAL '24 hours'
