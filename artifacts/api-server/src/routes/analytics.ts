@@ -80,7 +80,7 @@ function appVersionFromRequest(req: Request): string | null {
 
 function platformFromRequest(req: Request): "web" | "android" | "ios" {
   const explicit = String(req.headers["x-client-platform"] ?? "").toLowerCase();
-  const twa = String(req.headers["x-client-twa"] ?? "") === "1";
+  const twa = isTwaRequest(req);
   if (twa) return "android";
   if (PLATFORMS.has(explicit)) return explicit as "web" | "android" | "ios";
   const ua = String(req.headers["user-agent"] ?? "").toLowerCase();
