@@ -72,3 +72,13 @@ describe("STOP Control analytics failure safety", () => {
     expect(adminRouteSource).toContain("if (hasCachedHtml)");
   });
 });
+
+describe("STOP Control funnel chart units", () => {
+  it("renders sessions and unique players as separate charts, never one mixed funnel", () => {
+    expect(adminRouteSource).toContain("sessionFunnelChart");
+    expect(adminRouteSource).toContain("playerActivityChart");
+    expect(adminRouteSource).toContain('"Navegación · sesiones · 7 días"');
+    expect(adminRouteSource).toContain('"Actividad · jugadores únicos · 7 días"');
+    expect(adminRouteSource).not.toContain("funnelChart");
+  });
+});
