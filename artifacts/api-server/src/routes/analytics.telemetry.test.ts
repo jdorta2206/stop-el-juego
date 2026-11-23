@@ -54,6 +54,10 @@ describe("STOP gameplay telemetry allowlist", () => {
     expect(analyticsRouteSource).toContain('router.post("/game-start"');
   });
 
+  it("uses the shared TWA detector when assigning Android platform", () => {
+    expect(analyticsRouteSource).toContain("const twa = isTwaRequest(req);");
+  });
+
   it("redacts secret-like key/value diagnostics before rendering STOP Analytics", () => {
     expect(adminAnalyticsRouteSource).toContain(
       "/(token|password|cookie|secret|authorization|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+/gi",
