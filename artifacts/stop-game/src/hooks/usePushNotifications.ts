@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
-import { runSingleFlight, waitForPermissionResult } from "@/lib/pushSubscriptionFlow";
+import { PermissionRequestTimeoutError, runSingleFlight, waitForPermissionResult } from "@/lib/pushSubscriptionFlow";
 
 const API_BASE = getApiUrl();
 const DISABLED_KEY = "stop_push_notifications_disabled";
+// Module-level so navigating away and back cannot lose the lock while Android
+// still owns an unresolved permission prompt.
+let pendingPermissionRequest: Promise<NotificationPermission> | null = null;
 
 function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -52,6 +55,7 @@ function subscriptionMatchesVapidKey(subscription: PushSubscription, publicKey: 
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
 export type PushActivationError =
   | "permission-request-failed"
+  | "permission-request-pending"
   | "permission-not-granted"
   | "vapid-key-unavailable"
   | "service-worker-unavailable"
@@ -253,6 +257,11 @@ export function usePushNotifications(playerId: string | undefined, language: str
   }, [playerId, language]);
 
   const subscribe = useCallback((): Promise<boolean> => {
+    if (pendingPermissionRequest) {
+      setActivationError("permission-request-pending");
+      activationErrorRef.current = "permission-request-pending";
+      return Promise.resolve(false);
+    }
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
       setActivationError("service-worker-unavailable");
       activationErrorRef.current = "service-worker-unavailable";
@@ -272,6 +281,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
           let permissionRequest: Promise<NotificationPermission>;
           try {
             permissionRequest = Notification.requestPermission();
+            pendingPermissionRequest = permissionRequest;
+            // Release this lock only when the original Android request settles.
+            void permissionRequest.then(
+              () => { if (pendingPermissionRequest === permissionRequest) pendingPermissionRequest = null; },
+              () => { if (pendingPermissionRequest === permissionRequest) pendingPermissionRequest = null; },
+            );
           } catch {
             throw new PushActivationFailure("permission-request-failed", "Permission prompt could not be opened");
           }
@@ -283,7 +298,10 @@ export function usePushNotifications(playerId: string | undefined, language: str
               () => setPermissionWaiting(true),
               15000,
             );
-          } catch {
+          } catch (error) {
+            if (error instanceof PermissionRequestTimeoutError) {
+              throw new PushActivationFailure("permission-request-pending", "Android permission request is still pending");
+            }
             throw new PushActivationFailure("permission-request-failed", "Permission request failed");
           }
 
