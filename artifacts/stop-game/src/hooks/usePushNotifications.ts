@@ -160,6 +160,11 @@ export function usePushNotifications(playerId: string | undefined, language: str
           }), 12000, "Subscription backfill timed out");
           if (!res.ok) {
             console.warn("[push] subscription backfill failed", res.status);
+            // Match the explicit activation path: a 503 means this server
+            // cannot store the endpoint, so do not leave a local-only sub.
+            if (res.status === 503) {
+              try { await sub.unsubscribe(); } catch {}
+            }
             if (!cancelled) setIsSubscribed(false);
             return;
           }
@@ -232,7 +237,15 @@ export function usePushNotifications(playerId: string | undefined, language: str
       throw new PushActivationFailure("subscription-registration-failed", "Subscription registration request failed");
     }
 
-    if (!res.ok) throw new PushActivationFailure("subscription-registration-failed", `Subscription registration HTTP ${res.status}`);
+    if (!res.ok) {
+      // A 503 means this server instance cannot accept the subscription.
+      // Remove the browser-side endpoint so it is not left looking active
+      // without a corresponding server record; the user can retry later.
+      if (res.status === 503) {
+        try { await sub.unsubscribe(); } catch {}
+      }
+      throw new PushActivationFailure("subscription-registration-failed", `Subscription registration HTTP ${res.status}`);
+    }
     if (currentPlayerIdRef.current !== playerId) return false;
     try { localStorage.removeItem(DISABLED_KEY); } catch {}
     setIsSubscribed(true);
