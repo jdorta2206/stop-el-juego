@@ -42,18 +42,18 @@ try {
   const gameplayDiagnostics = await db.transaction(async (tx) => {
     await tx.execute(sql.raw("SET LOCAL statement_timeout = '1500ms'"));
     return tx.execute(sql.raw(
-      "SELECT COUNT(*) FILTER (WHERE starts > 0)::int AS started_players, " ||
-      "COUNT(*) FILTER (WHERE completes > 0)::int AS completed_players, " ||
-      "COALESCE(SUM(starts), 0)::int AS start_events, COALESCE(SUM(completes), 0)::int AS completion_events, " ||
-      "COUNT(*) FILTER (WHERE last_start >= NOW() - INTERVAL '60 minutes' AND last_start <= NOW() - INTERVAL '20 minutes' " ||
-      "AND (last_complete IS NULL OR last_complete < last_start))::int AS potentially_stuck " ||
-      "FROM (SELECT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END AS identity_key, " ||
-      "COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts, " ||
-      "COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes, " ||
-      "MAX(created_at) FILTER (WHERE event_name = 'game_start') AS last_start, " ||
-      "MAX(created_at) FILTER (WHERE event_name = 'game_complete') AS last_complete " ||
-      "FROM public.analytics_events WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '2 hours' " ||
-      "AND event_name IN ('game_start', 'game_complete') AND (player_id IS NOT NULL OR session_id IS NOT NULL) " ||
+      "SELECT COUNT(*) FILTER (WHERE starts > 0)::int AS started_players, " +
+      "COUNT(*) FILTER (WHERE completes > 0)::int AS completed_players, " +
+      "COALESCE(SUM(starts), 0)::int AS start_events, COALESCE(SUM(completes), 0)::int AS completion_events, " +
+      "COUNT(*) FILTER (WHERE last_start >= NOW() - INTERVAL '60 minutes' AND last_start <= NOW() - INTERVAL '20 minutes' " +
+      "AND (last_complete IS NULL OR last_complete < last_start))::int AS potentially_stuck " +
+      "FROM (SELECT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END AS identity_key, " +
+      "COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts, " +
+      "COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes, " +
+      "MAX(created_at) FILTER (WHERE event_name = 'game_start') AS last_start, " +
+      "MAX(created_at) FILTER (WHERE event_name = 'game_complete') AS last_complete " +
+      "FROM public.analytics_events WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '2 hours' " +
+      "AND event_name IN ('game_start', 'game_complete') AND (player_id IS NOT NULL OR session_id IS NOT NULL) " +
       "GROUP BY 1) AS recent_gameplay"
     ));
   });
