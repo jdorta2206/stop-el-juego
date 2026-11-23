@@ -17,7 +17,8 @@ function isPremiumEligibleAccount(playerId: string): boolean {
 }
 
 export function usePremium(playerId: string | null | undefined): PremiumStatus {
-  const [isPremium, setIsPremium] = useState(false);
+  const [premiumState, setPremiumState] = useState<{ playerId: string | null; isPremium: boolean }>({ playerId: null, isPremium: false });
+  const isPremium = premiumState.playerId === playerId && premiumState.isPremium;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resolvedKey, setResolvedKey] = useState<string | null>(null);
@@ -33,7 +34,7 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
 
   useEffect(() => {
     if (!playerId || !isPremiumEligibleAccount(playerId)) {
-      setIsPremium(false);
+      setPremiumState({ playerId: playerId ?? null, isPremium: false });
       setLoading(false);
       setError(null);
       setResolvedKey(requestKey);
@@ -43,7 +44,6 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setIsPremium(false);
 
     void (async () => {
       try {
@@ -60,10 +60,9 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
 
         if (!r.ok) throw new Error(`Premium status unavailable (${r.status})`);
         const data: any = await r.json();
-        if (!cancelled) setIsPremium(data?.isPremium === true);
+        if (!cancelled) setPremiumState({ playerId, isPremium: data?.isPremium === true });
       } catch (err: any) {
         if (!cancelled) {
-          setIsPremium(false);
           setError(err?.message || "No se pudo comprobar Premium");
         }
       } finally {
