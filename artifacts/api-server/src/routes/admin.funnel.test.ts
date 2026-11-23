@@ -72,3 +72,10 @@ describe("STOP Control analytics failure safety", () => {
     expect(adminRouteSource).toContain("if (hasCachedHtml)");
   });
 });
+
+describe("STOP Control distinct actor identity", () => {
+  it("keeps account IDs and guest session IDs in separate namespaces", () => {
+    expect(adminRouteSource).not.toContain("COALESCE(player_id, session_id)");
+    expect(adminRouteSource).toContain("THEN 'player:' || player_id ELSE 'session:' || session_id END");
+  });
+});
