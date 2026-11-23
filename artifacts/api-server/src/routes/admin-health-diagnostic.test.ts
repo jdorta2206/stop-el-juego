@@ -14,5 +14,8 @@ describe("admin health lazy-module diagnostics", () => {
     expect(healthSource).toContain('parsed.context?.module_exports==="string"');
     expect(healthSource).toContain('"Página lazy: "+lazyPage');
     expect(healthSource).toContain('"Exportaciones del módulo: "+moduleExports');
+    expect(healthSource).toContain("lazyIdentity=typeof parsed.message");
+    expect(healthSource).toContain("lazyIdentity?.[1]");
+    expect(healthSource).toContain("lazyIdentity?.[2]");
   });
 });
