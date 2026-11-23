@@ -68,7 +68,7 @@ try {
   const diagnosticError = gameplayError as { name?: unknown; code?: unknown };
   const diagnosticMessage = typeof diagnosticError?.message === "string"
     ? diagnosticError.message
-        .replace(/https?:\\/\\/[^\\s"'<>]+/gi, "[url]")
+        .replace(/https?:\/\/\S+/gi, "[url]")
         .replace(/\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/gi, "[email]")
         .replace(/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/g, "[ip]")
         .replace(/\\s+/g, " ")
