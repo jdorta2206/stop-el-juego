@@ -21,7 +21,7 @@ function reportUnexpectedNetworkFailure(error: unknown, context: Record<string, 
   // turn the private operational panel red. Keep this filter limited to
   // explicit third-party origins in the error stack or resource context.
   const diagnosticSource = (value.stack ?? "") + " " + String(context.resource_url ?? "");
-  if (/googletagmanager\\.com|google-analytics\\.com|googlesyndication\\.com|static\\.cloudflareinsights\\.com/i.test(diagnosticSource)) return;
+  if (/googletagmanager\.com|google-analytics\.com|googlesyndication\.com|static\.cloudflareinsights\.com/i.test(diagnosticSource)) return;
 
   const signature = `${value.message}|${value.stack ?? ""}|${String(context.resource_url ?? "")}`;
   if (reportedNetworkFailures.has(signature)) return;
