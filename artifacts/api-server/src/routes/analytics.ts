@@ -342,14 +342,39 @@ router.post("/client-error", presenceLimiter, async (req, res) => {
     await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
     const message = redactClientDiagnostic(body.message, 500) ?? "Unknown client error";
-    const stack = redactClientDiagnostic(body.stack, 2500);
-    const componentStack = redactClientDiagnostic(body.componentStack, 2500);
+    const stack = redactClientDiagnostic(body.stack, 1200);
+    const componentStack = redactClientDiagnostic(body.componentStack, 1200);
+    const rawContext = body.context && typeof body.context === "object" && !Array.isArray(body.context)
+      ? body.context as Record<string, unknown>
+      : {};
+    // Persist only bounded diagnostic fields. Resource URLs are reduced to
+    // origin + pathname so query strings, fragments and credentials never enter analytics.
+    const diagnosticContext: Record<string, unknown> = {};
+    for (const key of ["source", "error_kind", "phase", "resource_tag"] as const) {
+      const value = rawContext[key];
+      if (typeof value === "string" && value.trim()) diagnosticContext[key] = redactClientDiagnostic(value, 80);
+    }
+    for (const key of ["resource_url", "filename"] as const) {
+      const value = rawContext[key];
+      if (typeof value === "string" && value.trim()) {
+        try {
+          const parsed = new URL(value);
+          diagnosticContext[key] = (parsed.origin + parsed.pathname).slice(0, 400);
+        } catch {
+          // Ignore malformed locations rather than persisting arbitrary text.
+        }
+      }
+    }
+    for (const key of ["line", "column"] as const) {
+      const value = rawContext[key];
+      if (typeof value === "number" && Number.isFinite(value) && value >= 0) diagnosticContext[key] = Math.floor(value);
+    }
     const sessionId = typeof body.sessionId === "string" ? body.sessionId.slice(0, 128) : null;
     const playerId = readPlayerId(req);
     const platform = platformFromRequest(req);
     const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
-    const metadataJson = JSON.stringify({ message, stack, componentStack }).slice(0, 4000);
+    const metadataJson = JSON.stringify({ message, stack, componentStack, context: diagnosticContext }).slice(0, 4000);
     await db.execute(sql`
       INSERT INTO public.analytics_events
         (event_name, player_id, session_id, platform, app_version, language, metadata_json, trusted)
