@@ -220,7 +220,8 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
     `);
 
     // Read-only diagnostics for solo-vs-AI play. game_start stores its mode in
-    // the mode column; game_complete stores it in metadata_json.mode. The
+    // the mode column. game_complete may use either the indexed mode column
+    // (new clients) or legacy metadata_json.mode (older clients). The
     // client/server session identifiers are not guaranteed to match, so we
     // deliberately report separate totals instead of fabricating abandoned
     // games or claiming a per-game join.
@@ -240,7 +241,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
         SELECT event_name, player_id, session_id, platform, app_version, language,
                CASE
                  WHEN event_name = 'game_start' THEN NULLIF(mode, '')
-                 ELSE NULLIF(metadata_json::jsonb ->> 'mode', '')
+                 ELSE COALESCE(NULLIF(mode, ''), NULLIF(metadata_json::jsonb ->> 'mode', ''))
                END AS game_mode
         FROM public.analytics_events
         WHERE trusted = TRUE
