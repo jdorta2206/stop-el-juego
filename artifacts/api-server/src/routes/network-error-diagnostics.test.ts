@@ -14,7 +14,7 @@ describe("browser network failure diagnostics", () => {
   it("captures unhandled fetch failures with their original stack", () => {
     expect(mainSource).toContain('window.addEventListener("unhandledrejection"');
     expect(mainSource).toContain("reportUnexpectedNetworkFailure(event.reason");
-    expect(mainSource).toContain("trackClientError(value, null");
+    expect(mainSource).toContain("trackClientError(safeValue, null");
     expect(mainSource).toContain('phase: "global_network_failure"');
   });
 
