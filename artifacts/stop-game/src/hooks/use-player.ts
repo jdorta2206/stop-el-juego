@@ -164,11 +164,12 @@ export function usePlayer() {
     };
 
     const refresh = () => {
-      identityGeneration += 1;
-      const generation = identityGeneration;
       const stored = readStoredPlayer();
       const previousPlayerId = currentPlayerIdRef.current;
-      currentPlayerIdRef.current = stored?.id ?? null;
+      const nextPlayerId = stored?.id ?? null;
+      if (nextPlayerId !== previousPlayerId) identityGeneration += 1;
+      const generation = identityGeneration;
+      currentPlayerIdRef.current = nextPlayerId;
       setPlayer(stored);
       setNeedsAuth(!stored);
 
