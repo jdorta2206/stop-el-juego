@@ -67,7 +67,7 @@ try {
 } catch (gameplayError: unknown) {
   const diagnosticError = gameplayError as { name?: unknown; code?: unknown; message?: unknown };
   const diagnosticMessage = typeof diagnosticError?.message === "string"
-    ? diagnosticError.message.replace(/https?:\\/\\/\\S+/gi, "[url]").split(/\\s+/).join(" ").slice(0, 180)
+    ? diagnosticError.message.replace(/https?:\/\/\S+/gi, "[url]").slice(0, 180)
     : "unavailable";
   console.warn("[admin health] gameplay check unavailable", {
     name: typeof diagnosticError?.name === "string" ? diagnosticError.name : "Error",
