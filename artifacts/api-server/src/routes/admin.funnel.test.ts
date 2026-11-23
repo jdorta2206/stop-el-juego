@@ -32,6 +32,7 @@ describe("STOP Control analytics funnel event ordering", () => {
     expect(funnelQuery).toMatch(/WHERE trusted = TRUE/);
     expect(funnelQuery).toMatch(/created_at >= NOW\(\) - INTERVAL '7 days'/);
     expect(funnelQuery).toMatch(/GROUP BY session_id/);
+    expect(funnelQuery).toMatch(/WHERE session_id IS NOT NULL\s+GROUP BY session_id/);
     expect(funnelQuery).toMatch(/MAX\(created_at\) FILTER \(WHERE event_name = 'game_lobby_view'\)/);
     expect(funnelQuery).toMatch(/MAX\(created_at\) FILTER \(WHERE event_name = 'game_start'\)/);
     expect(funnelQuery).toMatch(/MAX\(created_at\) FILTER \(WHERE event_name = 'game_complete'\)/);
@@ -70,5 +71,15 @@ describe("STOP Control analytics failure safety", () => {
     expect(allQueries).toBeGreaterThan(-1);
     expect(cacheWrite).toBeGreaterThan(allQueries);
     expect(adminRouteSource).toContain("if (hasCachedHtml)");
+  });
+});
+
+describe("STOP Control funnel chart units", () => {
+  it("renders sessions and unique players as separate charts, never one mixed funnel", () => {
+    expect(adminRouteSource).toContain("sessionFunnelChart");
+    expect(adminRouteSource).toContain("playerActivityChart");
+    expect(adminRouteSource).toContain('"Navegación · sesiones · 7 días"');
+    expect(adminRouteSource).toContain('"Actividad · jugadores únicos · 7 días"');
+    expect(adminRouteSource).not.toContain("funnelChart");
   });
 });

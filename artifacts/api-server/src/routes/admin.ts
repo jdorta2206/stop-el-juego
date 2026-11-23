@@ -291,6 +291,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
             MAX(created_at) FILTER (WHERE event_name = 'game_start') AS last_game_start,
             MAX(created_at) FILTER (WHERE event_name = 'game_complete') AS last_game_complete
           FROM recent_events
+          WHERE session_id IS NOT NULL
           GROUP BY session_id
         ),
         player_counts AS (
@@ -627,11 +628,15 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const chartCompletions = [...activityByDay].reverse().filter((row) => num(row.starters) > 0).map((row) => ({ label: String(row.d).slice(5), value: Math.round((num(row.completers) / num(row.starters)) * 100) }));
     const modeChart = modeUsage.map((row) => ({ label: String(row.mode), value: num(row.total) }));
     const powerupChart = powerupUsage.map((row) => ({ label: String(row.powerup), value: num(row.total) }));
-    const funnelChart = [
+    // Keep unlike units out of the same funnel: sessions and unique players
+    // are separate populations and must not be read as a single conversion.
+    const sessionFunnelChart = [
       { label: "Sesiones", value: num(funnel?.sessions) },
-      { label: "Lobbies", value: num(funnel?.lobby_sessions) },
-      { label: "Jugadores que iniciaron", value: num(funnel?.game_players) },
-      { label: "Jugadores con resultado", value: num(funnel?.completed_players) },
+      { label: "Lobbies vistos", value: num(funnel?.lobby_sessions) },
+    ];
+    const playerActivityChart = [
+      { label: "Iniciaron", value: num(funnel?.game_players) },
+      { label: "Con resultado", value: num(funnel?.completed_players) },
     ];
 
 
@@ -848,7 +853,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <div class="charts">
     ${svgLineChart(chartActivity, "Jugadores activos por día · 14 días")}
     ${svgLineChart(chartCompletions, "Porcentaje de finalización · 14 días")}
-    ${svgBars(funnelChart, "Embudo · jugadores únicos · 7 días")}
+    ${svgBars(sessionFunnelChart, "Navegación · sesiones · 7 días")}
+    ${svgBars(playerActivityChart, "Actividad · jugadores únicos · 7 días")}
     ${svgBars(adChart, "Publicidad · usuarios únicos · 7 días")}
     ${svgBars(modeChart, "Modos más jugados · 7 días")}
     ${svgBars(powerupChart, "Recompensas más utilizadas · 7 días")}
