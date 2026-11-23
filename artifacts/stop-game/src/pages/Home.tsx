@@ -9,6 +9,7 @@ import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
 import { useFollows, useFriendsOnline } from "@/lib/useFollows";
 import { usePlayer } from "@/hooks/use-player";
+import { getDailyStatusRequestMode } from "@/lib/dailyStatusAuthGate";
 import { useT } from "@/i18n/useT";
 import { useDisplayStreak } from "@/hooks/useDisplayStreak";
 import { useAchievements } from "@/hooks/useAchievements";
@@ -51,17 +52,17 @@ export default function Home() {
     };
   }, []);
 
-  const { player, isLoaded } = usePlayer();
+  const { player, isLoaded, authRestoreStatus } = usePlayer();
   const lobbyAuthStartedAtRef = useRef(performance.now());
   const lobbyAuthTelemetryRef = useRef<string>("");
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || authRestoreStatus === "pending") return;
     const result = !player ? "anonymous" : player.loginMethod === "guest" ? "guest" : "authenticated";
     const key = `${result}:${player?.loginMethod ?? "none"}`;
     if (lobbyAuthTelemetryRef.current === key) return;
     lobbyAuthTelemetryRef.current = key;
     trackAnalyticsEvent("lobby_auth_resolved", { metadata: { phase: "auth_restore_complete", result, loginMethod: player?.loginMethod ?? null, durationMs: Math.max(0, Math.round(performance.now() - lobbyAuthStartedAtRef.current)) } });
-  }, [isLoaded, player?.id, player?.loginMethod]);
+  }, [isLoaded, authRestoreStatus, player?.id, player?.loginMethod]);
   const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
   const adsBlocked = isPremium || premiumLoading || !!premiumError;
   const { friends } = useFollows(player?.id);
@@ -172,10 +173,12 @@ export default function Home() {
       try { return !!localStorage.getItem(`stop_daily_${today}_${lang}_${player?.id || "guest"}`); } catch { return false; }
     })();
 
-    if (!player || player.loginMethod === "guest") {
+    const requestMode = getDailyStatusRequestMode(player, authRestoreStatus);
+    if (requestMode === "local") {
       setDailyDone(localPlayed);
       return;
     }
+    if (requestMode === "wait") return;
 
     const dailyStatusStartedAt = performance.now();
     trackAnalyticsEvent("lobby_daily_status_started", { metadata: { endpoint: "/api/daily/status", method: "GET", phase: "daily_status_request" } });
@@ -208,7 +211,7 @@ export default function Home() {
         if (status === 401 || status === 403) trackAnalyticsEvent("lobby_auth_failed", { metadata: { endpoint: "/api/daily/status", status, requestId: requestId || null } });
       });
     return () => controller.abort();
-  }, [player?.id, player?.loginMethod, lang]);
+  }, [player?.id, player?.loginMethod, lang, authRestoreStatus]);
 
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
