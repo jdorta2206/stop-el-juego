@@ -234,6 +234,14 @@ function serverSessionId(req: Request, res: any): string {
   return id;
 }
 
+// The browser creates one sessionStorage ID before analytics heartbeat starts.
+// Reuse it for heartbeat, game-start and game_complete so concurrent first
+// requests do not race to create different cookie sessions.
+function clientAnalyticsSessionId(body: Record<string, unknown>): string | null {
+  const value = body.sessionId;
+  return typeof value === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(value) ? value : null;
+}
+
 router.use(async (req, res, next) => {
   if (req.path === "/summary" || req.path === "/event" || req.path === "/heartbeat") return next();
   try {
@@ -352,7 +360,12 @@ router.post("/event", presenceLimiter, async (req, res) => {
     const metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
     const metadataJson = JSON.stringify(sanitizeClientMetadata(metadata)).slice(0, 4000);
     const playerId = readPlayerId(req);
-    const sessionId = clean(body.sessionId, 128) ?? serverSessionId(req, res);
+    // game_start is assigned the server-owned analytics cookie session.
+    // Use that same session for completion events so Control can pair starts
+    // and finishes even when the browser-side sessionStorage ID differs.
+    const sessionId = eventName === "game_complete"
+      ? clientAnalyticsSessionId(body) ?? serverSessionId(req, res)
+      : clean(body.sessionId, 128) ?? serverSessionId(req, res);
     const trusted = TRUSTED_CLIENT_TELEMETRY_EVENTS.has(eventName);
     await db.execute(sql`
       INSERT INTO public.analytics_events (event_name, player_id, session_id, platform, app_version, language, mode, ai_difficulty, metadata_json, trusted)
