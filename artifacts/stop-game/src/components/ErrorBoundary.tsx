@@ -87,6 +87,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
       try {
         sessionStorage.removeItem("stop_chunk_recovery_once");
+        sessionStorage.removeItem(LAZY_DEFAULT_RECOVERY_KEY);
       } catch {
         // Storage can be unavailable in restricted webviews.
       }
