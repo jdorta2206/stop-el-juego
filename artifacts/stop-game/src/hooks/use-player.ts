@@ -126,6 +126,11 @@ export function usePlayer() {
   const [initialStored] = useState<PlayerProfile | null>(() => readStoredPlayer());
   const [player, setPlayer] = useState<PlayerProfile | null>(initialStored);
   const [isLoaded, setIsLoaded] = useState(false);
+  // A stored OAuth profile is rendered immediately, but its token must be
+  // restored before authenticated, non-critical lobby requests are sent.
+  const [authRestoreStatus, setAuthRestoreStatus] = useState<"pending" | "restored" | "unavailable">(
+    initialStored && isLoggedInId(initialStored.id) ? "pending" : "restored",
+  );
   const [needsAuth, setNeedsAuth] = useState(!initialStored || hasPendingOAuthError());
 
   useEffect(() => {
@@ -147,6 +152,7 @@ export function usePlayer() {
           const generation = identityGeneration;
           const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration, stored?.id ?? null);
           if (cancelled || generation !== identityGeneration) return;
+          setAuthRestoreStatus(restored ? "restored" : "unavailable");
           if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
           else { setPlayer(stored); setNeedsAuth(false); }
         })();
@@ -156,6 +162,7 @@ export function usePlayer() {
         const generation = identityGeneration;
         const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration);
         if (cancelled || generation !== identityGeneration) return;
+        setAuthRestoreStatus(restored ? "restored" : "unavailable");
         if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
         else { setPlayer(null); setNeedsAuth(true); }
         setIsLoaded(true);
@@ -200,5 +207,5 @@ export function usePlayer() {
 
   const dismissAuth = () => setNeedsAuth(false);
   const showAuth = () => { try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {} setNeedsAuth(true); };
-  return { player, isLoaded, needsAuth, savePlayer, updateProfile, saveFbToken, logout, showAuth, dismissAuth };
+  return { player, isLoaded, authRestoreStatus, needsAuth, savePlayer, updateProfile, saveFbToken, logout, showAuth, dismissAuth };
 }
