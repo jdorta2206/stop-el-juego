@@ -248,7 +248,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
   const isKnownClientRoute = (pathname: string) => {
     const normalized = pathname.replace(/\/+$/, "") || "/";
     return knownClientPaths.has(normalized) ||
-      /^\/(?:room|live|overlay|player|torneo)\/[^/]+$/.test(normalized);
+      /^\/(?:room|live|overlay|player|torneo|blog)\/[^/]+$/.test(normalized);
   };
 
   app.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
