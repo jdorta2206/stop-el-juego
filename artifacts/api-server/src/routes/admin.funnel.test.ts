@@ -90,3 +90,18 @@ describe("STOP Control distinct actor identity", () => {
     expect(adminRouteSource).toContain("THEN 'player:' || player_id ELSE 'session:' || session_id END");
   });
 });
+
+
+describe("STOP Control daily game-start version coverage", () => {
+  it("uses the same trusted client game-start source as the 24-hour coverage KPI", () => {
+    const queryStart = adminRouteSource.indexOf("const analyticsStartsByDayPromise =");
+    const queryEnd = adminRouteSource.indexOf("`)).rows as Record<string, unknown>[];", queryStart);
+    expect(queryStart).toBeGreaterThan(-1);
+    expect(queryEnd).toBeGreaterThan(queryStart);
+    const query = adminRouteSource.slice(queryStart, queryEnd);
+    expect(query).toContain("event_name = 'game_start'");
+    expect(query).toContain("metadata_json::jsonb->>'source' = 'client_game_start'");
+    expect(query).toContain("app_version IS NOT NULL AND app_version <> ''");
+    expect(query).toContain("created_at >= NOW() - INTERVAL '14 days'");
+  });
+});
