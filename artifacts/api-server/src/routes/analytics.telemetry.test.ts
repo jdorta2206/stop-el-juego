@@ -78,7 +78,7 @@ describe("STOP gameplay telemetry allowlist", () => {
 describe("STOP trusted game-start delivery", () => {
   it("retries transient client failures with a stable idempotency key", () => {
     const clientSource = readFileSync(
-      resolve(currentDir, "../../../../../stop-game/src/lib/analyticsClient.ts"),
+      resolve(currentDir, "../../../stop-game/src/lib/analyticsClient.ts"),
       "utf8",
     );
     expect(clientSource).toContain("const eventId");
