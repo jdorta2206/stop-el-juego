@@ -26,38 +26,50 @@ const CHUNK_RECOVERY_KEYS = [
   "stop_lazy_default_boundary_recovery_once",
 ] as const;
 
-function lazyPage<T extends { default: ComponentType<any> }>(load: () => Promise<T>) {
+function lazyPage<T extends { default: ComponentType<any> }>(pageName: string, load: () => Promise<T>) {
   return lazy(async () => {
     const module = await load();
-    if (!module?.default) throw new Error("lazy-module-missing-default");
+    if (!module?.default) {
+      const exports = module && typeof module === "object" ? Object.keys(module).slice(0, 12) : [];
+      const error = new Error("lazy-module-missing-default");
+      Object.assign(error, {
+        diagnosticContext: {
+          phase: "lazy_module_resolution",
+          error_kind: "missing_default_export",
+          lazy_page: pageName,
+          module_exports: exports.join(",").slice(0, 160) || "(none)",
+        },
+      });
+      throw error;
+    }
     return module;
   });
 }
 
-const Privacy = lazyPage(() => import("@/pages/Privacy"));
-const Terms = lazyPage(() => import("@/pages/Terms"));
-const FAQ = lazyPage(() => import("@/pages/FAQ"));
-const About = lazyPage(() => import("@/pages/About"));
-const HowToPlay = lazyPage(() => import("@/pages/HowToPlay"));
-const ComoFunciona = lazyPage(() => import("@/pages/ComoFunciona"));
-const DailyChallenge = lazyPage(() => import("@/pages/DailyChallenge"));
-const Impossible = lazyPage(() => import("@/pages/Impossible"));
-const Friends = lazyPage(() => import("@/pages/Friends"));
-const Strategies = lazyPage(() => import("@/pages/Strategies"));
-const PlayerProfile = lazyPage(() => import("@/pages/PlayerProfile"));
-const Tienda = lazyPage(() => import("@/pages/Tienda"));
-const Tournament = lazyPage(() => import("@/pages/Tournament"));
-const Live = lazyPage(() => import("@/pages/Live"));
-const StreamerDirectory = lazyPage(() => import("@/pages/StreamerDirectory"));
-const Overlay = lazyPage(() => import("@/pages/Overlay"));
-const DeleteAccount = lazyPage(() => import("@/pages/DeleteAccount"));
-const SeasonPass = lazyPage(() => import("@/pages/SeasonPass"));
-const Achievements = lazyPage(() => import("@/pages/Achievements"));
-const Collection = lazyPage(() => import("@/pages/Collection"));
-const Notifications = lazyPage(() => import("@/pages/Notifications"));
-const Blog = lazyPage(() => import("@/pages/Blog"));
-const BlogPost = lazyPage(() => import("@/pages/BlogPost"));
-const Contact = lazyPage(() => import("@/pages/Contact"));
+const Privacy = lazyPage("Privacy", () => import("@/pages/Privacy"));
+const Terms = lazyPage("Terms", () => import("@/pages/Terms"));
+const FAQ = lazyPage("FAQ", () => import("@/pages/FAQ"));
+const About = lazyPage("About", () => import("@/pages/About"));
+const HowToPlay = lazyPage("HowToPlay", () => import("@/pages/HowToPlay"));
+const ComoFunciona = lazyPage("ComoFunciona", () => import("@/pages/ComoFunciona"));
+const DailyChallenge = lazyPage("DailyChallenge", () => import("@/pages/DailyChallenge"));
+const Impossible = lazyPage("Impossible", () => import("@/pages/Impossible"));
+const Friends = lazyPage("Friends", () => import("@/pages/Friends"));
+const Strategies = lazyPage("Strategies", () => import("@/pages/Strategies"));
+const PlayerProfile = lazyPage("PlayerProfile", () => import("@/pages/PlayerProfile"));
+const Tienda = lazyPage("Tienda", () => import("@/pages/Tienda"));
+const Tournament = lazyPage("Tournament", () => import("@/pages/Tournament"));
+const Live = lazyPage("Live", () => import("@/pages/Live"));
+const StreamerDirectory = lazyPage("StreamerDirectory", () => import("@/pages/StreamerDirectory"));
+const Overlay = lazyPage("Overlay", () => import("@/pages/Overlay"));
+const DeleteAccount = lazyPage("DeleteAccount", () => import("@/pages/DeleteAccount"));
+const SeasonPass = lazyPage("SeasonPass", () => import("@/pages/SeasonPass"));
+const Achievements = lazyPage("Achievements", () => import("@/pages/Achievements"));
+const Collection = lazyPage("Collection", () => import("@/pages/Collection"));
+const Notifications = lazyPage("Notifications", () => import("@/pages/Notifications"));
+const Blog = lazyPage("Blog", () => import("@/pages/Blog"));
+const BlogPost = lazyPage("BlogPost", () => import("@/pages/BlogPost"));
+const Contact = lazyPage("Contact", () => import("@/pages/Contact"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
