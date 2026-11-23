@@ -74,3 +74,10 @@ describe("STOP gameplay telemetry allowlist", () => {
   });
 
 });
+
+describe("STOP analytics client version attribution", () => {
+  it("does not label TWA requests without a version header as the legacy 1.3.6.9 build", () => {
+    expect(analyticsRouteSource).not.toContain("CURRENT_TWA_ANALYTICS_VERSION");
+    expect(analyticsRouteSource).toContain("return isTwaRequest(req) ? null : CURRENT_WEB_ANALYTICS_VERSION");
+  });
+});
