@@ -26,23 +26,37 @@ export function trackTrustedGameStart(options?: { mode?: string; language?: stri
   try {
     const appVersion = getAnalyticsClientVersion();
     const token = (() => { try { return localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); } catch { return null; } })();
-    void fetch(`${window.location.origin}/api/analytics/game-start`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Client-Platform": platform(),
-        ...(isTwa() ? { "X-Client-TWA": "1" } : {}),
-        ...(appVersion ? { "X-Client-Version": appVersion } : {}),
-        ...(token ? { "X-Stop-Token": token } : {}),
-      },
-      body: JSON.stringify({
-        sessionId: sessionId(),
-        mode: options?.mode ?? null,
-        language: options?.language ?? (document.documentElement.lang || null),
-      }),
-      credentials: "include",
-      keepalive: true,
-    }).catch(() => {});
+    // A stable ID makes the one retry safe if the server committed but the
+    // response was lost. It is scoped to this logical start, not a score.
+    const eventId = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `gs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+    const body = JSON.stringify({
+      eventId,
+      sessionId: sessionId(),
+      mode: options?.mode ?? null,
+      language: options?.language ?? (document.documentElement.lang || null),
+    });
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Client-Platform": platform(),
+      ...(isTwa() ? { "X-Client-TWA": "1" } : {}),
+      ...(appVersion ? { "X-Client-Version": appVersion } : {}),
+      ...(token ? { "X-Stop-Token": token } : {}),
+    };
+    void (async () => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const response = await fetch(`${window.location.origin}/api/analytics/game-start`, {
+            method: "POST", headers, body, credentials: "include", keepalive: true,
+          });
+          if (response.ok || response.status < 500 || attempt === 1) return;
+        } catch {
+          if (attempt === 1) return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    })();
   } catch {}
 }
 

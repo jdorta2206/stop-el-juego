@@ -303,12 +303,33 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
     const mode = typeof body.mode === "string" ? body.mode.slice(0, 32) : null;
     const appVersion = appVersionFromRequest(req);
     const platform = platformFromRequest(req);
-    await db.execute(sql`
-      INSERT INTO public.analytics_events
-        (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
-      VALUES
-        ('game_start', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode}, '{"source":"client_game_start"}', TRUE)
-    `);
+    const eventId = typeof body.eventId === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(body.eventId)
+      ? body.eventId
+      : null;
+    if (eventId) {
+      // Serialize retries for this logical start and persist at most one event.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${eventId}, 0))`);
+        await tx.execute(sql`
+          INSERT INTO public.analytics_events
+            (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
+          SELECT 'game_start', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode},
+                 ${JSON.stringify({ source: "client_game_start", eventId })}, TRUE
+          WHERE NOT EXISTS (
+            SELECT 1 FROM public.analytics_events
+            WHERE event_name = 'game_start'
+              AND metadata_json::jsonb->>'eventId' = ${eventId}
+          )
+        `);
+      });
+    } else {
+      await db.execute(sql`
+        INSERT INTO public.analytics_events
+          (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
+        VALUES
+          ('game_start', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode}, '{"source":"client_game_start"}', TRUE)
+      `);
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error("[analytics] trusted game-start failed; details withheld.");
