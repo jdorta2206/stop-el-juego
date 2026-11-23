@@ -15,6 +15,11 @@ const mainSource = readFileSync(
 );
 
 describe("lazy module diagnostics", () => {
+  it("loads HowToPlay statically so a stale lazy chunk cannot blank that route", () => {
+    expect(appSource).toContain('import HowToPlay from "@/pages/HowToPlay"');
+    expect(appSource).not.toContain('lazyPage("HowToPlay"');
+  });
+
   it("identifies the lazy page and its actual exports when default is missing", () => {
     expect(appSource).toContain('function lazyPage<T extends { default: ComponentType<any> }>(pageName: string');
     expect(appSource).toContain("lazy_page: pageName");
@@ -33,6 +38,15 @@ describe("browser network failure diagnostics", () => {
     expect(mainSource).not.toContain("registration.unregister()");
     expect(mainSource).toContain("trackClientError(safeValue, null");
     expect(mainSource).toContain('phase: "global_network_failure"');
+  });
+
+  it("retries only same-origin GET requests and excludes external/best-effort telemetry", () => {
+    expect(mainSource).toContain("const shouldRetryGet = Boolean(requestUrl && method === \"GET\")");
+    expect(mainSource).toContain("await nativeFetch(retryInput, init)");
+    expect(mainSource).toContain('parsed.origin === window.location.origin');
+    expect(mainSource).toContain('parsed.pathname === "/api/analytics/event"');
+    expect(mainSource).toContain('parsed.pathname === "/api/analytics/heartbeat"');
+    expect(mainSource).toContain("!requestSignal?.aborted");
   });
 
   it("captures rejected fetch URLs without changing the original rejection", () => {

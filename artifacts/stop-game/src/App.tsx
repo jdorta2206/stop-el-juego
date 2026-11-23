@@ -17,6 +17,7 @@ import Multiplayer from "@/pages/Multiplayer";
 import Room from "@/pages/Room";
 import Ranking from "@/pages/Ranking";
 import NotFound from "@/pages/not-found";
+import HowToPlay from "@/pages/HowToPlay";
 
 // Recovery guards are reset only after React has successfully committed
 // the requested route. A successful import alone is not enough: another
@@ -53,7 +54,7 @@ const Privacy = lazyPage("Privacy", () => import("@/pages/Privacy"));
 const Terms = lazyPage("Terms", () => import("@/pages/Terms"));
 const FAQ = lazyPage("FAQ", () => import("@/pages/FAQ"));
 const About = lazyPage("About", () => import("@/pages/About"));
-const HowToPlay = lazyPage("HowToPlay", () => import("@/pages/HowToPlay"));
+
 const ComoFunciona = lazyPage("ComoFunciona", () => import("@/pages/ComoFunciona"));
 const DailyChallenge = lazyPage("DailyChallenge", () => import("@/pages/DailyChallenge"));
 const Impossible = lazyPage("Impossible", () => import("@/pages/Impossible"));

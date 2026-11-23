@@ -35,22 +35,53 @@ function reportUnexpectedNetworkFailure(error: unknown, context: Record<string, 
   });
 }
 
-// Observe rejected fetch requests without changing their result, retrying, or
-// interfering with the caller. Store only origin + pathname (never query data).
+// Monitor STOP-owned requests only. Third-party analytics/ad scripts can be
+// blocked by privacy tools and are not evidence that the STOP API is unhealthy.
 const nativeFetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   let requestUrl: string | null = null;
+  const method = String(init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+  let retryInput: RequestInfo | URL = input;
+  const requestSignal: AbortSignal | null = init?.signal ?? (input instanceof Request ? input.signal : null);
   try {
     const rawUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const parsed = new URL(rawUrl, window.location.origin);
+    const isSameOrigin = parsed.origin === window.location.origin;
     const isDiagnosticEndpoint = parsed.pathname === "/api/analytics/client-error";
-    if (!isDiagnosticEndpoint) requestUrl = parsed.origin + parsed.pathname;
+    const isBestEffortTelemetry = method === "POST" &&
+      (parsed.pathname === "/api/analytics/event" || parsed.pathname === "/api/analytics/heartbeat");
+    if (isSameOrigin && !isDiagnosticEndpoint && !isBestEffortTelemetry) {
+      requestUrl = parsed.origin + parsed.pathname;
+      if (method === "GET" && input instanceof Request) retryInput = input.clone();
+    } else {
+      requestUrl = null;
+    }
   } catch {
     // A malformed request URL should not affect the original fetch call.
   }
 
-  return nativeFetch(input, init).catch((error: unknown) => {
-    if (requestUrl) {
+  const shouldRetryGet = Boolean(requestUrl && method === "GET");
+  return nativeFetch(input, init).catch(async (error: unknown) => {
+    if (shouldRetryGet && !requestSignal?.aborted) {
+      // GET is idempotent. One short retry absorbs brief connection drops during
+      // a Railway rollout without replaying game actions or POST submissions.
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      if (!requestSignal?.aborted) {
+        try {
+          return await nativeFetch(retryInput, init);
+        } catch (retryError) {
+          if (!requestSignal?.aborted && requestUrl) {
+            reportUnexpectedNetworkFailure(retryError, {
+              source: "fetch_rejection",
+              resource_url: requestUrl,
+              resource_tag: "fetch",
+            });
+          }
+          throw retryError;
+        }
+      }
+    }
+    if (requestUrl && !requestSignal?.aborted) {
       reportUnexpectedNetworkFailure(error, {
         source: "fetch_rejection",
         resource_url: requestUrl,
@@ -82,15 +113,18 @@ window.addEventListener("error", (event) => {
     let resourcePath: string | null = null;
     try {
       const parsed = new URL(rawUrl, window.location.origin);
-      resourcePath = parsed.origin + parsed.pathname;
+      // External ad/analytics/CDN failures are outside STOP's operational control.
+      if (parsed.origin === window.location.origin) resourcePath = parsed.origin + parsed.pathname;
     } catch {
       // Do not record an unparseable URL or any query-string data.
     }
-    reportUnexpectedNetworkFailure(new Error("Failed to fetch resource"), {
-      source: "resource_load",
-      resource_url: resourcePath,
-      resource_tag: target.tagName.toLowerCase(),
-    });
+    if (resourcePath) {
+      reportUnexpectedNetworkFailure(new Error("Failed to fetch resource"), {
+        source: "resource_load",
+        resource_url: resourcePath,
+        resource_tag: target.tagName.toLowerCase(),
+      });
+    }
   }
 }, true);
 
