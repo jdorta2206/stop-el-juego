@@ -93,3 +93,18 @@ describe("STOP trusted game-start delivery", () => {
     expect(analyticsRouteSource).toContain("source: \"client_game_start\"");
   });
 });
+
+describe("STOP analytics attribution", () => {
+  it("does not invent a legacy version for TWA requests without a version header", () => {
+    expect(analyticsRouteSource).not.toContain("CURRENT_TWA_ANALYTICS_VERSION");
+    expect(analyticsRouteSource).toContain("return isTwaRequest(req) ? null : CURRENT_WEB_ANALYTICS_VERSION");
+  });
+
+  it("uses the shared TWA detector for Android platform attribution", () => {
+    expect(analyticsRouteSource).toContain("const twa = isTwaRequest(req);");
+  });
+
+  it("refreshes the app version when an existing passive session reports activity", () => {
+    expect(analyticsRouteSource).toContain("app_version = EXCLUDED.app_version, last_seen = NOW()");
+  });
+});

@@ -62,7 +62,6 @@ function sanitizeClientMetadata(value: unknown, depth = 0): unknown {
 }
 
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
-const CURRENT_TWA_ANALYTICS_VERSION = "1.3.6.9";
 const CURRENT_WEB_ANALYTICS_VERSION = String(process.env.RAILWAY_GIT_COMMIT_SHA ?? "web-dev").slice(0, 12);
 
 function isTwaRequest(req: Request): boolean {
@@ -75,12 +74,13 @@ function isTwaRequest(req: Request): boolean {
 function appVersionFromRequest(req: Request): string | null {
   const clientVersion = String(req.headers["x-client-version"] ?? "").trim().slice(0, 32);
   if (clientVersion) return clientVersion;
-  return isTwaRequest(req) ? CURRENT_TWA_ANALYTICS_VERSION : CURRENT_WEB_ANALYTICS_VERSION;
+  // Do not attribute an unknown TWA build to a hard-coded legacy version.
+  return isTwaRequest(req) ? null : CURRENT_WEB_ANALYTICS_VERSION;
 }
 
 function platformFromRequest(req: Request): "web" | "android" | "ios" {
   const explicit = String(req.headers["x-client-platform"] ?? "").toLowerCase();
-  const twa = String(req.headers["x-client-twa"] ?? "") === "1";
+  const twa = isTwaRequest(req);
   if (twa) return "android";
   if (PLATFORMS.has(explicit)) return explicit as "web" | "android" | "ios";
   const ua = String(req.headers["user-agent"] ?? "").toLowerCase();
@@ -244,7 +244,7 @@ router.use(async (req, res, next) => {
     await db.execute(sql`
       INSERT INTO public.analytics_sessions (session_id, platform, app_version, last_seen, started_at)
       VALUES (${sessionId}, ${platform}, ${appVersion}, NOW(), NOW())
-      ON CONFLICT (session_id) DO UPDATE SET platform = EXCLUDED.platform, last_seen = NOW()
+      ON CONFLICT (session_id) DO UPDATE SET platform = EXCLUDED.platform, app_version = EXCLUDED.app_version, last_seen = NOW()
     `);
   } catch (err) {
     console.error("[analytics] passive heartbeat failed; details withheld.");
