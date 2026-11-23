@@ -7,6 +7,13 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const healthSource = readFileSync(resolve(currentDir, "./adminHealth.ts"), "utf8");
 
 describe("admin health lazy-module diagnostics", () => {
+  it("evaluates gameplay from a bounded indexed window with a strict timeout", () => {
+    expect(healthSource).toContain("SET LOCAL statement_timeout = '2500ms'");
+    expect(healthSource).toContain("INTERVAL '2 hours'");
+    expect(healthSource).toContain("event_name IN ('game_start', 'game_complete')");
+    expect(healthSource).toContain("INTERVAL '20 minutes'");
+    expect(healthSource).not.toContain("NO EVALUADO");
+  });
   it("renders the lazy page and module exports captured by client-error telemetry", () => {
     expect(healthSource).toContain("lazy_page?:unknown");
     expect(healthSource).toContain("module_exports?:unknown");
