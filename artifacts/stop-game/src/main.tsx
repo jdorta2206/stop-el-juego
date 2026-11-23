@@ -117,7 +117,7 @@ function recoverFromChunkFailure(reason: unknown) {
   // export instead of a conventional chunk-loading error. Recover only from
   // these explicit module-resolution signatures, using the same one-shot
   // cache cleanup below; unrelated runtime errors must not trigger reloads.
-  const isLazyDefaultFailure = /cannot read properties of undefined \(reading ['"]default['"]\)|undefined is not an object.*(?:_result\.default|\.default)|_result\.default/i.test(message);
+  const isLazyDefaultFailure = /lazy-module-missing-default|cannot read properties of undefined \(reading ['"]default['"]\)|undefined is not an object.*(?:_result\.default|\.default)|_result\.default/i.test(message);
   if (!isChunkFailure && !isLazyDefaultFailure) return;
 
   try {
@@ -127,10 +127,9 @@ function recoverFromChunkFailure(reason: unknown) {
 
     // Remove stale code caches only. Never clear player/offline data.
     void (async () => {
-      try {
-        const registrations = await navigator.serviceWorker?.getRegistrations?.() || [];
-        await Promise.all(registrations.map((registration) => registration.unregister()));
-      } catch {}
+      // Keep the active service worker registered: unregistering it here can
+      // interrupt Web Push delivery. A fresh navigation uses network-first HTML,
+      // while removing only STOP's versioned code caches forces current chunks.
       try {
         const keys = await caches.keys();
         await Promise.all(keys.filter((key) => /^stop-v/i.test(key)).map((key) => caches.delete(key)));
