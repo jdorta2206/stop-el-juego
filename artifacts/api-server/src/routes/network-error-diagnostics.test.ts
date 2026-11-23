@@ -18,8 +18,9 @@ describe("lazy module diagnostics", () => {
   it("identifies the lazy page and its actual exports when default is missing", () => {
     expect(appSource).toContain('function lazyPage<T extends { default: ComponentType<any> }>(pageName: string');
     expect(appSource).toContain("lazy_page: pageName");
-    expect(appSource).toContain('module_exports: exports.join(",")');
+    expect(appSource).toContain('module_exports: exportSummary');
     expect(appSource).toContain('error_kind: "missing_default_export"');
+    expect(appSource).toContain('lazy-module-missing-default [page=${pageName}; exports=${exportSummary}]');
     expect(appSource).toContain('lazyPage("BlogPost", () => import("@/pages/BlogPost"))');
   });
 });
