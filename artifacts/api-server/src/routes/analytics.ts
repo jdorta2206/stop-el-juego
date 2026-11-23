@@ -220,6 +220,11 @@ export async function recordTrustedAnalyticsEvent(input: {
   `);
 }
 
+function clientAnalyticsSessionId(body: Record<string, unknown>): string | null {
+  const value = body.sessionId;
+  return typeof value === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(value) ? value : null;
+}
+
 function serverSessionId(req: Request, res: any): string {
   const raw = String(req.headers.cookie ?? "");
   const match = raw.match(/(?:^|;\s*)stop_analytics_session=([^;]+)/);
@@ -251,7 +256,7 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
   try {
     await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const sessionId = serverSessionId(req, res);
+    const sessionId = clientAnalyticsSessionId(body) ?? serverSessionId(req, res);
     // OAuth/player identity is always taken from the verified server token.
     // For guests there is no authenticated identity, so only the non-sensitive
     // login-method label "guest" is accepted for analytics classification.
@@ -292,7 +297,7 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
   try {
     await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const sessionId = serverSessionId(req, res);
+    const sessionId = clientAnalyticsSessionId(body) ?? serverSessionId(req, res);
     const playerId = readPlayerId(req);
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const mode = typeof body.mode === "string" ? body.mode.slice(0, 32) : null;
