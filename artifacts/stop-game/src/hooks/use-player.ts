@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AVATAR_COLORS, getApiUrl } from "@/lib/utils";
 
 const SESSION_TOKEN_KEY = "stop_session_token";
@@ -127,39 +127,78 @@ export function usePlayer() {
   const [player, setPlayer] = useState<PlayerProfile | null>(initialStored);
   const [isLoaded, setIsLoaded] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(!initialStored || hasPendingOAuthError());
+  const initialRestoreStatus: "pending" | "restored" = initialStored && isLoggedInId(initialStored.id) ? "pending" : "restored";
+  const [authRestoreStatus, setAuthRestoreStatus] = useState<"pending" | "restored" | "unavailable">(initialRestoreStatus);
+  const authRestoreStatusRef = useRef(authRestoreStatus);
+  const currentPlayerIdRef = useRef<string | null>(initialStored?.id ?? null);
+  const updateAuthRestoreStatus = (status: "pending" | "restored" | "unavailable") => {
+    authRestoreStatusRef.current = status;
+    setAuthRestoreStatus(status);
+  };
 
   useEffect(() => {
     let cancelled = false;
     let identityGeneration = 0;
+
+    const restoreStoredPlayer = async (stored: PlayerProfile | null, generation: number) => {
+      const restored = await tryRestoreSession(
+        () => !cancelled && generation === identityGeneration,
+        stored?.id ?? null,
+      );
+      if (cancelled || generation !== identityGeneration) return;
+
+      if (restored) {
+        // Set the identity and status before dispatching PLAYER_EVENT so our
+        // own persistence event cannot start a second restore operation.
+        currentPlayerIdRef.current = restored.id;
+        updateAuthRestoreStatus("restored");
+        writeStoredPlayer(restored);
+        setPlayer(restored);
+        setNeedsAuth(false);
+      } else {
+        updateAuthRestoreStatus("unavailable");
+        setPlayer(stored);
+        setNeedsAuth(!stored);
+      }
+      setIsLoaded(true);
+    };
+
     const refresh = () => {
       identityGeneration += 1;
+      const generation = identityGeneration;
       const stored = readStoredPlayer();
+      const previousPlayerId = currentPlayerIdRef.current;
+      currentPlayerIdRef.current = stored?.id ?? null;
       setPlayer(stored);
       setNeedsAuth(!stored);
+
+      if (stored && isLoggedInId(stored.id) &&
+          (stored.id !== previousPlayerId || authRestoreStatusRef.current === "unavailable")) {
+        updateAuthRestoreStatus("pending");
+        void restoreStoredPlayer(stored, generation);
+      } else if (!stored || !isLoggedInId(stored.id)) {
+        updateAuthRestoreStatus("restored");
+      }
     };
+
     try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
     const stored = readStoredPlayer();
 
     if (stored) {
-      setPlayer(stored); setNeedsAuth(hasPendingOAuthError()); setIsLoaded(true);
+      currentPlayerIdRef.current = stored.id;
+      setPlayer(stored);
+      setNeedsAuth(hasPendingOAuthError());
+      setIsLoaded(true);
       if (isLoggedInId(stored.id)) {
-        void (async () => {
-          const generation = identityGeneration;
-          const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration, stored?.id ?? null);
-          if (cancelled || generation !== identityGeneration) return;
-          if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
-          else { setPlayer(stored); setNeedsAuth(false); }
-        })();
+        updateAuthRestoreStatus("pending");
+        void restoreStoredPlayer(stored, identityGeneration);
+      } else {
+        updateAuthRestoreStatus("restored");
       }
     } else {
-      void (async () => {
-        const generation = identityGeneration;
-        const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration);
-        if (cancelled || generation !== identityGeneration) return;
-        if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
-        else { setPlayer(null); setNeedsAuth(true); }
-        setIsLoaded(true);
-      })();
+      currentPlayerIdRef.current = null;
+      updateAuthRestoreStatus("pending");
+      void restoreStoredPlayer(null, identityGeneration);
     }
 
     const handler = () => refresh();
@@ -167,7 +206,12 @@ export function usePlayer() {
     window.addEventListener(PLAYER_EVENT, handler);
     window.addEventListener("storage", handler);
     window.addEventListener("stop:oauth-error", handleOAuthError);
-    return () => { cancelled = true; window.removeEventListener(PLAYER_EVENT, handler); window.removeEventListener("storage", handler); window.removeEventListener("stop:oauth-error", handleOAuthError); };
+    return () => {
+      cancelled = true;
+      window.removeEventListener(PLAYER_EVENT, handler);
+      window.removeEventListener("storage", handler);
+      window.removeEventListener("stop:oauth-error", handleOAuthError);
+    };
   }, []);
 
   const savePlayer = (profile: PlayerProfile) => {
@@ -200,5 +244,5 @@ export function usePlayer() {
 
   const dismissAuth = () => setNeedsAuth(false);
   const showAuth = () => { try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {} setNeedsAuth(true); };
-  return { player, isLoaded, needsAuth, savePlayer, updateProfile, saveFbToken, logout, showAuth, dismissAuth };
+  return { player, isLoaded, authRestoreStatus, needsAuth, savePlayer, updateProfile, saveFbToken, logout, showAuth, dismissAuth };
 }
