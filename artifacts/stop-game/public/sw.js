@@ -13,8 +13,28 @@ self.addEventListener("install", (e) => {
 });
 
 self.addEventListener("activate", (e) => {
-  const keep = new Set([CACHE, DATA_CACHE]);
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => !keep.has(key)).map((key) => caches.delete(key)))).then(() => self.clients.claim()));
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    // A previous app cache means this is an upgrade, not a first install.
+    // Existing tabs may still be running an older hashed JS bundle whose
+    // lazy chunks were removed by the deployment. Reload those tabs after
+    // the new worker takes control so they request the current asset manifest.
+    const upgradingExistingApp = keys.some((key) => key.startsWith("stop-v") && key !== CACHE);
+    const keep = new Set([CACHE, DATA_CACHE]);
+    await Promise.all(
+      keys.filter((key) => !keep.has(key)).map((key) => caches.delete(key))
+    );
+    await self.clients.claim();
+
+    if (upgradingExistingApp) {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      // Do not await navigation here: a navigation may wait for this
+      // activation event to finish before it can be controlled by the new worker.
+      for (const client of clients) {
+        void client.navigate(client.url).catch(() => null);
+      }
+    }
+  })());
 });
 
 self.addEventListener("fetch", (e) => {
