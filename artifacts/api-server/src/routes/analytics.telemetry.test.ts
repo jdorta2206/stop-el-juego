@@ -74,3 +74,22 @@ describe("STOP gameplay telemetry allowlist", () => {
   });
 
 });
+
+describe("STOP trusted game-start delivery", () => {
+  it("retries transient client failures with a stable idempotency key", () => {
+    const clientSource = readFileSync(
+      resolve(currentDir, "../../../../../stop-game/src/lib/analyticsClient.ts"),
+      "utf8",
+    );
+    expect(clientSource).toContain("const eventId");
+    expect(clientSource).toContain("attempt < 2");
+    expect(clientSource).toContain("response.status < 500");
+    expect(clientSource).toContain("eventId,");
+  });
+
+  it("deduplicates retried game-start requests on the server", () => {
+    expect(analyticsRouteSource).toContain("pg_advisory_xact_lock(hashtextextended");
+    expect(analyticsRouteSource).toContain("metadata_json::jsonb->>'eventId'");
+    expect(analyticsRouteSource).toContain("source: \"client_game_start\"");
+  });
+});
