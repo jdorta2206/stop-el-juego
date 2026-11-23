@@ -131,14 +131,13 @@ export function usePlayer() {
   const [authRestoreStatus, setAuthRestoreStatus] = useState<"pending" | "restored" | "unavailable">(initialRestoreStatus);
   const authRestoreStatusRef = useRef(authRestoreStatus);
   const currentPlayerIdRef = useRef<string | null>(initialStored?.id ?? null);
-  const updateAuthRestoreStatus = (status: "pending" | "restored" | "unavailable") => {
-    authRestoreStatusRef.current = status;
-    setAuthRestoreStatus(status);
-  };
-
   useEffect(() => {
     let cancelled = false;
     let identityGeneration = 0;
+    const updateAuthRestoreStatus = (status: "pending" | "restored" | "unavailable") => {
+      authRestoreStatusRef.current = status;
+      setAuthRestoreStatus(status);
+    };
 
     const restoreStoredPlayer = async (stored: PlayerProfile | null, generation: number) => {
       const restored = await tryRestoreSession(
