@@ -5,10 +5,24 @@ import { fileURLToPath } from "node:url";
 import { sanitizeDiagnosticText } from "../../../stop-game/src/lib/diagnosticPrivacy";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
+const appSource = readFileSync(
+  resolve(currentDir, "../../../stop-game/src/App.tsx"),
+  "utf8",
+);
 const mainSource = readFileSync(
   resolve(currentDir, "../../../stop-game/src/main.tsx"),
   "utf8",
 );
+
+describe("lazy module diagnostics", () => {
+  it("identifies the lazy page and its actual exports when default is missing", () => {
+    expect(appSource).toContain('function lazyPage<T extends { default: ComponentType<any> }>(pageName: string');
+    expect(appSource).toContain("lazy_page: pageName");
+    expect(appSource).toContain('module_exports: exports.join(",")');
+    expect(appSource).toContain('error_kind: "missing_default_export"');
+    expect(appSource).toContain('lazyPage("BlogPost", () => import("@/pages/BlogPost"))');
+  });
+});
 
 describe("browser network failure diagnostics", () => {
   it("captures unhandled fetch failures with their original stack", () => {
@@ -25,6 +39,11 @@ describe("browser network failure diagnostics", () => {
     expect(mainSource).toContain("resource_url: requestUrl");
     expect(mainSource).toContain("throw error;");
     expect(mainSource).toContain('parsed.pathname === "/api/analytics/client-error"');
+  });
+
+  it("keeps lazy module identity in the server diagnostic allowlist", () => {
+    const analyticsSource = readFileSync(resolve(currentDir, "./analytics.ts"), "utf8");
+    expect(analyticsSource).toContain('"lazy_page", "module_exports"');
   });
 
   it("captures resource load location without recording query strings", () => {
