@@ -2,6 +2,16 @@ import { db } from "@workspace/db";
 import { playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
+const SLOW_BILLING_DB_PHASE_MS = 150;
+
+function logSlowBillingDbPhase(phase: string, startedAt: number): void {
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= SLOW_BILLING_DB_PHASE_MS) {
+    // Deliberately log phase and duration only: never player IDs or billing data.
+    console.warn("[perf] billing.premium.database", JSON.stringify({ phase, elapsedMs }));
+  }
+}
+
 export async function withPlayerBillingLock<T>(playerId: string, fn: () => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
@@ -81,18 +91,25 @@ export class StripeStorage {
     // identical lock here and refuse to recreate a revoked account; otherwise
     // a concurrent Premium self-heal / Stripe request could resurrect the
     // deleted player_scores row after the deletion transaction commits.
-    return db.transaction(async (tx) => {
+    const transactionStartedAt = Date.now();
+    const result = await db.transaction(async (tx) => {
       if (!options?.skipLock) {
+        const lockStartedAt = Date.now();
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+        logSlowBillingDbPhase("advisory_lock_wait", lockStartedAt);
       }
+
+      const revocationStartedAt = Date.now();
       const revoked = await tx.execute(sql`
         SELECT 1
         FROM revoked_player_ids
         WHERE player_id = ${playerId}
         LIMIT 1
       `);
+      logSlowBillingDbPhase("revocation_guard_query", revocationStartedAt);
       if (revoked.rows?.length) return null;
 
+      const upsertStartedAt = Date.now();
       const [player] = await tx
         .insert(playerScoresTable)
         .values({
@@ -109,8 +126,12 @@ export class StripeStorage {
           set: { ...info, updatedAt: new Date() },
         })
         .returning();
+      logSlowBillingDbPhase("premium_mirror_upsert", upsertStartedAt);
       return player ?? null;
     });
+    // This outer measurement includes transaction commit/connection handling.
+    logSlowBillingDbPhase("transaction_total_including_commit", transactionStartedAt);
+    return result;
   }
 }
 
