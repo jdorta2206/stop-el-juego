@@ -17,7 +17,9 @@ describe("admin health lazy-module diagnostics", () => {
     expect(healthSource).toContain("SET LOCAL statement_timeout = '1500ms'");
     expect(healthSource).toContain("INTERVAL '2 hours'");
     expect(healthSource).toContain("event_name IN ('game_start', 'game_complete')");
-    expect(healthSource).toContain("INTERVAL '20 minutes'");
+    expect(healthSource).not.toContain("potentiallyStuck");
+    expect(healthSource).not.toContain("Partidas potencialmente atascadas");
+    expect(healthSource).toContain("Son recuentos de eventos e identidades, no partidas emparejadas");
     expect(healthSource).toContain("catch (gameplayError: unknown)");
     expect(healthSource).toContain("value: 'NO EVALUADO'");
     expect(healthSource).toContain("resto del diagnóstico sigue disponible");
