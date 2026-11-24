@@ -1,3 +1,22 @@
+describe("STOP analytics crawler filtering", () => {
+  it("recognizes common search and social crawlers without blocking page delivery", () => {
+    expect(analyticsRouteSource).toContain("const KNOWN_CRAWLER_USER_AGENT");
+    expect(analyticsRouteSource).toContain("function isKnownCrawler(req: Request): boolean");
+    expect(analyticsRouteSource).toContain("if (isKnownCrawler(req) || req.path === \"/summary\"");
+  });
+
+  it("ignores crawler writes to analytics endpoints while preserving normal clients", () => {
+    expect(analyticsRouteSource).toContain("function ignoreCrawlerTelemetry(req: Request, res: any): boolean");
+    for (const route of ["/heartbeat", "/game-start", "/client-error", "/event"]) {
+      const routeStart = analyticsRouteSource.indexOf(`router.post("${route}"`);
+      const nextRoute = analyticsRouteSource.indexOf('router.post("', routeStart + 1);
+      const section = analyticsRouteSource.slice(routeStart, nextRoute < 0 ? undefined : nextRoute);
+      expect(section).toContain("if (ignoreCrawlerTelemetry(req, res)) return;");
+    }
+    expect(analyticsRouteSource).toContain('res.status(200).json({ ok: true, ignored: true })');
+  });
+});
+
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
