@@ -27,16 +27,18 @@ describe("STOP Control analytics funnel event ordering", () => {
     expect(funnelQuery).toMatch(/created_at >= NOW\(\) - INTERVAL '7 days'/);
   });
 
-  it("uses one bounded seven-day event set and aggregates transitions per session", () => {
+  it("counts sessions and actors independently without pairing starts and completions", () => {
     expect(funnelQuery).toMatch(/WITH recent_events AS MATERIALIZED/);
-    expect(funnelQuery).toMatch(/WHERE trusted = TRUE/);
-    expect(funnelQuery).toMatch(/created_at >= NOW\(\) - INTERVAL '7 days'/);
-    expect(funnelQuery).toMatch(/GROUP BY session_id/);
-    expect(funnelQuery).toMatch(/WHERE session_id IS NOT NULL\s+GROUP BY session_id/);
-    expect(funnelQuery).toMatch(/MAX\(created_at\) FILTER \(WHERE event_name = 'game_lobby_view'\)/);
-    expect(funnelQuery).toMatch(/MAX\(created_at\) FILTER \(WHERE event_name = 'game_start'\)/);
-    expect(funnelQuery).toMatch(/MAX\(created_at\) FILTER \(WHERE event_name = 'game_complete'\)/);
-    expect(funnelQuery).not.toMatch(/NOT EXISTS/);
+    expect(funnelQuery).toMatch(/session_counts AS/);
+    expect(funnelQuery).toMatch(/COUNT\(DISTINCT session_id\) FILTER \(WHERE event_name = 'session_start'\)/);
+    expect(funnelQuery).toMatch(/COUNT\(DISTINCT session_id\) FILTER \(WHERE event_name = 'game_lobby_view'\)/);
+    expect(funnelQuery).toMatch(/player_counts AS/);
+    expect(funnelQuery).toMatch(/FILTER \(WHERE event_name = 'game_start'\)/);
+    expect(funnelQuery).toMatch(/FILTER \(WHERE event_name = 'game_complete'\)/);
+    expect(funnelQuery).toMatch(/FROM session_counts CROSS JOIN player_counts/);
+    expect(funnelQuery).not.toMatch(/GROUP BY session_id/);
+    expect(funnelQuery).not.toMatch(/MAX\(created_at\)/);
+    expect(funnelQuery).not.toMatch(/lobby_without_start|started_without_complete/);
   });
 });
 

@@ -285,22 +285,14 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
           WHERE trusted = TRUE
             AND created_at >= NOW() - INTERVAL '7 days'
         ),
-        session_flow AS (
+        session_counts AS (
           SELECT
-            session_id,
-            BOOL_OR(event_name = 'session_start') AS has_session_start,
-            BOOL_OR(event_name = 'game_lobby_view') AS has_lobby_view,
-            MAX(created_at) FILTER (WHERE event_name = 'game_lobby_view') AS last_lobby_view,
-            MAX(created_at) FILTER (WHERE event_name = 'game_start') AS last_game_start,
-            MAX(created_at) FILTER (WHERE event_name = 'game_complete') AS last_game_complete
+            COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'session_start')::int AS sessions,
+            COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'game_lobby_view')::int AS lobby_sessions
           FROM recent_events
-          WHERE session_id IS NOT NULL
-          GROUP BY session_id
         ),
         player_counts AS (
           SELECT
-            COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_start')::int AS games_started,
-            COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
             COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_start')::int AS game_players,
             COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'game_complete')::int AS completed_players,
             COUNT(DISTINCT CASE WHEN player_id IS NOT NULL THEN 'player:' || player_id ELSE 'session:' || session_id END) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS ad_players,
@@ -308,20 +300,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
           FROM recent_events
         )
         SELECT
-          (SELECT COUNT(DISTINCT session_id)::int FROM session_flow WHERE has_session_start) AS sessions,
-          (SELECT COUNT(DISTINCT session_id)::int FROM session_flow WHERE has_lobby_view) AS lobby_sessions,
-          (SELECT COUNT(DISTINCT session_id)::int FROM session_flow
-            WHERE has_lobby_view AND (last_game_start IS NULL OR last_game_start < last_lobby_view)) AS lobby_without_start,
-          player_counts.games_started,
-          (SELECT COUNT(DISTINCT session_id)::int FROM session_flow
-            WHERE last_game_start IS NOT NULL
-              AND (last_game_complete IS NULL OR last_game_complete < last_game_start)) AS started_without_complete,
-          player_counts.games_completed,
+          session_counts.sessions,
+          session_counts.lobby_sessions,
           player_counts.game_players,
           player_counts.completed_players,
           player_counts.ad_players,
           player_counts.ad_failed_players
-        FROM player_counts
+        FROM session_counts CROSS JOIN player_counts
       `)
     ).rows[0] as Record<string, unknown> | undefined; })();
     const activityByDayPromise = (async () => { return (
@@ -628,7 +613,6 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
 
     const chartActivity = [...activityByDay].reverse().map((row) => ({ label: String(row.d).slice(5), value: num(row.active) }));
-    const chartCompletions = [...activityByDay].reverse().filter((row) => num(row.starters) > 0).map((row) => ({ label: String(row.d).slice(5), value: Math.round((num(row.completers) / num(row.starters)) * 100) }));
     const modeChart = modeUsage.map((row) => ({ label: String(row.mode), value: num(row.total) }));
     const powerupChart = powerupUsage.map((row) => ({ label: String(row.powerup), value: num(row.total) }));
     // Keep unlike units out of the same funnel: sessions and unique players
@@ -638,8 +622,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       { label: "Lobbies vistos", value: num(funnel?.lobby_sessions) },
     ];
     const playerActivityChart = [
-      { label: "Iniciaron", value: num(funnel?.game_players) },
-      { label: "Con resultado", value: num(funnel?.completed_players) },
+      { label: "Actores con evento de inicio", value: num(funnel?.game_players) },
+      { label: "Actores con evento de final", value: num(funnel?.completed_players) },
     ];
 
 
@@ -804,19 +788,17 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     <div class="card"><div class="label">MAU real · 30 días</div><div class="val">${num(retentionKpis?.mau)}</div></div>
     <div class="card"><div class="label">Cuentas activas · 7 días</div><div class="val">${num(retentionKpis?.account_active_7d)}</div></div>
     <div class="card"><div class="label">Invitados activos · 7 días</div><div class="val">${num(retentionKpis?.guest_active_7d)}</div></div>
-    <div class="card"><div class="label">Jugadores con resultado / inicio · 7 días</div><div class="val">${num(funnel?.game_players) > 0 ? `${Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100)}%` : "Sin muestra"}</div></div>
   </div>
 
-  <h2>🎯 Actividad de jugadores · últimos 7 días</h2>
+  <h2>🎯 Actividad registrada · últimos 7 días</h2>
+  <p class="sub">Sesiones, vistas del lobby e identidades con eventos de inicio/final se muestran por separado. No son etapas correlacionadas: los eventos no comparten un identificador fiable de partida y no permiten calcular abandonos ni conversiones.</p>
   <table>
     <thead><tr><th>Etapa</th><th>Unidad</th><th>Total</th></tr></thead>
     <tbody>
       <tr><td>Sesión iniciada</td><td>Sesiones</td><td>${num(funnel?.sessions)}</td></tr>
       <tr><td>Lobby de juego visto</td><td>Sesiones</td><td>${num(funnel?.lobby_sessions)}</td></tr>
-      <tr><td>Lobby sin iniciar partida <span style="color:#8a98a8">(telemetría)</span></td><td>Sesiones</td><td>${num(funnel?.lobby_without_start)}</td></tr>
-      <tr><td>Partida iniciada</td><td>Jugadores únicos</td><td>${num(funnel?.game_players)}</td></tr>
-      <tr><td>Inicio sin final en la misma sesión</td><td>Sesiones</td><td>${num(funnel?.started_without_complete)}</td></tr>
-      <tr><td>Partida terminada</td><td>Jugadores únicos</td><td>${num(funnel?.completed_players)}</td></tr>
+      <tr><td>Actores con evento de inicio</td><td>Jugadores/sesiones únicos</td><td>${num(funnel?.game_players)}</td></tr>
+      <tr><td>Actores con evento de final</td><td>Jugadores/sesiones únicos</td><td>${num(funnel?.completed_players)}</td></tr>
       <tr><td>Rewarded solicitado <span style="color:#8a98a8">(telemetría)</span></td><td>Jugadores únicos</td><td>${num(funnel?.ad_players)}</td></tr>
       <tr><td>Rewarded fallido <span style="color:#8a98a8">(telemetría)</span></td><td>Jugadores únicos</td><td>${num(funnel?.ad_failed_players)}</td></tr>
     </tbody>
@@ -855,7 +837,6 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <h2>📊 Lo que está pasando de un vistazo</h2>
   <div class="charts">
     ${svgLineChart(chartActivity, "Jugadores activos por día · 14 días")}
-    ${svgLineChart(chartCompletions, "Porcentaje de finalización · 14 días")}
     ${svgBars(sessionFunnelChart, "Navegación · sesiones · 7 días")}
     ${svgBars(playerActivityChart, "Actividad · jugadores únicos · 7 días")}
     ${svgBars(adChart, "Publicidad · usuarios únicos · 7 días")}
