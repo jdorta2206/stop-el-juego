@@ -179,18 +179,35 @@ export async function ensureAnalyticsReady(): Promise<void> {
   await analyticsTablesReady;
 }
 
-async function latestPlatformForPlayer(playerId: string | null | undefined): Promise<"web" | "android" | "ios" | null> {
-  if (!playerId) return null;
+type AnalyticsSessionContext = {
+  sessionId: string | null;
+  platform: "web" | "android" | "ios" | null;
+  appVersion: string | null;
+  language: string | null;
+};
+
+// Server-authoritative events (for example multiplayer settlement) do not
+// originate from the browser analytics endpoint, so they must inherit the
+// player's latest known session dimensions. This keeps platform/version/
+// language attribution consistent without trusting client-supplied identity.
+async function latestAnalyticsContextForPlayer(playerId: string | null | undefined): Promise<AnalyticsSessionContext> {
+  if (!playerId) return { sessionId: null, platform: null, appVersion: null, language: null };
   const rows = await db.execute(sql`
-    SELECT platform
+    SELECT session_id, platform, app_version, language
     FROM public.analytics_sessions
     WHERE player_id = ${playerId}
       AND platform IN ('web', 'android', 'ios')
     ORDER BY last_seen DESC
     LIMIT 1
   `);
-  const platform = String((rows.rows[0] as any)?.platform ?? "");
-  return platform === "android" || platform === "ios" || platform === "web" ? platform : null;
+  const row = rows.rows[0] as any;
+  const platform = String(row?.platform ?? "");
+  return {
+    sessionId: typeof row?.session_id === "string" ? row.session_id : null,
+    platform: platform === "android" || platform === "ios" || platform === "web" ? platform : null,
+    appVersion: typeof row?.app_version === "string" ? row.app_version : null,
+    language: typeof row?.language === "string" ? row.language : null,
+  };
 }
 
 export function getAnalyticsSessionId(req: Request, res: any): string {
@@ -208,14 +225,18 @@ export async function recordTrustedAnalyticsEvent(input: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   await ensureAnalyticsReady();
-  const resolvedPlatform = input.platform ?? await latestPlatformForPlayer(input.playerId);
+  const sessionContext = await latestAnalyticsContextForPlayer(input.playerId);
+  const resolvedPlatform = input.platform ?? sessionContext.platform ?? "web";
+  const resolvedSessionId = input.sessionId ?? sessionContext.sessionId;
+  const resolvedAppVersion = input.appVersion ?? sessionContext.appVersion;
+  const resolvedLanguage = input.language ?? sessionContext.language;
   const metadataJson = JSON.stringify(sanitizeClientMetadata(input.metadata ?? {})).slice(0, 4000);
   await db.execute(sql`
     INSERT INTO public.analytics_events
       (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
     VALUES
-      (${input.eventName}, ${input.playerId ?? null}, ${input.sessionId ?? null}, ${resolvedPlatform ?? "web"},
-       ${input.appVersion ?? null}, ${input.language ?? null}, ${input.mode ?? null},
+      (${input.eventName}, ${input.playerId ?? null}, ${resolvedSessionId}, ${resolvedPlatform},
+       ${resolvedAppVersion}, ${resolvedLanguage}, ${input.mode ?? null},
        ${metadataJson}, TRUE)
   `);
 }
