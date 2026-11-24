@@ -12,11 +12,34 @@ function logSlowBillingDbPhase(phase: string, startedAt: number): void {
   }
 }
 
+const SLOW_PLAYER_LOCK_MS = 150;
+
+function logSlowPlayerLock(phase: string, startedAt: number): void {
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= SLOW_PLAYER_LOCK_MS) {
+    // Phase and duration only: never log player IDs or billing data.
+    console.warn("[perf] player.advisory_lock", JSON.stringify({
+      source: "with_player_billing_lock",
+      phase,
+      elapsedMs,
+    }));
+  }
+}
+
 export async function withPlayerBillingLock<T>(playerId: string, fn: () => Promise<T>): Promise<T> {
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
-    return fn();
-  });
+  let lockAcquiredAt = 0;
+  try {
+    return await db.transaction(async (tx) => {
+      const waitStartedAt = Date.now();
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+      lockAcquiredAt = Date.now();
+      logSlowPlayerLock("wait", waitStartedAt);
+      return fn();
+    });
+  } finally {
+    // Measured after transaction completion, so this includes commit time.
+    if (lockAcquiredAt > 0) logSlowPlayerLock("hold_including_commit", lockAcquiredAt);
+  }
 }
 
 export class StripeStorage {
