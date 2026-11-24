@@ -32,7 +32,7 @@ describe("admin health lazy-module diagnostics", () => {
     expect(healthSource).toContain('"Página lazy: "+lazyPage');
     expect(healthSource).toContain("filename?:unknown");
     expect(healthSource).toContain("parsed.context?.filename");
-    expect(healthSource).toContain("Archivo JS: "+filename);
+    expect(healthSource).toContain('"Archivo JS: "+filename');
     expect(healthSource).toContain("parsed.context?.line");
     expect(healthSource).toContain("parsed.context?.column");
     expect(healthSource).toContain('"Exportaciones del módulo: "+moduleExports');
