@@ -30,14 +30,14 @@ describe("STOP Control analytics funnel event ordering", () => {
   it("counts sessions and actors independently without pairing starts and completions", () => {
     expect(funnelQuery).toMatch(/WITH recent_events AS MATERIALIZED/);
     expect(funnelQuery).toMatch(/session_counts AS/);
-    expect(funnelQuery).toMatch(/COUNT\\(DISTINCT session_id\\) FILTER \\(WHERE event_name = 'session_start'\\)/);
-    expect(funnelQuery).toMatch(/COUNT\\(DISTINCT session_id\\) FILTER \\(WHERE event_name = 'game_lobby_view'\\)/);
+    expect(funnelQuery).toMatch(/COUNT\(DISTINCT session_id\) FILTER \(WHERE event_name = 'session_start'\)/);
+    expect(funnelQuery).toMatch(/COUNT\(DISTINCT session_id\) FILTER \(WHERE event_name = 'game_lobby_view'\)/);
     expect(funnelQuery).toMatch(/player_counts AS/);
-    expect(funnelQuery).toMatch(/FILTER \\(WHERE event_name = 'game_start'\\)/);
-    expect(funnelQuery).toMatch(/FILTER \\(WHERE event_name = 'game_complete'\\)/);
+    expect(funnelQuery).toMatch(/FILTER \(WHERE event_name = 'game_start'\)/);
+    expect(funnelQuery).toMatch(/FILTER \(WHERE event_name = 'game_complete'\)/);
     expect(funnelQuery).toMatch(/FROM session_counts CROSS JOIN player_counts/);
     expect(funnelQuery).not.toMatch(/GROUP BY session_id/);
-    expect(funnelQuery).not.toMatch(/MAX\\(created_at\\)/);
+    expect(funnelQuery).not.toMatch(/MAX\(created_at\)/);
     expect(funnelQuery).not.toMatch(/lobby_without_start|started_without_complete/);
   });
 });
