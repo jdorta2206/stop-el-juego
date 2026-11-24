@@ -613,7 +613,6 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
 
     const chartActivity = [...activityByDay].reverse().map((row) => ({ label: String(row.d).slice(5), value: num(row.active) }));
-    const chartCompletions = [...activityByDay].reverse().filter((row) => num(row.starters) > 0).map((row) => ({ label: String(row.d).slice(5), value: Math.round((num(row.completers) / num(row.starters)) * 100) }));
     const modeChart = modeUsage.map((row) => ({ label: String(row.mode), value: num(row.total) }));
     const powerupChart = powerupUsage.map((row) => ({ label: String(row.powerup), value: num(row.total) }));
     // Keep unlike units out of the same funnel: sessions and unique players
@@ -623,8 +622,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       { label: "Lobbies vistos", value: num(funnel?.lobby_sessions) },
     ];
     const playerActivityChart = [
-      { label: "Iniciaron", value: num(funnel?.game_players) },
-      { label: "Con resultado", value: num(funnel?.completed_players) },
+      { label: "Actores con evento de inicio", value: num(funnel?.game_players) },
+      { label: "Actores con evento de final", value: num(funnel?.completed_players) },
     ];
 
 
@@ -789,7 +788,6 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     <div class="card"><div class="label">MAU real · 30 días</div><div class="val">${num(retentionKpis?.mau)}</div></div>
     <div class="card"><div class="label">Cuentas activas · 7 días</div><div class="val">${num(retentionKpis?.account_active_7d)}</div></div>
     <div class="card"><div class="label">Invitados activos · 7 días</div><div class="val">${num(retentionKpis?.guest_active_7d)}</div></div>
-    <div class="card"><div class="label">Jugadores con resultado / inicio · 7 días</div><div class="val">${num(funnel?.game_players) > 0 ? `${Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100)}%` : "Sin muestra"}</div></div>
   </div>
 
   <h2>🎯 Actividad registrada · últimos 7 días</h2>
@@ -839,7 +837,6 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <h2>📊 Lo que está pasando de un vistazo</h2>
   <div class="charts">
     ${svgLineChart(chartActivity, "Jugadores activos por día · 14 días")}
-    ${svgLineChart(chartCompletions, "Porcentaje de finalización · 14 días")}
     ${svgBars(sessionFunnelChart, "Navegación · sesiones · 7 días")}
     ${svgBars(playerActivityChart, "Actividad · jugadores únicos · 7 días")}
     ${svgBars(adChart, "Publicidad · usuarios únicos · 7 días")}
