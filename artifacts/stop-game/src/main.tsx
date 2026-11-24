@@ -99,9 +99,11 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response>
   });
 };
 
-window.addEventListener("unhandledrejection", (event) => {
-  reportUnexpectedNetworkFailure(event.reason, { source: "unhandledrejection" });
-});
+// Fetch rejections are already classified by the fetch wrapper above. Do not
+// classify arbitrary unhandled promises here: third-party SDKs can reject
+// their own network requests without exposing a reliable request URL.
+// Keep the separate chunk-recovery listener below.
+
 
 window.addEventListener("error", (event) => {
   if (event.error) {
