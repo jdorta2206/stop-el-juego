@@ -4,7 +4,7 @@ import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, gt, ne, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTimezone, normalizePlayerTimeZone } from "./ranking";
-import { recordTrustedAnalyticsEvent } from "./analytics";
+import { getAnalyticsRequestContext, recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTimeZone, isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
@@ -492,6 +492,8 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
       equippedTitle: cosmeticsMap[p.playerId]?.equippedTitle ?? null,
     }));
   }
+  // Session attribution is private server metadata, never part of room/SSE payloads.
+  players = players.map(({ _analyticsContext, ...player }: any) => player);
 
   return {
     id: room.id,
@@ -768,6 +770,10 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     void recordTrustedAnalyticsEvent({
       eventName: "game_complete",
       playerId: p.playerId,
+      sessionId: p._analyticsContext?.sessionId,
+      platform: p._analyticsContext?.platform,
+      appVersion: p._analyticsContext?.appVersion,
+      language: p._analyticsContext?.language,
       mode: "multiplayer",
       metadata: { source: "server_room_result", roomCode: normalizedRoomCode, roomId },
     }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
@@ -1611,9 +1617,11 @@ router.post("/", async (req, res) => {
   // arbiter; retry on a collision instead of turning a rare concurrent create
   // into a 500.
   const hostPremium = await isPlayerPremium(hostId);
+  const hostAnalyticsContext = await getAnalyticsRequestContext(req, res).catch(() => null);
 
   const players = [{
     playerId: hostId,
+    ...(hostAnalyticsContext ? { _analyticsContext: hostAnalyticsContext } : {}),
     playerName: effectiveHostName,
     avatarColor: effectiveAvatarColor,
     picture: effectivePicture,
@@ -1767,6 +1775,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     ? canonicalProfile.profilePicture
     : (typeof picture === "string" ? picture.slice(0, 1000) : null);
 
+  const joinerAnalyticsContext = await getAnalyticsRequestContext(req, res).catch(() => null);
   const myNorm = normalizePlayerName(effectivePlayerName);
   if (myNorm.length === 0) {
     res.status(400).json({ error: "Name cannot be empty" });
@@ -1819,6 +1828,10 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     if (collision) return { kind: "nameTaken" } as const;
 
     const existing = players.find((p: any) => p.playerId === playerId);
+    if (existing && joinerAnalyticsContext) {
+      // Refresh attribution when a participant reconnects from a new app session.
+      existing._analyticsContext = joinerAnalyticsContext;
+    }
     if (!existing) {
       // 🔒 New joiners only (existing players always reconnect): the lobby must
       // still be open ("waiting") and not full. Without this, a stranger could
@@ -1829,6 +1842,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
       if (players.length >= maxPlayers) return { kind: "full" } as const;
       players.push({
         playerId,
+        ...(joinerAnalyticsContext ? { _analyticsContext: joinerAnalyticsContext } : {}),
         playerName: effectivePlayerName,
         avatarColor: effectiveAvatarColor,
         picture: effectivePicture,
@@ -2007,6 +2021,10 @@ router.post("/:roomCode/start", async (req, res) => {
       .map((p: any) => recordTrustedAnalyticsEvent({
         eventName: "game_start",
         playerId: p.playerId,
+        sessionId: p._analyticsContext?.sessionId,
+        platform: p._analyticsContext?.platform,
+        appVersion: p._analyticsContext?.appVersion,
+        language: p._analyticsContext?.language,
         mode: "multiplayer",
         metadata: { source: "server_room_start", roomCode: roomCode.toUpperCase(), roomId },
       }))
