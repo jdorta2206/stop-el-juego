@@ -214,6 +214,41 @@ export function getAnalyticsSessionId(req: Request, res: any): string {
   return serverSessionId(req, res);
 }
 
+export type AnalyticsRequestContext = {
+  sessionId: string;
+  platform: "web" | "android" | "ios";
+  appVersion: string | null;
+  language: string | null;
+};
+
+// Bind room participants to the same server-owned session used by subsequent
+// authoritative multiplayer start/completion events. Analytics is best-effort:
+// callers must catch failures so room creation/joining never depends on it.
+export async function getAnalyticsRequestContext(req: Request, res: any): Promise<AnalyticsRequestContext> {
+  await ensureAnalyticsReady();
+  const sessionId = serverSessionId(req, res);
+  const playerId = readPlayerId(req);
+  const platform = platformFromRequest(req);
+  const appVersion = appVersionFromRequest(req);
+  const body = req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {};
+  const bodyLanguage = typeof body.language === "string" ? body.language.slice(0, 16) : null;
+  const acceptLanguage = String(req.headers["accept-language"] ?? "").split(",")[0]?.trim().slice(0, 16) || null;
+  const language = bodyLanguage || acceptLanguage;
+  await db.execute(sql`
+    INSERT INTO public.analytics_sessions
+      (session_id, player_id, platform, app_version, language, last_seen, started_at)
+    VALUES
+      (${sessionId}, ${playerId}, ${platform}, ${appVersion}, ${language}, NOW(), NOW())
+    ON CONFLICT (session_id) DO UPDATE SET
+      player_id = COALESCE(EXCLUDED.player_id, analytics_sessions.player_id),
+      platform = EXCLUDED.platform,
+      app_version = COALESCE(EXCLUDED.app_version, analytics_sessions.app_version),
+      language = COALESCE(EXCLUDED.language, analytics_sessions.language),
+      last_seen = NOW()
+  `);
+  return { sessionId, platform, appVersion, language };
+}
+
 export async function recordTrustedAnalyticsEvent(input: {
   eventName: string;
   playerId?: string | null;
