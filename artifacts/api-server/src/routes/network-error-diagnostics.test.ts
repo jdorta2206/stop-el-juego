@@ -38,9 +38,9 @@ describe("lazy module diagnostics", () => {
   });
 
 describe("browser network failure diagnostics", () => {
-  it("captures unhandled fetch failures with their original stack", () => {
-    expect(mainSource).toContain('window.addEventListener("unhandledrejection"');
-    expect(mainSource).toContain("reportUnexpectedNetworkFailure(event.reason");
+  it("does not classify arbitrary unhandled promises as STOP network failures", () => {
+    expect(mainSource).not.toContain("reportUnexpectedNetworkFailure(event.reason");
+    expect(mainSource).toContain('window.addEventListener("unhandledrejection", (event) => recoverFromChunkFailure(event?.reason))');
     expect(mainSource).toContain("lazy-module-missing-default|cannot read properties of undefined");
     expect(mainSource).not.toContain("registration.unregister()");
     expect(mainSource).toContain("trackClientError(safeValue, null");
