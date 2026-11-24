@@ -287,6 +287,14 @@ async function getOrCreateActiveSeason() {
 
 type ProgressRow = typeof seasonProgressTable.$inferSelect;
 
+function logSlowSeasonLock(source: string, phase: string, startedAt: number): void {
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 150) {
+    // Phase and duration only; never log player IDs or progress payloads.
+    console.warn("[perf] player.advisory_lock", JSON.stringify({ source, phase, elapsedMs }));
+  }
+}
+
 type MissionsBlob = { date: string; missions: Mission[] };
 
 function parseMissions(raw: string, dateStr: string): MissionsBlob {
@@ -313,8 +321,12 @@ function parseClaimed(raw: string): { free: number[]; premium: number[] } {
 
 async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
   const today = todayUTC();
-  return db.transaction(async (tx) => {
+  let lockAcquiredAt = 0;
+  const result = await db.transaction(async (tx) => {
+    const lockWaitStartedAt = Date.now();
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+    lockAcquiredAt = Date.now();
+    logSlowSeasonLock("season_progress_read", "wait", lockWaitStartedAt);
     const revoked = await tx.execute(sql`SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1`);
     if ((revoked as any).rows?.length) throw new Error("ACCOUNT_DELETED");
 
@@ -378,6 +390,8 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
     })();
     return rolledRow ?? row;
   });
+  if (lockAcquiredAt > 0) logSlowSeasonLock("season_progress_read", "hold_including_commit", lockAcquiredAt);
+  return result;
 }
 
 /**
@@ -414,7 +428,9 @@ async function applyAuthoritativeSeasonEventsInTransaction(
   await tx.execute(sql`
     SELECT pg_advisory_xact_lock(${Number(season.id)}::bigint)
   `);
+  const playerLockWaitStartedAt = Date.now();
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+  logSlowSeasonLock("season_authoritative_event", "wait", playerLockWaitStartedAt);
 
   const revoked = await tx.execute(sql`SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1`);
   if ((revoked as any).rows?.length) return;
