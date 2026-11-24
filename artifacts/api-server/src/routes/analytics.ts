@@ -64,6 +64,12 @@ function sanitizeClientMetadata(value: unknown, depth = 0): unknown {
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
 const CURRENT_WEB_ANALYTICS_VERSION = String(process.env.RAILWAY_GIT_COMMIT_SHA ?? "web-dev").slice(0, 12);
 
+const KNOWN_CRAWLER_USER_AGENT = /(?:googlebot|bingbot|bingpreview|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|meta-webindexer|twitterbot|linkedinbot|ahrefsbot|semrushbot|mj12bot|dotbot|applebot|petalbot|bytespider|gptbot|chatgpt-user|claudebot|ccbot)/i;
+
+function isKnownCrawler(req: Request): boolean {
+  return KNOWN_CRAWLER_USER_AGENT.test(String(req.headers["user-agent"] ?? ""));
+}
+
 function isTwaRequest(req: Request): boolean {
   if (String(req.headers["x-client-twa"] ?? "") === "1") return true;
   const referrer = String(req.headers.referer ?? req.headers.referrer ?? "");
@@ -291,7 +297,7 @@ function serverSessionId(req: Request, res: any): string {
 }
 
 router.use(async (req, res, next) => {
-  if (req.path === "/summary" || req.path === "/event" || req.path === "/heartbeat") return next();
+  if (isKnownCrawler(req) || req.path === "/summary" || req.path === "/event" || req.path === "/heartbeat") return next();
   try {
     await ensureAnalyticsReady();
     const sessionId = serverSessionId(req, res);
@@ -308,7 +314,14 @@ router.use(async (req, res, next) => {
   next();
 });
 
+function ignoreCrawlerTelemetry(req: Request, res: any): boolean {
+  if (!isKnownCrawler(req)) return false;
+  res.status(200).json({ ok: true, ignored: true });
+  return true;
+}
+
 router.post("/heartbeat", presenceLimiter, async (req, res) => {
+  if (ignoreCrawlerTelemetry(req, res)) return;
   try {
     await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -350,6 +363,7 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
 });
 
 router.post("/game-start", presenceLimiter, async (req, res) => {
+  if (ignoreCrawlerTelemetry(req, res)) return;
   try {
     await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -394,6 +408,7 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
 });
 
 router.post("/client-error", presenceLimiter, async (req, res) => {
+  if (ignoreCrawlerTelemetry(req, res)) return;
   try {
     await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -445,6 +460,7 @@ router.post("/client-error", presenceLimiter, async (req, res) => {
 });
 
 router.post("/event", presenceLimiter, async (req, res) => {
+  if (ignoreCrawlerTelemetry(req, res)) return;
   try {
     await ensureAnalyticsReady();
     const body = (req.body ?? {}) as Record<string, unknown>;
