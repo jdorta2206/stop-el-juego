@@ -459,6 +459,13 @@ router.get("/profile/:playerId", async (req, res) => {
 // POST /scores
 // ============================================================
 router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRequest, res) => {
+  const perfStartedAt = Date.now();
+  let perfPhaseStartedAt = perfStartedAt;
+  const logSlowPhase = (phase: string) => {
+    const elapsedMs = Date.now() - perfPhaseStartedAt;
+    if (elapsedMs >= 250) console.warn("[perf] ranking.scores", JSON.stringify({ phase, elapsedMs }));
+    perfPhaseStartedAt = Date.now();
+  };
   const body = SubmitScoreBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
@@ -518,6 +525,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       return;
     }
   }
+  logSlowPhase("idempotency_check");
   // Keep the bonus claim identity outside the validation block because the
   // same value is atomically consumed inside the transaction below.
   let bonusClaimTokenSetHash: string | null = null;
@@ -556,6 +564,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
     // count cap independent of the client-supplied `mode`; otherwise a caller
     // could request `multiplayer` and raise the cap from 3 rounds to 12.
     : await sumVerifiedBasePersistent(scoreTokens, 3);
+  logSlowPhase("voucher_verification");
   // A request that supplies vouchers must prove at least one fresh voucher.
   // Otherwise a replay of an already-consumed token set would fall through
   // to the offline absolute ceiling and could credit the same score again.
@@ -585,6 +594,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
     .where(eq(playerScoresTable.playerId, playerId))
     .limit(1);
 
+  logSlowPhase("player_snapshot");
   const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;
   const newTotal = oldTotal + score;
 
@@ -618,6 +628,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         )
     : [];
 
+  logSlowPhase("overtaken_lookup");
   const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
   const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
   const playerTimezone = await lookupPlayerTimezone(playerId);
@@ -628,6 +639,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const happyHourActive = effectiveTimeZone
     ? isHappyHourActiveForTimeZone(effectiveTimeZone)
     : isHappyHourActiveForTzOffset(playerTimezone.tzOffset);
+  logSlowPhase("timezone_lookup");
   const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const xpGain = baseXpGain * xpMultiplier;
@@ -988,6 +1000,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
 
   }
 
+  logSlowPhase("score_transaction_and_post_commit");
   if (overtaken.length > 0) {
     await Promise.allSettled(
       overtaken.map(op =>
@@ -1012,6 +1025,8 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
 
   }
 
+  const totalElapsedMs = Date.now() - perfStartedAt;
+  if (totalElapsedMs >= 500) console.warn("[perf] ranking.scores", JSON.stringify({ phase: "total", elapsedMs: totalElapsedMs }));
   res.status(201).json({
     ...player,
     rank: 0,
