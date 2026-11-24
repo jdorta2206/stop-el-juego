@@ -1189,9 +1189,9 @@ export default function SoloGame() {
     }
   }, [gameState, results]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean }) => {
-    if (!player || player.loginMethod === "guest") return;
-    if (finalScore <= 0) return;
+  const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean }): Promise<boolean> => {
+    if (!player || player.loginMethod === "guest") return Promise.resolve(false);
+    if (finalScore <= 0) return Promise.resolve(false);
     const isBonus = opts?.bonus === true;
     const leaderboardScoreTokens = isDailyMode ? rankingScoreTokensRef.current : scoreTokensRef.current;
     if (!isBonus && leaderboardScoreTokens.length === 0) {
@@ -1201,10 +1201,11 @@ export default function SoloGame() {
         lang === "fr" ? "Hors-ligne — ce score reste sur cet appareil et n'entre pas au classement." :
         "Sin conexión: esta puntuación queda en este dispositivo y no entra en el ranking.";
       toast({ title: "📡 " + offMsg });
-      return;
+      return Promise.resolve(false);
     }
     const won = finalScore > finalAiScore;
-    submitScoreMutation.mutate({
+    return new Promise<boolean>((resolve) => {
+      submitScoreMutation.mutate({
       data: {
         submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
         playerId: player.id,
@@ -1247,6 +1248,7 @@ export default function SoloGame() {
             `⚡ ¡HAPPY HOUR x${rewards.multiplier}! +${rewards.coinsAwarded} monedas, +${rewards.xpAwarded} XP`;
           setTimeout(() => toast({ title: hhMsg }), 1200);
         }
+        resolve(true);
       },
       onError: async () => {
         // 📡 Sin conexión: aparcamos la puntuación en la outbox para
@@ -1278,6 +1280,7 @@ export default function SoloGame() {
               lang === "fr" ? "Hors-ligne — les manches vérifiées seront synchronisées au retour." :
               "Sin conexión: las rondas verificadas se sincronizarán al volver.";
             toast({ title: "📡 " + offMsg });
+            resolve(true);
           } else {
             const offMsg =
               lang === "en" ? "Offline — this score stays on this device and won't enter the ranking." :
@@ -1285,6 +1288,7 @@ export default function SoloGame() {
               lang === "fr" ? "Hors-ligne — ce score reste sur cet appareil et n'entre pas au classement." :
               "Sin conexión: esta puntuación queda en este dispositivo y no entra en el ranking.";
             toast({ title: "📡 " + offMsg });
+            resolve(false);
           }
           return;
         }
@@ -1294,7 +1298,9 @@ export default function SoloGame() {
           lang === "fr" ? "Impossible d'enregistrer le score." :
           "No se pudo guardar el puntaje. Verifica tu conexión.";
         toast({ title: "⚠️ " + msg, variant: "destructive" });
+        resolve(false);
       }
+      });
     });
   };
 
@@ -1444,21 +1450,26 @@ export default function SoloGame() {
       setRewardedUsed(true);
     } else if (rewardedAdType === "hint") {
       const pending = pendingHintRef.current;
-      pendingHintRef.current = null;
-      if (pending) {
-        setResponses(prev => ({ ...prev, [pending.category]: pending.word }));
-        setHintReveal({ category: pending.category, word: pending.word });
-        setTimeout(() => setHintReveal(null), 3500);
-        setHintUsed(true);
-      } else {
+      if (!pending) {
         toast({ title: lang === "en" ? "Hint unavailable" : lang === "pt" ? "Pista indisponível" : lang === "fr" ? "Indice indisponible" : "Pista no disponible", variant: "destructive" });
+        throw new Error("La pista ya no está disponible; la recompensa no se ha aplicado.");
       }
+      pendingHintRef.current = null;
+      setResponses(prev => ({ ...prev, [pending.category]: pending.word }));
+      setHintReveal({ category: pending.category, word: pending.word });
+      setTimeout(() => setHintReveal(null), 3500);
+      setHintUsed(true);
     } else if (rewardedAdType === "double") {
       // Capture the current score once. The bonus is a second leaderboard write;
       // the server must not consume the round vouchers a second time.
       const bonus = Math.max(0, totalScore);
       if (bonus > 0) {
-        submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
+        // Do not show the double-points reward as applied until the leaderboard
+        // accepts it, or the verified submission is safely queued while offline.
+        const saved = await submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
+        if (!saved) {
+          throw new Error("No se pudieron guardar los puntos dobles en el ranking. La recompensa sigue pendiente.");
+        }
         setTotalScore(prev => prev + bonus);
         setDoubleUsed(true);
       }

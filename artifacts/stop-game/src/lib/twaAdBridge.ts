@@ -2,6 +2,8 @@ const RESULT_BASE = "/api/rewards/admob-result";
 // An earned client callback is only a signal. Keep polling for signed AdMob SSV
 // throughout the reconciliation window; never grant an unverified reward.
 const RESULT_TIMEOUT_MS = 300_000;
+// Bound each network request so a stalled WebView fetch cannot hold the poller forever.
+const RESULT_REQUEST_TIMEOUT_MS = 10_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
 export type RewardResult = {
@@ -15,10 +17,10 @@ export type RewardResult = {
 };
 
 let initialized = false;
-let pendingPlayerId = "guest";
+let pendingPlayerId = "";
 
 export function setRewardedAdPlayerId(playerId: string | undefined): void {
-  pendingPlayerId = playerId || "guest";
+  pendingPlayerId = playerId?.trim() || "";
 }
 
 function installResumeListener(): void {
@@ -44,6 +46,16 @@ export function isTwaAdBridgeAvailable(): boolean {
   }
 }
 
+function getRewardAuthHeaders(): Record<string, string> {
+  try {
+    const token = window.localStorage.getItem("stop_session_token")
+      || window.sessionStorage.getItem("stop_session_token");
+    return token ? { "X-Stop-Token": token } : {};
+  } catch {
+    return {};
+  }
+}
+
 function makeRequestId(): string {
   try {
     if (crypto.randomUUID) return crypto.randomUUID().replace(/-/g, "");
@@ -51,12 +63,17 @@ function makeRequestId(): string {
   return `${Date.now()}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
 }
 
-async function readResult(requestId: string): Promise<RewardResult | null> {
+/** @internal Exported to exercise the real request timeout in regression tests. */
+export async function readResult(requestId: string): Promise<RewardResult | null> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), RESULT_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}`, {
       method: "GET",
       credentials: "include",
+      headers: getRewardAuthHeaders(),
       cache: "no-store",
+      signal: controller.signal,
     });
     if (!response.ok) return null;
     const data = await response.json();
@@ -77,21 +94,30 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
     return null;
   } catch {
     return null;
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
-export async function acknowledgeRewardResult(requestId: string): Promise<void> {
+export async function acknowledgeRewardResult(requestId: string): Promise<boolean> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), RESULT_REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}/consume`, {
         method: "POST",
         credentials: "include",
+        headers: getRewardAuthHeaders(),
         cache: "no-store",
+        signal: controller.signal,
       });
-      if (response.ok) return;
-    } catch {}
-    await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+      if (response.ok) return true;
+    } catch {} finally {
+      window.clearTimeout(timeout);
+    }
+    if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
   }
+  return false;
 }
 
 function pollRewardResult(requestId: string): Promise<RewardResult> {
@@ -119,7 +145,11 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       checkInFlight = true;
       try {
         const result = await readResult(requestId);
-        if (result?.rewarded || result?.source === "skipped") {
+        if (result?.rewarded || result?.source === "skipped" || result?.pendingSsv) {
+          // The native Activity has already reported that the ad was earned.
+          // Stop showing the loading state immediately while SSV reconciliation
+          // remains available through the pending request's explicit retry flow.
+          // Never treat this client signal as a verified reward.
           finish(result);
           return;
         }
@@ -188,12 +218,13 @@ export function retryRewardedResult(requestId: string): Promise<RewardResult> {
 export async function requestRewardedAd(placement: RewardedPlacement, onRequestCreated?: (requestId: string) => void): Promise<RewardResult> {
   installResumeListener();
   if (typeof window === "undefined") return { rewarded: false, source: "error", errorMessage: "Window unavailable" };
+  if (!pendingPlayerId) return { rewarded: false, source: "error", errorMessage: "No se ha podido identificar al jugador para esta recompensa." };
 
   const requestId = makeRequestId();
   // Persist the identity before handing control to the native fullscreen ad.
   // The web page may be recreated while Android is showing the ad.
   onRequestCreated?.(requestId);
-  const playerId = pendingPlayerId || "guest";
+  const playerId = pendingPlayerId;
   const origin = window.location.origin;
   const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}&playerId=${encodeURIComponent(playerId)}&origin=${encodeURIComponent(origin)}`;
   const resultPromise = pollRewardResult(requestId);

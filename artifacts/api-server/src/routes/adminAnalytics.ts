@@ -108,7 +108,7 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
              COUNT(*) FILTER (WHERE event_name = 'session_start')::int AS sessions,
              (SELECT COUNT(*) FROM normalized_starts ns WHERE ns.platform = de.platform)::int AS games_started,
              COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
-             COUNT(*) FILTER (WHERE event_name IN ('ad_impression','rewarded_ad_completed'))::int AS ad_impressions
+             COUNT(*) FILTER (WHERE event_name = 'ad_impression')::int AS ad_impressions
       FROM day_events de
       GROUP BY platform
       ORDER BY platform

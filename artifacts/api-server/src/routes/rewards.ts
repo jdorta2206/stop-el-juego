@@ -17,6 +17,7 @@ import {
 } from "../lib/collectionSets";
 import { evaluatePrestige, prestigeReward, prestigeTier } from "../lib/prestigeRewards";
 import { verifyAdMobSsv } from "../lib/admobSsv";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { buildAdmobPendingResponse } from "../lib/admobRewardPoll";
 
 interface SqlResult<T> {
@@ -180,12 +181,13 @@ router.get("/admob-result/:requestId", async (req, res) => {
     await cleanupAdmobRewardRequests();
 
     const rows = await db.execute(sql`
-      SELECT request_id, rewarded, client_state, consumed_at, created_at
+      SELECT request_id, player_id, rewarded, client_state, consumed_at, created_at
       FROM admob_reward_requests
       WHERE request_id = ${requestId}
       LIMIT 1
     `) as unknown as SqlResult<{
       request_id: string;
+      player_id: string;
       rewarded: boolean;
       client_state: string;
       consumed_at: Date | null;
@@ -193,6 +195,11 @@ router.get("/admob-result/:requestId", async (req, res) => {
     }>;
 
     const row = rows.rows?.[0];
+
+    if (row && !(await verifyClaimedIdentity(req, row.player_id))) {
+      res.status(403).json({ error: "Reward request identity verification failed" });
+      return;
+    }
 
     if (!row || row.consumed_at) {
       res.json(buildAdmobPendingResponse(row));
@@ -273,10 +280,30 @@ router.post("/admob-result/:requestId/consume", async (req, res) => {
 
   try {
     await ensureAdmobRewardTable();
+    // Bind first-time and repeated acknowledgements to the owning player.
+    // A requestId alone must never be sufficient to consume another account reward.
+    const existingRows = await db.execute(sql`
+      SELECT player_id, rewarded, consumed_at
+      FROM admob_reward_requests
+      WHERE request_id = ${requestId}
+      LIMIT 1
+    `) as unknown as SqlResult<{ player_id: string; rewarded: boolean; consumed_at: Date | null }>;
+    const existing = existingRows.rows?.[0];
+
+    if (!existing) {
+      res.status(404).json({ error: "Reward request not found" });
+      return;
+    }
+    if (!(await verifyClaimedIdentity(req, existing.player_id))) {
+      res.status(403).json({ error: "Reward request identity verification failed" });
+      return;
+    }
+
     const consumed = await db.execute(sql`
       UPDATE admob_reward_requests
       SET consumed_at = NOW()
       WHERE request_id = ${requestId}
+        AND player_id = ${existing.player_id}
         AND rewarded = true
         AND consumed_at IS NULL
       RETURNING request_id
@@ -287,21 +314,15 @@ router.post("/admob-result/:requestId/consume", async (req, res) => {
       return;
     }
 
-    // Repeated acknowledgements are idempotent only for an existing,
-    // SSV-verified request that was already consumed.
-    const existingRows = await db.execute(sql`
+    // Re-read after a lost race so simultaneous duplicate acknowledgements remain idempotent.
+    const latestRows = await db.execute(sql`
       SELECT rewarded, consumed_at
       FROM admob_reward_requests
-      WHERE request_id = ${requestId}
+      WHERE request_id = ${requestId} AND player_id = ${existing.player_id}
       LIMIT 1
     `) as unknown as SqlResult<{ rewarded: boolean; consumed_at: Date | null }>;
-    const existing = existingRows.rows?.[0];
-
-    if (!existing) {
-      res.status(404).json({ error: "Reward request not found" });
-      return;
-    }
-    if (existing.rewarded && existing.consumed_at) {
+    const latest = latestRows.rows?.[0];
+    if (latest?.rewarded && latest.consumed_at) {
       res.status(204).end();
       return;
     }
