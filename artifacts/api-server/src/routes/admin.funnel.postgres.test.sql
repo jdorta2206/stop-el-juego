@@ -24,6 +24,7 @@ INSERT INTO funnel_test_events (event_id, event_name, session_id, trusted, creat
   ('good-end',           'game_complete',   'session-e', true,  '2026-01-01T00:00:08Z'),
   ('lobby-other-session','game_lobby_view', 'session-f', true,  '2026-01-01T00:00:09Z'),
   ('start-other-session','game_start',      'session-z', true,  '2026-01-01T00:00:10Z'),
+  ('complete-other-session','game_complete','session-f', true,  '2026-01-01T00:00:11Z'),
   ('lobby-untrusted',    'game_lobby_view', 'session-g', true,  '2026-01-01T00:00:11Z'),
   ('start-untrusted',    'game_start',      'session-g', false, '2026-01-01T00:00:12Z'),
   ('lobby-untrusted-event', 'game_lobby_view', 'session-h', false, '2026-01-01T00:00:13Z');
