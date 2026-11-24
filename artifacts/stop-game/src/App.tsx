@@ -29,7 +29,22 @@ const CHUNK_RECOVERY_KEYS = [
 
 function lazyPage<T extends { default: ComponentType<any> }>(pageName: string, load: () => Promise<T>) {
   return lazy(async () => {
-    const module = await load();
+    let module: T;
+    try {
+      module = await load();
+    } catch (cause) {
+      const original = cause instanceof Error ? cause : new Error(String(cause ?? "Unknown import failure"));
+      const error = new Error(`lazy-module-import-failed [page=${pageName}; cause=${original.message.slice(0, 240)}]`);
+      Object.assign(error, {
+        cause: original,
+        diagnosticContext: {
+          phase: "lazy_module_import",
+          error_kind: "dynamic_import_failed",
+          lazy_page: pageName,
+        },
+      });
+      throw error;
+    }
     if (!module?.default) {
       const exports = module && typeof module === "object" ? Object.keys(module).slice(0, 12) : [];
       const exportSummary = exports.join(",").slice(0, 160) || "(none)";
