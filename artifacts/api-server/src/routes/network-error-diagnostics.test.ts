@@ -30,6 +30,13 @@ describe("lazy module diagnostics", () => {
   });
 });
 
+  it("distinguishes a rejected dynamic import from a missing default export", () => {
+    expect(appSource).toContain("lazy-module-import-failed [page=${pageName}; cause=${original.message.slice(0, 240)}]");
+    expect(appSource).toContain('phase: "lazy_module_import"');
+    expect(appSource).toContain('error_kind: "dynamic_import_failed"');
+    expect(appSource).toContain("cause: original");
+  });
+
 describe("browser network failure diagnostics", () => {
   it("captures unhandled fetch failures with their original stack", () => {
     expect(mainSource).toContain('window.addEventListener("unhandledrejection"');
