@@ -125,17 +125,29 @@ router.post("/webhook", async (req: Request, res: Response) => {
 });
 
 router.get("/status", async (req: Request, res: Response) => {
+  const perfStartedAt = Date.now();
+  let perfPhaseStartedAt = perfStartedAt;
+  const logSlowPhase = (phase: string) => {
+    const elapsedMs = Date.now() - perfPhaseStartedAt;
+    if (elapsedMs >= 250) console.warn("[perf] billing.play.status", JSON.stringify({ phase, elapsedMs }));
+    perfPhaseStartedAt = Date.now();
+  };
   try {
     const playerId = String(req.query.playerId || "").trim();
     if (!playerId) return res.status(400).json({ error: "playerId required" });
     if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
+    logSlowPhase("identity_verification");
     const isPremium = await isUserPremium(playerId);
+    logSlowPhase("entitlement_lookup");
     // Keep the legacy cached mirror synchronized with the live unified
     // entitlement so rankings/rooms do not display stale Premium state after
     // a Play renewal, restore, cancellation, or expiry.
     await stripeStorage.updatePlayerStripeInfo(playerId, { isPremium });
+    logSlowPhase("premium_mirror_transaction");
+    const totalElapsedMs = Date.now() - perfStartedAt;
+    if (totalElapsedMs >= 500) console.warn("[perf] billing.play.status", JSON.stringify({ phase: "total", elapsedMs: totalElapsedMs }));
     return res.json({ isPremium });
   } catch (error: any) {
     console.error("❌ Error en /status Play Billing:", error.message);
