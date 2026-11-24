@@ -103,11 +103,19 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
         FROM day_events
         WHERE event_name = 'game_start'
         ORDER BY platform, COALESCE(player_id, session_id), created_at
+      ),
+      normalized_completions AS (
+        SELECT DISTINCT ON (platform, COALESCE(player_id, session_id))
+               platform, session_id, player_id, created_at
+        FROM day_events
+        WHERE event_name = 'game_complete'
+        ORDER BY platform, COALESCE(player_id, session_id), created_at
       )
       SELECT platform,
              COUNT(*) FILTER (WHERE event_name = 'session_start')::int AS sessions,
-             (SELECT COUNT(*) FROM normalized_starts ns WHERE ns.platform = de.platform)::int AS games_started,
-             COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
+             (SELECT COUNT(*) FROM normalized_starts ns WHERE ns.platform = de.platform)::int AS start_actors,
+             (SELECT COUNT(*) FROM normalized_completions nc WHERE nc.platform = de.platform)::int AS completion_actors,
+             COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completion_events,
              COUNT(*) FILTER (WHERE event_name IN ('ad_impression','rewarded_ad_completed'))::int AS ad_impressions
       FROM day_events de
       GROUP BY platform
@@ -520,18 +528,18 @@ router.get("/", authLimiter, basicAuth, async (req, res) => {
     const halloweenSaved = halloweenTotals.get("halloween_scare_report_saved") ?? 0;
     const halloweenFailed = halloweenTotals.get("halloween_scare_report_failed") ?? 0;
 
-    const platformMap = new Map<string, { active: number; sessions: number; started: number; completed: number; ads: number }>();
+    const platformMap = new Map<string, { active: number; sessions: number; started: number; completed: number; completionEvents: number; ads: number }>();
     for (const row of online.rows as any[]) platformMap.set(String(row.platform), { active: n(row.active), sessions: 0, started: 0, completed: 0, ads: 0 });
     for (const row of today.rows as any[]) {
       const key = String(row.platform);
-      const current = platformMap.get(key) ?? { active: 0, sessions: 0, started: 0, completed: 0, ads: 0 };
-      current.sessions = n(row.sessions); current.started = n(row.games_started); current.completed = n(row.games_completed); current.ads = n(row.ad_impressions);
+      const current = platformMap.get(key) ?? { active: 0, sessions: 0, started: 0, completed: 0, completionEvents: 0, ads: 0 };
+      current.sessions = n(row.sessions); current.started = n(row.start_actors); current.completed = n(row.completion_actors); current.completionEvents = n(row.completion_events); current.ads = n(row.ad_impressions);
       platformMap.set(key, current);
     }
 
     const platformRows = ["web", "android", "ios"].map((platform) => {
-      const p = platformMap.get(platform) ?? { active: 0, sessions: 0, started: 0, completed: 0, ads: 0 };
-      return `<tr><td>${platform === "ios" ? "🍎 iOS" : platform === "android" ? "🤖 Android" : "🌐 Web"}</td><td>${p.active}</td><td>${p.sessions}</td><td>${p.started}</td><td>${p.completed}</td><td>${p.ads}</td></tr>`;
+      const p = platformMap.get(platform) ?? { active: 0, sessions: 0, started: 0, completed: 0, completionEvents: 0, ads: 0 };
+      return `<tr><td>${platform === "ios" ? "🍎 iOS" : platform === "android" ? "🤖 Android" : "🌐 Web"}</td><td>${p.active}</td><td>${p.sessions}</td><td>${p.started}</td><td>${p.completed}</td><td>${p.completionEvents}</td><td>${p.ads}</td></tr>`;
     }).join("");
 
     const loginRows = (loginMethods.rows as any[]).map((row) => {
@@ -638,7 +646,7 @@ a{color:#4ade80;text-decoration:none}
       <p class="sub">Incluye etapas del Lobby, errores API/cliente y resultados de anuncios. Los motivos solo aparecen cuando el cliente o servidor los registra explícitamente; una salida sin señal no se etiqueta como abandono voluntario.</p>
       <table><thead><tr><th>Fecha (Madrid)</th><th>Evento</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Contexto técnico</th></tr></thead><tbody>${rootCauseRows || '<tr><td colspan="6">No hay eventos instrumentados con estos filtros.</td></tr>'}</tbody></table>
     </div>
-    <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Jugadores que iniciaron</th><th>Resultados terminados</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
+    <div class="card"><h2>Plataformas · hoy</h2><p class="sub">Los inicios/finales se cuentan como actores únicos por plataforma; los finales registrados también se muestran como eventos. No son partidas emparejadas.</p><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Actores con inicio</th><th>Actores con final</th><th>Finales registrados (eventos)</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
     <div class="card"><h2>Conexiones por método · hoy</h2><table><thead><tr><th>Método</th><th>Ahora</th><th>Sesiones</th></tr></thead><tbody>${loginRows || '<tr><td colspan="3">Todavía no hay conexiones identificadas.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>Uso del juego y publicidad · últimos 7 días</h2><table><thead><tr><th>Métrica</th><th>Total</th></tr></thead><tbody>${powerupRows || '<tr><td colspan="2">Todavía no hay datos.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>Eventos · últimos 7 días</h2><table><thead><tr><th>Evento</th><th>Total</th></tr></thead><tbody>${eventRows || '<tr><td colspan="2">Todavía no hay eventos.</td></tr>'}</tbody></table></div>
