@@ -11,6 +11,18 @@ import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
+function logSlowPresenceLock(phase: string, startedAt: number): void {
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 150) {
+    // Phase and duration only; do not log player IDs or profile data.
+    console.warn("[perf] player.advisory_lock", JSON.stringify({
+      source: "presence_ping",
+      phase,
+      elapsedMs,
+    }));
+  }
+}
+
 // PostgreSQL-backed presence is the shared source of truth across Railway instances.
 interface PresenceEntry {
   name: string;
@@ -224,8 +236,12 @@ router.post("/ping", presenceLimiter, async (req, res) => {
 
   await presenceTableReady;
   const lastSeen = new Date();
+  let lockAcquiredAt = 0;
   const wasOffline = await db.transaction(async (tx) => {
+    const lockWaitStartedAt = Date.now();
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+    lockAcquiredAt = Date.now();
+    logSlowPresenceLock("wait", lockWaitStartedAt);
     const existingRows = await tx.execute(sql`
       SELECT last_seen
       FROM player_presence
@@ -249,6 +265,7 @@ router.post("/ping", presenceLimiter, async (req, res) => {
     `);
     return offline;
   });
+  if (lockAcquiredAt > 0) logSlowPresenceLock("hold_including_commit", lockAcquiredAt);
   presenceMap.set(playerId, {
     ...profile,
     roomCode: canonicalRoomCode,
