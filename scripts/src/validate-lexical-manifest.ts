@@ -93,6 +93,11 @@ function validateSourceShape(value: unknown, index: number): Source {
     fail(`${value.id}: invalid thirdPartyContent`);
   }
   if (!["candidate", "blocked", "approved"].includes(String(value.reviewStatus))) fail(`${value.id}: invalid reviewStatus`);
+  if ("reviewedBy" in value && !nonEmpty(value.reviewedBy)) fail(`${value.id}: reviewedBy must be a non-empty string`);
+  if ("approvalReference" in value && !nonEmpty(value.approvalReference)) fail(`${value.id}: approvalReference must be a non-empty string`);
+  if ("reviewedAt" in value && (typeof value.reviewedAt !== "string" || !isCalendarDate(value.reviewedAt))) {
+    fail(`${value.id}: reviewedAt must be a valid calendar date`);
+  }
   if (value.reviewStatus === "approved") {
     if (value.commercialUse !== true || value.redistribution !== true) fail(`${value.id}: approved source must permit commercial use and redistribution`);
     if (!["none-known", "present-audited"].includes(String(value.thirdPartyContent))) fail(`${value.id}: third-party content is not audited`);
