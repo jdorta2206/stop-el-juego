@@ -153,7 +153,7 @@ test("rejects invalid calendar dates in approval records", async () => {
   const { root, manifestPath, manifest } = await fixture();
   manifest.sources[0].reviewedAt = "2026-02-30";
   await writeFile(manifestPath, JSON.stringify(manifest));
-  await assert.rejects(validateManifest(manifestPath, root), /requires reviewer, date and approval reference/);
+  await assert.rejects(validateManifest(manifestPath, root), /reviewedAt must be a valid calendar date/);
 });
 
 
