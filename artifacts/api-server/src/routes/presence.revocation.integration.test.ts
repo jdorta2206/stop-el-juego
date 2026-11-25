@@ -40,6 +40,8 @@ integration("PostgreSQL presence revocation lock integration", () => {
     const ping = await pool.connect();
     const probe = await pool.connect();
     let pingReachedLock = false;
+    let deletionCommitted = false;
+    let pingCommitted = false;
 
     try {
       await deletion.query("BEGIN");
@@ -73,6 +75,7 @@ integration("PostgreSQL presence revocation lock integration", () => {
           );
         }
         await ping.query("COMMIT");
+        pingCommitted = true;
         return revoked.rowCount === 1;
       })();
 
@@ -102,9 +105,10 @@ integration("PostgreSQL presence revocation lock integration", () => {
         [playerId],
       );
       expect(lockProbe.rows[0]?.acquired).toBe(false);
-      await probe.query("ROLLBACK");
-
+      // pg_try_advisory_xact_lock ran in autocommit mode, so no probe
+      // transaction remains open to roll back.
       await deletion.query("COMMIT");
+      deletionCommitted = true;
       expect(await pingTransaction).toBe(true);
 
       const presence = await pool.query(
@@ -113,9 +117,8 @@ integration("PostgreSQL presence revocation lock integration", () => {
       );
       expect(presence.rowCount).toBe(0);
     } finally {
-      await deletion.query("ROLLBACK").catch(() => {});
-      await ping.query("ROLLBACK").catch(() => {});
-      await probe.query("ROLLBACK").catch(() => {});
+      if (!deletionCommitted) await deletion.query("ROLLBACK").catch(() => {});
+      if (!pingCommitted) await ping.query("ROLLBACK").catch(() => {});
       deletion.release();
       ping.release();
       probe.release();
