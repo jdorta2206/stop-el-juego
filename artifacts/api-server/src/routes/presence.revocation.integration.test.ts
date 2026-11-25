@@ -52,6 +52,8 @@ integration("PostgreSQL presence revocation lock integration", () => {
         [playerId],
       );
 
+      const applicationName = `stop-presence-it-${process.pid}`;
+      await ping.query("SELECT set_config('application_name', $1, false)", [applicationName]);
       await ping.query("BEGIN");
       const pingTransaction = (async () => {
         pingReachedLock = true;
@@ -74,9 +76,27 @@ integration("PostgreSQL presence revocation lock integration", () => {
         return revoked.rowCount === 1;
       })();
 
-      // Wait until the ping has issued its lock request, then independently
-      // prove the deletion transaction still owns the same advisory lock.
-      while (!pingReachedLock) await new Promise((resolve) => setTimeout(resolve, 1));
+      // Wait until PostgreSQL itself reports the ping blocked on an advisory
+      // lock. This proves the two independent transactions overlap in time.
+      let observedAdvisoryWait = false;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const activity = await probe.query(
+          `SELECT 1 FROM pg_stat_activity
+           WHERE application_name = $1
+             AND wait_event_type = 'Lock'
+             AND wait_event = 'advisory'`,
+          [applicationName],
+        );
+        if (activity.rowCount === 1) {
+          observedAdvisoryWait = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(pingReachedLock).toBe(true);
+      expect(observedAdvisoryWait).toBe(true);
+
+      // Independently prove deletion still owns the same advisory lock.
       const lockProbe = await probe.query(
         "SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired",
         [playerId],
