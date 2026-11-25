@@ -140,3 +140,18 @@ test("rejects invalid calendar dates in approval records", async () => {
   await writeFile(manifestPath, JSON.stringify(manifest));
   await assert.rejects(validateManifest(manifestPath, root), /requires reviewer, date and approval reference/);
 });
+
+
+test("rejects locales whose language does not match the source language", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].locales = ["fr-FR"];
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /locale language must match es/);
+});
+
+test("rejects impossible calendar dates in bundle versions", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.bundleVersion = "2026.02.30";
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /Invalid manifest header/);
+});
