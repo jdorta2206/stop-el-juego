@@ -80,6 +80,20 @@ test("rejects a candidate source even when its checksum is valid", async () => {
   await assert.rejects(validateManifest(manifestPath, root), /source is candidate; import is blocked/);
 });
 
+test("rejects invalid optional review metadata on unapproved sources", async () => {
+  const cases = [
+    { field: "reviewedBy", value: "   ", pattern: /reviewedBy must be a non-empty string/ },
+    { field: "approvalReference", value: "", pattern: /approvalReference must be a non-empty string/ },
+    { field: "reviewedAt", value: "2026-02-30", pattern: /reviewedAt must be a valid calendar date/ },
+  ] as const;
+  for (const item of cases) {
+    const { root, manifestPath, manifest } = await fixture("candidate");
+    Object.assign(manifest.sources[0], { [item.field]: item.value });
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    await assert.rejects(validateManifest(manifestPath, root), item.pattern);
+  }
+});
+
 test("rejects modified source files through the checksum", async () => {
   const { root, manifestPath } = await fixture();
   await writeFile(path.join(root, "source", "words.dic"), "3\ncasa\ngato\nárbol\n");
