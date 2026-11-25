@@ -114,6 +114,7 @@ export async function validateManifest(manifestPath: string, dataRoot: string): 
   if (!isRecord(parsed) || parsed.schemaVersion !== 1 ||
       typeof parsed.bundleVersion !== "string" ||
       !/^\d{4}\.\d{2}\.\d{2}([+-][A-Za-z0-9.-]+)?$/.test(parsed.bundleVersion) ||
+      !isCalendarDate(parsed.bundleVersion.slice(0, 10).replaceAll(".", "-")) ||
       !Array.isArray(parsed.sources)) {
     fail("Invalid manifest header: expected schemaVersion 1, dated bundleVersion and sources array");
   }
