@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
@@ -96,4 +96,25 @@ test("rejects a missing license or dictionary file", async () => {
   const { root, manifestPath } = await fixture();
   await rm(path.join(root, "source", "LICENSE"));
   await assert.rejects(validateManifest(manifestPath, root), /Missing file: source\/LICENSE/);
+});
+
+test("rejects an approved source that does not permit commercial use", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].commercialUse = false;
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /must permit commercial use and redistribution/);
+});
+
+test("rejects a symlink that escapes the data root", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  const outside = path.join(os.tmpdir(), `stop-lexical-outside-${process.pid}-${Date.now()}.dic`);
+  await writeFile(outside, "outside data");
+  try {
+    await symlink(outside, path.join(root, "source", "external.dic"));
+    manifest.sources[0].files = ["source/external.dic"];
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    await assert.rejects(validateManifest(manifestPath, root), /Path escapes data root/);
+  } finally {
+    await rm(outside, { force: true });
+  }
 });
