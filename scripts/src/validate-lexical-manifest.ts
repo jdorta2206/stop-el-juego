@@ -34,7 +34,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const nonEmpty = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 const isCalendarDate = (value: string): boolean => {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 };
