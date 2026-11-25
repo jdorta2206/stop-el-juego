@@ -110,3 +110,49 @@ These resources are spelling/morphology datasets. They are not a complete semant
 - RAE/ASALE legal notice: https://www.asale.org/info/asale/aviso-legal
 
 No file from these packages has been downloaded, copied, transformed, or included in STOP by this audit.
+
+
+## Follow-up audit: English SCOWL and Canadian French
+
+Audit update: 2026-11-25.
+
+### English: SCOWL-derived Hunspell dictionaries
+
+The upstream English Hunspell README identifies a maintained release (2026.02.25, commit 7e99eda) and the following actual variants: en_US, en_CA, en_GB-ise, en_GB-ize and en_AU. It distinguishes normal size-60 dictionaries from larger size-70 variants and explicitly warns that the larger lists are less carefully checked and can contain misspellings or problematic uncommon words.
+
+The same README gives a permissive SCOWL grant: use, copy, modify, distribute and sell word lists and derivatives without fee, provided the copyright and permission notices are retained in copies and supporting documentation. It separately identifies the Ispell-derived affix file under a BSD-style license with redistribution notice requirements, and identifies Benjamin Titze's Australian contribution with its own notice.
+
+- Decision: strong candidate for en-US, en-CA, en-AU and both British spelling tracks. Prefer the normal size-60 release for the initial import; do not use the larger lists as an unreviewed acceptance authority. Keep the wordlist and affix-file notices distinct in the provenance manifest.
+- en-NZ, en-ZA and en-IE are not included in this SCOWL Hunspell release list; do not claim they are covered by it. They need separate sources or explicitly documented fallback policy.
+- Exact release, commit and per-file checksums still need to be pinned and independently verified before import.
+- Sources:
+  - https://wordlist.aspell.net/hunspell-readme/
+  - https://wordlist.aspell.net/dicts/
+
+### French Canada: important distinction between locale aliases and regional data
+
+A packaging recipe for Grammalecte/Dicollecte's French Hunspell dictionary creates fr_CA aliases by pointing them to the same fr_FR .aff/.dic files. This establishes technical compatibility under the fr_CA locale code, but it does NOT establish Canadian French lexical coverage or a distinct Canadian vocabulary source.
+
+Usito, developed at Université de Sherbrooke, explicitly describes standard French in use in Québec and North American French vocabulary. It is a promising human-reference and lexical research source, but the pages inspected do not establish a redistribution license for bulk extraction or bundling.
+
+- Decision: do not mark fr_CA as covered by the fr_FR alias. Keep fr_CA regional coverage open.
+- Usito may guide manual research and regional evidence discovery; do not scrape or import its content until a written data license or explicit reuse terms are confirmed.
+- A separate Hydro-Québec French Ispell dictionary exists in Debian's package catalog, but its exact upstream source and license have not yet been audited; it remains a research lead, not an approved source.
+- Sources:
+  - https://github.com/void-linux/void-packages/blob/master/srcpkgs/hunspell-fr_FR/template
+  - https://www.usherbrooke.ca/usito/
+  - https://packages.debian.org/ca/trixie/ifrench
+
+### Updated coverage decision
+
+| Locale | Current evidence | Status |
+|---|---|---|
+| en-US | SCOWL/Hunspell current release; permissive SCOWL notice plus BSD-style affix notice | Candidate; pin files and notices |
+| en-CA | Same release and license structure | Candidate; pin files and notices |
+| en-GB | en-GB-ise and en-GB-ize tracks | Candidate; pin files and notices |
+| en-AU | SCOWL/Hunspell current release; separate Australian contributor notice | Candidate; preserve separate notice |
+| en-NZ, en-ZA, en-IE | Not established by this SCOWL release | Open; separate sources required |
+| fr-CA | fr_FR alias exists in some packages, but no independent Canadian lexical dataset established | Open; alias is not regional coverage |
+| fr-CA reference | Usito describes Quebec standard French; redistribution terms not established | Human research only; no import |
+
+This audit narrows the next implementation scope: only datasets with exact release, checksum, file-level license, and complete notices may be admitted. A locale alias must never be mistaken for a regionally curated wordlist.
