@@ -87,3 +87,24 @@ At minimum test:
 ## Release safety
 
 This foundation is documentation only. Do not merge, deploy, change timers, or generate Android artifacts as part of this phase. Later implementation must be isolated, tested on all four languages and both online/offline paths, and reviewed before production release.
+
+
+## Manifest preflight tool (implementation step)
+
+A fail-closed preflight command is available in `scripts`:
+
+```sh
+pnpm --filter @workspace/scripts linguistics:preflight
+```
+
+It validates the manifest header and required source fields, rejects duplicate IDs/locales/files, blocks every source not explicitly marked `approved`, and requires an approval record plus commercial-use and redistribution permission. For each approved source it reads the listed dataset files and the exact license text from the supplied data root, rejects paths outside that root, and checks the SHA-256 digest.
+
+The digest is computed over the lexicographically sorted union of `files` and `license.licenseTextPath`; for each path, the hash stream is UTF-8 path, one NUL byte, file bytes, one NUL byte. This makes the check deterministic across operating systems.
+
+Optional CLI arguments are: manifest path (default `docs/linguistic-engine/source-manifest.json`) and data root (default repository root). Example:
+
+```sh
+pnpm --filter @workspace/scripts linguistics:preflight -- ./docs/linguistic-engine/source-manifest.json ./lexical-sources
+```
+
+This is a preflight gate, not yet a wordlist parser or runtime importer. The current manifest is intentionally empty, so a successful run confirms only that no unapproved source is being admitted; it does not mean STOP has gained new vocabulary. The next implementation stage is fixture-based tests for rejected candidates, missing files, path traversal, checksum mismatch, and approved-source acceptance before any real dataset is considered.
