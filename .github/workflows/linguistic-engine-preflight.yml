@@ -1,0 +1,44 @@
+name: Linguistic engine preflight
+
+on:
+  pull_request:
+    paths:
+      - "docs/linguistic-engine/**"
+      - "scripts/package.json"
+      - "scripts/src/validate-lexical-manifest.ts"
+      - "scripts/src/validate-lexical-manifest.test.ts"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/linguistic-engine-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linguistic-preflight-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile --filter @workspace/scripts
+      - name: Run lexical manifest tests
+        run: pnpm --filter @workspace/scripts linguistics:test
+      - name: Type-check scripts package
+        run: pnpm --filter @workspace/scripts typecheck
