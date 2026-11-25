@@ -65,8 +65,10 @@ function validateSourceShape(value: unknown, index: number): Source {
     fail(`${value.id}: invalid locales`);
   }
   if (new Set(value.locales).size !== value.locales.length) fail(`${value.id}: duplicate locale`);
-  if (!nonEmpty(value.upstreamUrl) || !/^https?:\/\//.test(value.upstreamUrl)) fail(`${value.id}: invalid upstreamUrl`);
-  for (const key of ["version", "revision"] as const) if (!nonEmpty(value[key])) fail(`${value.id}: missing ${key}`);
+  if (!nonEmpty(value.upstreamUrl)) fail(`${value.id}: invalid upstreamUrl`);
+  try { const url = new URL(value.upstreamUrl); if (url.protocol !== "https:" && url.protocol !== "http:") fail(`${value.id}: invalid upstreamUrl`); } catch { fail(`${value.id}: invalid upstreamUrl`); }
+  if (!nonEmpty(value.version)) fail(`${value.id}: missing version`);
+  if (!nonEmpty(value.revision) || value.revision.length < 7) fail(`${value.id}: revision must contain at least 7 characters`);
   if (!/^[a-fA-F0-9]{64}$/.test(String(value.sha256))) fail(`${value.id}: invalid sha256`);
   if (!Array.isArray(value.files) || value.files.length === 0 || !value.files.every(nonEmpty)) fail(`${value.id}: files must be non-empty paths`);
   if (new Set(value.files).size !== value.files.length) fail(`${value.id}: duplicate files`);
@@ -88,7 +90,9 @@ function validateSourceShape(value: unknown, index: number): Source {
     if (!["none-known", "present-audited"].includes(String(value.thirdPartyContent))) fail(`${value.id}: third-party content is not audited`);
     if (value.notices.length === 0) fail(`${value.id}: approved source must preserve attribution/notices`);
     if (!nonEmpty(value.reviewedBy) || !nonEmpty(value.approvalReference) ||
-        typeof value.reviewedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.reviewedAt)) {
+        typeof value.reviewedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.reviewedAt) ||
+        Number.isNaN(Date.parse(`${value.reviewedAt}T00:00:00Z`)) ||
+        new Date(`${value.reviewedAt}T00:00:00Z`).toISOString().slice(0, 10) !== value.reviewedAt) {
       fail(`${value.id}: approved source requires reviewer, date and approval reference`);
     }
   }
