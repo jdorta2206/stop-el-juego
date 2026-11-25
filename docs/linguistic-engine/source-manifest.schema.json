@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "bundleVersion", "sources"],
   "properties": {
+    "$schema": { "type": "string", "minLength": 1 },
     "schemaVersion": { "const": 1 },
     "bundleVersion": {
       "type": "string",
