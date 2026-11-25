@@ -197,3 +197,46 @@ A Solus package recipe for Grammalecte's French 7.7 dictionary installs the same
 | fr-FR | Grammalecte/Dicollecte dictionary available; package metadata reports MPL-2.0 | Candidate baseline only; exact upstream archive and notices still need pinning |
 
 No additional dictionary files have been downloaded, copied, transformed, or added to STOP.
+
+
+## Follow-up audit: original-license evidence and Irish English distinction
+
+Audit update: 2026-11-25.
+
+### English South Africa (en_ZA): stronger license evidence
+
+The current LibreOffice/Debian package for hunspell-en-za is built from the LibreOffice dictionaries source package. The Document Foundation's published third-party licensing inventory explicitly identifies the English (South Africa) spelling dictionary and points to LGPL version 2.1.
+
+- Decision: en_ZA is a stronger candidate than previously recorded. Before importing, still pin the exact LibreOffice source release, inspect its source archive's copyright/notice files and identify the exact .dic/.aff files and any contributor-specific terms. The package-level LGPL notice is not a substitute for preserving all upstream notices.
+- Sources:
+  - https://gimli.documentfoundation.org/share/readme/LICENSE.html
+  - https://packages.debian.org/es/trixie/i386/hunspell-en-za
+
+### English New Zealand (en_NZ): historical source, not approved
+
+The Aspell project's historical dictionary inventory identifies an OpenOffice en_NZ dictionary attributed to Tristan Burtenshaw, last updated around 2003, with an LGPL label. A separate NetBSD package entry identifies version 20020518 and explicitly says no license is stated in its package metadata.
+
+- Decision: treat en_NZ as an old, unresolved source lead. Do not import or rely on the LGPL label alone. The original archive, copyright holder's grant, complete notices and current suitability must be verified. Regional lexical coverage may be stale.
+- Sources:
+  - https://wordlist.aspell.net/other-dicts/
+  - https://linux.yz.yamagata-u.ac.jp/pub/pkgsrc/current/pkgsrc/textproc/hunspell-en_NZ/index.html
+
+### English Ireland (en_IE): do not confuse with Irish language
+
+The code ga_IE denotes Irish (the Irish language), not English as used in Ireland. Some downstream English dictionary packages provide en_IE as a symbolic link to en_GB-ise; this is a technical fallback, not an independently curated Irish-English dataset.
+
+- Decision: en_IE remains open. If STOP later offers a documented fallback to en_GB-ise, label it explicitly as a fallback and do not claim Irish-specific lexical coverage. Do not treat ga_IE as an English dictionary.
+- Sources:
+  - https://github.com/elastic/hunspell/blob/master/conf.yaml
+  - https://www.slackbuilds.org/repository/15.0/office/hunspell-en/
+
+### Corrected locale status
+
+| Locale | Evidence | Status |
+|---|---|---|
+| en-ZA | Document Foundation license inventory identifies spelling dictionary under LGPL 2.1 | Candidate; exact source archive and notices still need pinning |
+| en-NZ | Historical OpenOffice dictionary circa 2002/2003; package metadata does not state license | Unresolved; do not import |
+| en-IE | No distinct Irish-English dataset established; en_IE can be a symlink to en_GB-ise | Open; fallback only if explicitly labelled |
+| ga-IE | Irish-language dictionary, not English | Excluded from English locale coverage |
+
+No dictionary files have been downloaded, copied, transformed or included in STOP by this audit.
