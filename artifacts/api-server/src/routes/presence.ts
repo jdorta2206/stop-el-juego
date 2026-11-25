@@ -237,11 +237,26 @@ router.post("/ping", presenceLimiter, async (req, res) => {
   await presenceTableReady;
   const lastSeen = new Date();
   let lockAcquiredAt = 0;
-  const wasOffline = await db.transaction(async (tx) => {
+  const pingResult = await db.transaction(async (tx) => {
     const lockWaitStartedAt = Date.now();
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
     lockAcquiredAt = Date.now();
     logSlowPresenceLock("wait", lockWaitStartedAt);
+
+    // Account deletion holds this same player lock while writing the durable
+    // revocation and purging player-owned rows. Re-check after acquiring it so
+    // a ping that passed the earlier identity check cannot recreate presence
+    // after deletion commits.
+    const revokedRows = await tx.execute(sql`
+      SELECT 1
+      FROM revoked_player_ids
+      WHERE player_id = ${playerId}
+      LIMIT 1
+    `);
+    if ((revokedRows.rows as any[]).length > 0) {
+      return { revoked: true as const, wasOffline: false };
+    }
+
     const existingRows = await tx.execute(sql`
       SELECT last_seen
       FROM player_presence
@@ -263,9 +278,14 @@ router.post("/ping", presenceLimiter, async (req, res) => {
         room_code = EXCLUDED.room_code,
         last_seen = EXCLUDED.last_seen
     `);
-    return offline;
+    return { revoked: false as const, wasOffline: offline };
   });
   if (lockAcquiredAt > 0) logSlowPresenceLock("hold_including_commit", lockAcquiredAt);
+  if (pingResult.revoked) {
+    presenceMap.delete(playerId);
+    return res.status(403).json({ error: "Invalid player identity" });
+  }
+  const wasOffline = pingResult.wasOffline;
   presenceMap.set(playerId, {
     ...profile,
     roomCode: canonicalRoomCode,
