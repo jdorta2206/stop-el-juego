@@ -10,91 +10,109 @@ const post: BlogPost = {
   category: "Estrategias",
   readMinutes: 7,
   content: `
-Una buena ronda de STOP no depende solo de conocer muchas palabras. También importa entender las reglas de esa partida, organizar el tiempo y comprobar que cada respuesta encaja en la categoría.
 
-Estos son diez errores habituales y algunas formas sencillas de evitarlos. La puntuación y el ritmo pueden cambiar según el modo de juego y las reglas acordadas, así que no tomes como universales los valores que aparecen en listas de internet.
+En STOP no basta con escribir una palabra que empiece por la letra indicada. También debe corresponder a la categoría y cumplir las reglas de la partida.
 
-## 1. No leer las reglas del modo elegido
+Estos diez errores pueden provocar respuestas dudosas, casillas sin completar o desacuerdos entre jugadores. Las normas y la puntuación pueden variar según la versión, por lo que conviene leer las instrucciones antes de empezar.
 
-**El error:** empezar a responder sin comprobar cuántas rondas hay, cuánto dura cada una o cómo termina.
+## 1. No leer las categorías
 
-**La corrección:** antes de jugar, revisa las instrucciones de la modalidad. En STOP, el modo normal puede incluir hasta tres rondas de 60 segundos; el modo rápido y el reto diario tienen una estructura distinta.
+**El error:** empezar a escribir sin comprobar qué pide cada casilla.
 
-## 2. Quedarte demasiado tiempo bloqueado en una categoría
+**Ejemplo:** escribir una ciudad cuando la categoría solicita un país.
 
-**El error:** insistir con una respuesta mientras quedan otras categorías por completar.
+**Cómo corregirlo:** lee todas las categorías antes de responder y comprueba que cada palabra corresponde a la consigna exacta.
 
-**La corrección:** si no encuentras una palabra, pasa a otra y vuelve después si queda tiempo. Una respuesta sencilla y correcta es mejor que una invención apresurada.
+## 2. Confundir la inicial con una letra que aparece dentro de la palabra
 
-## 3. Confundir una palabra conocida con una respuesta válida
+**El error:** escribir una palabra que contiene la letra de la ronda, pero no empieza por ella.
 
-**El error:** escribir una palabra real que no corresponde a la categoría o no empieza por la letra indicada.
+**Ejemplo:** con la letra M, responder «camino» en una categoría de objetos.
 
-**La corrección:** comprueba las dos condiciones: inicial y categoría. Por ejemplo, que una palabra sea un nombre de lugar no la convierte automáticamente en un país.
+**Cómo corregirlo:** comprueba la primera letra de la palabra antes de enviarla.
 
-## 4. Dar por válida cualquier marca o nombre propio
+## 3. Confundir categorías relacionadas
 
-**El error:** pensar que una marca, un personaje o un nombre de persona se acepta en todas las partidas.
+**El error:** considerar que dos conceptos relacionados son intercambiables.
 
-**La corrección:** consulta las reglas del grupo o de la modalidad. Si no se han permitido expresamente nombres propios, marcas o personajes, no des por hecho que cuentan.
+**Ejemplo:** escribir el nombre de un ingrediente cuando la categoría pide un plato preparado.
 
-## 5. Tratar el diccionario como única regla de la partida
+**Cómo corregirlo:** piensa en el significado concreto de la categoría y no solo en su relación con la respuesta.
 
-**El error:** asumir que cualquier entrada de un diccionario sirve para cualquier categoría.
+## 4. Dar por válida cualquier marca
 
-**La corrección:** el diccionario ayuda a comprobar significado y uso, pero también hay que respetar la categoría, la inicial y los criterios acordados. Una entrada no resuelve por sí sola todas las posibles impugnaciones.
+**El error:** asumir que el nombre comercial de un producto siempre cuenta como objeto o como respuesta válida.
 
-## 6. Repetir siempre la primera palabra que recuerdas
+**Cómo corregirlo:** acordad si se permiten marcas y nombres comerciales. Si la partida tiene reglas específicas, síguelas.
 
-**El error:** recurrir a la misma respuesta en cada partida sin pensar si existe otra opción más precisa.
+## 5. Suponer que todos los nombres propios están permitidos
 
-**La corrección:** amplía el vocabulario poco a poco y aprende alternativas, pero comprueba su significado antes de memorizarlas. No elijas una palabra solo porque parezca rara.
+**El error:** utilizar nombres de personas, personajes o lugares sin comprobar qué tipo de respuesta admite la categoría.
 
-## 7. No revisar las respuestas dudosas
+**Cómo corregirlo:** distingue entre nombre de persona, personaje, lugar y otras categorías. Acordad previamente qué nombres propios se aceptan.
 
-**El error:** dejar pasar una respuesta que no recuerdas bien o discutirla sin comprobarla.
+## 6. Pensar que el diccionario decide todas las respuestas
 
-**La corrección:** cuando termine la ronda, revisa las dudas con una fuente fiable y aplica el mismo criterio a todos los jugadores. Si la partida tiene un sistema de validación, sigue el resultado y las reglas de esa modalidad.
+**El error:** creer que una palabra es válida únicamente porque aparece en un diccionario.
 
-## 8. No adaptar el ritmo al tiempo disponible
+**Cómo corregirlo:** utiliza el diccionario para comprobar significado y escritura, pero revisa también la inicial, la categoría y las reglas de la partida.
 
-**El error:** jugar una ronda rápida como si tuvieras todo el tiempo del modo normal.
+## 7. Inventar una palabra para completar una casilla
 
-**La corrección:** identifica cuánto dura la ronda y distribuye el tiempo. En las modalidades más cortas, prioriza respuestas claras y no te detengas demasiado en una sola casilla.
+**El error:** cambiar la escritura o crear una forma que parece posible para conseguir una respuesta.
+
+**Cómo corregirlo:** utiliza palabras cuyo significado y grafía puedas justificar. Si no encuentras una respuesta segura, continúa con otra categoría.
+
+## 8. No adaptar el ritmo al modo
+
+**El error:** jugar una modalidad rápida como si tuviera el mismo tiempo que una partida normal.
+
+**Cómo corregirlo:** consulta el contador y las instrucciones del modo. Las modalidades individuales y multijugador pueden tener duraciones diferentes.
 
 ## 9. Confundir originalidad con validez
 
-**El error:** creer que una respuesta poco frecuente tiene que ser correcta o que una respuesta compartida deja de ser válida.
+**El error:** pensar que una palabra poco conocida tiene que ser correcta o que una respuesta compartida deja de ser válida automáticamente.
 
-**La corrección:** primero importa que la respuesta cumpla las reglas. La coincidencia con otros jugadores y su efecto en la puntuación dependen del sistema de esa partida.
+**Cómo corregirlo:** comprueba primero que la respuesta cumple la categoría y la inicial. La coincidencia con otros jugadores y su efecto en la puntuación dependen de las reglas de esa partida.
 
-## 10. No aprender de las dudas de partidas anteriores
+## 10. Repetir los mismos errores sin revisarlos
 
-**El error:** repetir una respuesta que ya generó confusión sin comprobarla.
+**El error:** volver a utilizar una respuesta dudosa sin comprobar por qué fue rechazada.
 
-**La corrección:** anota las palabras que te costó defender, busca su significado y decide si encajan en las categorías que sueles jugar. Así mejoras tu vocabulario sin memorizar listas dudosas.
+**Cómo corregirlo:** después de la partida, revisa su significado, escritura y relación con la categoría. Guarda solo los ejemplos que hayas podido verificar.
 
----
+## Lista de comprobación antes de enviar una respuesta
 
-## Resumen: cómo preparar una buena ronda
+Antes de completar una casilla, pregúntate:
 
-- Lee las instrucciones del modo antes de empezar.
-- Comprueba la inicial y la categoría de cada respuesta.
-- No presupongas que nombres propios, marcas o regionalismos están permitidos.
-- Usa diccionarios como apoyo, no como sustituto de las reglas.
-- Administra el tiempo y revisa las dudas al terminar.
+- ¿Empieza por la letra indicada?
+- ¿Pertenece a la categoría?
+- ¿Está escrita correctamente?
+- ¿Se permite ese tipo de respuesta en esta partida?
+- ¿Puedo explicar por qué es válida?
 
-No hay una técnica que garantice ganar todas las partidas. Sí puedes jugar con más seguridad si conoces las reglas, eliges respuestas defendibles y aprendes de cada ronda.
+Si puedes responder afirmativamente, tendrás una respuesta más fácil de justificar.
 
-Sigue practicando:
+## Recuerda las reglas de tu modalidad
 
-- [Estrategias para jugar mejor a STOP](/blog/estrategias-avanzadas-stop)
-- [Cómo pensar palabras rápido bajo presión](/blog/pensar-palabras-rapido-bajo-presion)
-- [Las palabras más raras pero válidas](/blog/palabras-raras-pero-validas-stop)
+STOP puede jugarse con reglas tradicionales acordadas entre participantes o mediante modalidades digitales con condiciones propias.
+
+En STOP online, el tiempo, las rondas, las ayudas y la puntuación pueden cambiar según el modo. No traslades automáticamente las reglas de una partida en papel a todas las modalidades digitales.
+
+## Conclusión
+
+Evitar errores no consiste en memorizar listas enormes. Consiste en leer las categorías, comprobar las palabras y aplicar un criterio coherente durante toda la partida.
+
+Una respuesta clara y correcta vale más que una palabra extraña que no puedas justificar.
+
+**Sigue leyendo:**
+- [Estrategias para mejorar en STOP](/blog/estrategias-ganar-stop)
+- [Estrategias avanzadas para jugar mejor](/blog/estrategias-avanzadas-stop)
+- [Cómo encontrar palabras más rápido](/blog/pensar-palabras-rapido-bajo-presion)
 - [Cómo jugar al STOP: reglas completas](/blog/como-jugar-stop-reglas-completas)
 
-¿Qué tipo de respuesta te cuesta más comprobar? Practica en [STOP online](/) y consulta las reglas de la modalidad antes de empezar.
+[Practica en STOP online](/).
+
 `,
-};
 
 export default post;
