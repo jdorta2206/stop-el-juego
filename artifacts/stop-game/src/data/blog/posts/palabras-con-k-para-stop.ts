@@ -10,180 +10,174 @@ const post: BlogPost = {
   category: "Listas de palabras",
   readMinutes: 7,
   content: `
-La letra **K** es una de las **pesadillas clásicas** del STOP. En español hay muy pocas palabras nativas con K (la mayoría son préstamos de otros idiomas), por lo que cuando sale, **muchos jugadores se quedan en blanco**.
+La **K** puede resultar complicada en STOP porque muchas palabras que la contienen proceden de otras lenguas o son nombres propios. Aun así, hay ejemplos que puedes preparar para distintas categorías.
 
-Preparar ejemplos por categoría puede ayudarte a recordar respuestas, pero ninguna lista garantiza puntos: el resultado depende de las reglas, de la validación y de lo que escriban los demás.
-
-## Por qué la K es tan difícil en español
-
-El español casi no tiene palabras propias con K. Las que existen son:
-
-- **Préstamos** de otros idiomas (kilo, karate, koala, kiwi…).
-- **Marcas comerciales** (Kit-Kat, Kellogg's…).
-- **Nombres propios** extranjeros (Karen, Kevin, Kenia…).
-- **Topónimos** lejanos (Kenia, Kuwait, Kioto…).
-
-Que una palabra aparezca en el DLE no determina por sí solo si será aceptada en una partida. Acordad si admitís préstamos, nombres propios, marcas y topónimos, y consultad el diccionario como referencia lingüística, no como sustituto de las reglas del grupo.
+Esta guía reúne palabras para practicar. Recuerda que una respuesta debe empezar por K, encajar en la categoría y respetar las normas de vuestra partida. Que una palabra aparezca en un diccionario no obliga a todos los grupos a admitir nombres propios, marcas o extranjerismos.
 
 ## Nombres de persona con K
 
-Estos son ejemplos de nombres propios que empiezan por K. Antes de usarlos, acordad si vuestra partida admite nombres de persona:
+Si vuestra partida permite nombres propios, puedes practicar con:
 
-- **Karen, Karina, Katia, Katrina, Krista, Kira** (femeninos)
-- **Kevin, Kenneth, Karl, Kurt, Kai, Khalid** (masculinos)
-- **Kim, Kobe, Kasper, Konstantin** (unisex o internacionales)
+- **Karen**
+- **Karina**
+- **Katia**
+- **Kira**
+- **Kevin**
+- **Kai**
+- **Khalid**
+- **Kurt**
 
-> 💡 "Karen" y "Kevin" son ejemplos de nombres propios con K. Utilízalos solo si habéis acordado admitir nombres de persona.
+Son nombres propios de distintas procedencias. Su aceptación depende de que la categoría «Nombres» esté permitida.
 
 ## Apellidos con K
 
-- **Kennedy, King, Khan, Klein, Kelly, Kant**
-- **Kowalski, Kim, Kafka, Krause, Kerr**
-- **Karlsson, Kowal, Kremer, Klitschko**
+Algunos apellidos que empiezan por esta letra son:
+
+- **Kant**
+- **Kafka**
+- **Kennedy**
+- **Kelly**
+- **Khan**
+- **Klein**
+- **Kowalski**
+- **Krause**
+
+Al tratarse de apellidos, utilizadlos solo si las reglas admiten esta clase de nombres.
 
 ## Animales con K
 
-Esta es la categoría donde más te puedes lucir:
+Estas son algunas opciones para practicar:
 
-- **Koala** (la apuesta segura)
-- **Kiwi** (el pájaro neozelandés, no la fruta)
-- **Kakapo** (loro nocturno de Nueva Zelanda)
-- **Kudú** (antílope africano)
-- **Krill** (los crustáceos que comen las ballenas)
-- **Kinkajú** (mamífero arborícola de América Central y del Sur)
+- **Koala**: mamífero australiano.
+- **Kiwi**: ave no voladora de Nueva Zelanda; no debe confundirse con la fruta.
+- **Kakapo**: loro nocturno de Nueva Zelanda.
+- **Kudú**: antílope africano.
+- **Krill**: conjunto de pequeños crustáceos marinos.
+
+Conviene recordar la diferencia entre el kiwi como ave y el kiwi como alimento: la misma palabra puede encajar en categorías distintas según el significado que se explique.
 
 ## Colores con K
 
-No hay una respuesta habitual y clara en español para esta categoría con K. "Caqui" suele escribirse con C; no la cambies por K sin comprobar el diccionario y las reglas que utilicéis.
+No hay una respuesta de uso general en español que resulte suficientemente clara para recomendarla como segura en esta categoría.
 
-Si no encuentras una opción que encaje, deja la casilla en blanco y continúa con otra categoría.
+No conviertas **caqui** en «kaki» por cambiar la inicial: la grafía que debes comprobar es la forma española admitida por el diccionario de referencia.
+
+Si no tienes una respuesta válida, es mejor dejar la casilla vacía que escribir una palabra incorrecta.
 
 ## Países con K
 
-- **Kenia** (Kenya)
-- **Kuwait**
-- **Kazajistán** (Kazakhstan)
-- **Kirguistán** (Kyrgyzstan)
-- **Kiribati** (pequeño archipiélago del Pacífico)
-- **Kosovo** (reconocido por la mayoría de países)
+Puedes practicar con estos nombres:
 
-> **Ejemplo:** "Kenia" es un topónimo conocido; su aceptación depende de las reglas que hayáis acordado.
+- **Kenia**
+- **Kuwait**
+- **Kazajistán**
+- **Kirguistán**
+- **Kiribati**
+
+Son nombres de países que se escriben con K en español. Para evitar discusiones, acordad previamente si vuestra partida admite países y qué fuente utilizaréis para comprobar sus nombres.
 
 ## Ciudades con K
 
-- **Kioto** (Japón)
-- **Karachi** (Pakistán)
-- **Kabul** (Afganistán)
-- **Kingston** (Jamaica)
-- **Kiev** o **Kyiv** (Ucrania)
-- **Kuala Lumpur** (Malasia)
-- **Krakovia / Cracovia** (Polonia)
+Algunos ejemplos de ciudades cuyos nombres se escriben con K son:
+
+- **Kioto**, en Japón.
+- **Kabul**, en Afganistán.
+- **Karachi**, en Pakistán.
+- **Kingston**, en Jamaica.
+- **Kuala Lumpur**, en Malasia.
+- **Kyiv**, en Ucrania.
+
+No confundas las grafías de otros idiomas con las formas españolas. Por ejemplo, **Cracovia** es la forma española de esa ciudad polaca y empieza por C, no por K.
 
 ## Comidas y bebidas con K
 
-Aquí hay más opciones de las que parece:
+Hay varias opciones procedentes de distintas tradiciones culinarias:
 
-- **Kebab** (plato de origen turco y de otras cocinas de la región)
-- **Kiwi** (la fruta)
-- **Kéfir** (bebida fermentada)
-- **Kétchup** (la salsa)
-- **Kale** (col rizada)
-- **Kombucha** (té fermentado)
-- **Kumquat** (cítrico pequeño)
+- **Kebab**: preparación de carne habitual en varias cocinas de Oriente Próximo y zonas cercanas.
+- **Kéfir**: alimento o bebida fermentada.
+- **Kétchup**: salsa de tomate condimentada.
+- **Kale**: nombre utilizado para la col rizada.
+- **Kumquat**: pequeño cítrico.
+- **Kiwi**: fruta.
 
-## Objetos / cosas con K
+Algunas son préstamos o nombres de uso internacional. Si el grupo tiene reglas estrictas sobre extranjerismos, comprobadlas antes de la partida.
 
-- **Kilo** (la unidad de peso)
-- **Kayak** (la embarcación)
-- **Kimono** (la prenda japonesa)
-- **Kart** (vehículo de competición)
-- **Kit** (conjunto de herramientas)
-- **Klaxon** (término usado para una bocina; comprueba la grafía y el criterio del diccionario que utilicéis)
+## Objetos y cosas con K
 
-## Deportes con K
+- **Kayak**: embarcación ligera.
+- **Kimono**: prenda tradicional japonesa.
+- **Kilo**: forma habitual de referirse al kilogramo.
+- **Kilómetro**: unidad de longitud.
+- **Kart**: vehículo pequeño utilizado en carreras de karting.
+- **Kit**: conjunto de elementos reunidos para una finalidad.
 
-- **Karate** (arte marcial de origen japonés)
-- **Kayak / Piragüismo en kayak**
-- **Kárting** (carreras de karts)
-- **Kickboxing** (préstamo del inglés; acordad si lo admitís)
-- **Kendo** (esgrima japonesa)
-- **Kung-fu**
+## Deportes y actividades con K
+
+- **Kárate**: arte marcial de origen japonés.
+- **Kendo**: disciplina japonesa de esgrima.
+- **Kickboxing**: deporte de combate cuyo nombre procede del inglés.
+- **Kung-fu**: denominación extendida para determinadas artes marciales chinas.
+- **Karting**: modalidad de competición con karts.
+
+Acordad si la categoría incluye artes marciales y modalidades deportivas, además de deportes de equipo.
 
 ## Profesiones con K
 
-Hay pocos términos frecuentes de profesiones con K. Las siguientes opciones son poco habituales y conviene comprobarlas antes de la partida:
+Esta es una categoría especialmente difícil. No conviene inventar nombres de profesiones ni transformar una afición en un oficio para conseguir una respuesta.
 
-Opciones débiles pero defendibles:
-
-- **Karateka** (practicante de karate)
-- **Kiwicultor** (cultivador de kiwis) — discutible
-- **Kayakista**
-
-> 💡 Si no se te ocurre nada en "profesión", déjalo y céntrate en sumar puntos donde sí puedas.
+Si no conoces una profesión cuyo nombre español empiece realmente por K y puedas justificar, es preferible dejar la casilla vacía. **Karateca**, por ejemplo, empieza por C, no por K.
 
 ## Marcas con K
 
-Hay marcas conocidas que empiezan por K. Son nombres comerciales, así que utilizadlos solo si las reglas de vuestra partida admiten marcas:
+Si las reglas admiten marcas comerciales, puedes practicar con:
 
-- **Kellogg's** (cereales)
-- **Kit-Kat** (chocolate)
-- **Kodak** (fotografía)
-- **Kawasaki** (motos)
-- **Kia** (coches)
-- **Kärcher** (limpieza)
-- **Knorr** (alimentación)
-- **Kleenex** (pañuelos)
-- **Krafft** (alimentación)
-- **Krups** (electrodomésticos)
+- **Kia**: automoción.
+- **Kodak**: fotografía.
+- **Kawasaki**: motocicletas y otros productos.
+- **Kellogg's**: alimentación.
+- **Kärcher**: equipos de limpieza.
+- **Knorr**: alimentación.
+- **Krups**: electrodomésticos.
+- **KitKat**: chocolate.
 
-> **Ejemplos:** "Kia" y "Kellogg's" son marcas; incluidlas solo si las normas de la partida permiten respuestas comerciales.
+Las marcas son nombres comerciales, no palabras comunes. No las utilices si vuestra partida no admite respuestas de este tipo.
 
-## Famosos con K
+## Consejos para jugar con la K
 
-- **Kim Kardashian** (figura pública; admítela solo si las normas permiten nombres de personas famosas)
-- **Kanye West** (rapero)
-- **Kobe Bryant** (NBA)
-- **Karol G** (cantante colombiana)
-- **Keanu Reeves** (actor)
-- **Kurt Cobain** (Nirvana)
-- **Kafka** (escritor)
-- **Kandinsky** (pintor)
+1. Recuerda primero las palabras comunes que conoces: *koala*, *kayak* o *kimono*.
+2. Separa mentalmente animales, alimentos, objetos y nombres propios.
+3. No cambies la grafía de una palabra para adaptarla a la inicial.
+4. Comprueba los préstamos y nombres extranjeros si hay dudas.
+5. Si una categoría no tiene una respuesta que puedas justificar, continúa con otra.
 
-## Trucos para no quedarse en blanco con la K
-
-1. Prepara algunos ejemplos por categoría y comprueba su escritura antes de la partida.
-2. Si una palabra te genera dudas, no la fuerces: valora si encaja realmente con la categoría y las reglas acordadas.
-3. Distingue nombres propios, marcas, préstamos y topónimos; cada grupo puede recibir un tratamiento distinto.
-4. Si no encuentras una respuesta, pasa a otra categoría y vuelve después si queda tiempo.
-
-## Resumen: tu "kit STOP letra K"
-
-Si quieres preparar algunos ejemplos por categoría, puedes empezar por estos:
+## Resumen: ejemplos con K
 
 | Categoría | Ejemplo |
 |---|---|
-| Nombre (si se admiten nombres propios) | Karen |
+| Nombre propio | Karen |
 | Animal | Koala |
 | País | Kenia |
 | Ciudad | Kioto |
 | Comida | Kebab |
 | Objeto | Kayak |
-| Deporte | Karate |
-| Marca (si se admiten marcas) | Kellogg's |
-| Persona famosa (si se admiten nombres propios) | Kim Kardashian |
+| Actividad deportiva | Kárate |
+| Marca (si se admite) | Kia |
 
-La tabla reúne ejemplos para practicar. Los nombres propios y las marcas solo encajan si las reglas de vuestra partida los admiten.
+Estos ejemplos sirven para practicar, pero no garantizan puntos. La validez depende de las reglas y del criterio de aceptación de cada partida.
 
----
+## Fuentes para consultar
 
-¿Te ha sido útil? Sigue practicando con más letras:
+- [RAE — Diccionario de la lengua española](https://dle.rae.es/): consulta de grafías y significados.
+- [Ministerio de Asuntos Exteriores — Fichas de países](https://www.exteriores.gob.es/es/Comunicacion/Paginas/Ficha.aspx): referencia para contrastar nombres de países.
+
+Sigue practicando con otras letras:
 
 - [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
 - [Palabras con X para STOP](/blog/palabras-con-x-para-stop)
 - [Palabras con Y para STOP](/blog/palabras-con-y-para-stop)
 - [Cómo pensar palabras rápido bajo presión](/blog/pensar-palabras-rapido-bajo-presion)
 
-Y si quieres probar tu vocabulario con K **ahora mismo**, juega una partida gratis en [STOP online](/) — quizá te toque la K en la primera ronda.
+¿Quieres poner a prueba tu vocabulario? Juega gratis a [STOP online](/).
 `,
 };
 
