@@ -33,6 +33,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const nonEmpty = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
+const assertOnlyKeys = (value: Record<string, unknown>, allowed: readonly string[], context: string): void => {
+  for (const key of Object.keys(value)) if (!allowed.includes(key)) fail(`${context}: unknown field ${key}`);
+};
 const safeRelativePath = (value: string): boolean =>
   !path.isAbsolute(value) && !value.split(/[\\/]/).includes("..");
 
@@ -48,6 +51,7 @@ async function readInsideRoot(relativePath: string, rootReal: string, dataRoot: 
 
 function validateSourceShape(value: unknown, index: number): Source {
   if (!isRecord(value)) fail(`sources[${index}] must be an object`);
+  assertOnlyKeys(value, ["id", "language", "locales", "upstreamUrl", "version", "revision", "sha256", "files", "license", "notices", "commercialUse", "modification", "redistribution", "shareAlike", "thirdPartyContent", "reviewStatus", "reviewedBy", "reviewedAt", "approvalReference"], `sources[${index}]`);
   const required = [
     "id", "language", "locales", "upstreamUrl", "version", "revision", "sha256",
     "files", "license", "notices", "commercialUse", "modification",
@@ -66,7 +70,9 @@ function validateSourceShape(value: unknown, index: number): Source {
   if (!/^[a-fA-F0-9]{64}$/.test(String(value.sha256))) fail(`${value.id}: invalid sha256`);
   if (!Array.isArray(value.files) || value.files.length === 0 || !value.files.every(nonEmpty)) fail(`${value.id}: files must be non-empty paths`);
   if (new Set(value.files).size !== value.files.length) fail(`${value.id}: duplicate files`);
-  if (!isRecord(value.license) || !nonEmpty(value.license.spdxId) || !nonEmpty(value.license.licenseTextPath)) {
+  if (!isRecord(value.license)) fail(`${value.id}: license requires spdxId and licenseTextPath`);
+  assertOnlyKeys(value.license, ["spdxId", "licenseTextPath"], `${value.id}.license`);
+  if (!nonEmpty(value.license.spdxId) || !nonEmpty(value.license.licenseTextPath)) {
     fail(`${value.id}: license requires spdxId and licenseTextPath`);
   }
   if (!Array.isArray(value.notices) || !value.notices.every(nonEmpty)) fail(`${value.id}: notices must be an array of non-empty strings`);
@@ -92,6 +98,7 @@ function validateSourceShape(value: unknown, index: number): Source {
 export async function validateManifest(manifestPath: string, dataRoot: string): Promise<{ sourceCount: number; bundleVersion: string }> {
   const manifestRaw = await readFile(manifestPath, "utf8");
   const parsed: unknown = JSON.parse(manifestRaw);
+  if (isRecord(parsed)) assertOnlyKeys(parsed, ["$schema", "schemaVersion", "bundleVersion", "sources"], "manifest");
   if (!isRecord(parsed) || parsed.schemaVersion !== 1 ||
       typeof parsed.bundleVersion !== "string" ||
       !/^\d{4}\.\d{2}\.\d{2}([+-][A-Za-z0-9.-]+)?$/.test(parsed.bundleVersion) ||
