@@ -136,11 +136,10 @@ export function Layout({ children }: { children: ReactNode }) {
     setShowProfile(true);
   };
 
-  const handleSaveProfile = () => {
-    if (editName.trim()) {
-      updateProfile({ name: editName.trim(), avatarColor: editColor });
-    }
-    setShowProfile(false);
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) return;
+    const saved = await updateProfile({ name: editName.trim(), avatarColor: editColor });
+    if (saved) setShowProfile(false);
   };
 
   return (
