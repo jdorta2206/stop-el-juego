@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 type Source = {
   id: string;
@@ -26,8 +27,7 @@ type Source = {
 
 type Manifest = { schemaVersion: 1; bundleVersion: string; sources: Source[] };
 
-const manifestPath = path.resolve(process.argv[2] ?? "docs/linguistic-engine/source-manifest.json");
-const dataRoot = path.resolve(process.argv[3] ?? ".");
+
 const fail = (message: string): never => { throw new Error(message); };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -36,7 +36,7 @@ const nonEmpty = (value: unknown): value is string =>
 const safeRelativePath = (value: string): boolean =>
   !path.isAbsolute(value) && !value.split(/[\\/]/).includes("..");
 
-async function readInsideRoot(relativePath: string, rootReal: string): Promise<Buffer> {
+async function readInsideRoot(relativePath: string, rootReal: string, dataRoot: string): Promise<Buffer> {
   if (!safeRelativePath(relativePath)) fail(`Unsafe path: ${relativePath}`);
   const absolute = path.resolve(dataRoot, relativePath);
   const resolved = await realpath(absolute).catch(() => fail(`Missing file: ${relativePath}`));
@@ -89,7 +89,7 @@ function validateSourceShape(value: unknown, index: number): Source {
   return value as unknown as Source;
 }
 
-async function main(): Promise<void> {
+export async function validateManifest(manifestPath: string, dataRoot: string): Promise<{ sourceCount: number; bundleVersion: string }> {
   const manifestRaw = await readFile(manifestPath, "utf8");
   const parsed: unknown = JSON.parse(manifestRaw);
   if (!isRecord(parsed) || parsed.schemaVersion !== 1 ||
@@ -107,7 +107,7 @@ async function main(): Promise<void> {
     const hash = createHash("sha256");
     const paths = [...new Set([...source.files, source.license.licenseTextPath])].sort();
     for (const relativePath of paths) {
-      const bytes = await readInsideRoot(relativePath, rootReal);
+      const bytes = await readInsideRoot(relativePath, rootReal, dataRoot);
       hash.update(relativePath, "utf8");
       hash.update(Buffer.from([0]));
       hash.update(bytes);
@@ -118,11 +118,20 @@ async function main(): Promise<void> {
       fail(`${source.id}: SHA-256 mismatch (expected ${source.sha256}, got ${actual})`);
     }
   }
-  console.log(`Manifest valid: ${sources.length} approved source(s), bundle ${parsed.bundleVersion}.`);
-  if (sources.length === 0) console.log("No lexical datasets are registered; nothing can be imported yet.");
+  return { sourceCount: sources.length, bundleVersion: parsed.bundleVersion };
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+async function main(): Promise<void> {
+  const manifestPath = path.resolve(process.argv[2] ?? "docs/linguistic-engine/source-manifest.json");
+  const dataRoot = path.resolve(process.argv[3] ?? ".");
+  const result = await validateManifest(manifestPath, dataRoot);
+  console.log(`Manifest valid: ${result.sourceCount} approved source(s), bundle ${result.bundleVersion}.`);
+  if (result.sourceCount === 0) console.log("No lexical datasets are registered; nothing can be imported yet.");
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
