@@ -28,7 +28,7 @@ type Source = {
 type Manifest = { schemaVersion: 1; bundleVersion: string; sources: Source[] };
 
 
-const fail = (message: string): never => { throw new Error(message); };
+function fail(message: string): never { throw new Error(message); }
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const nonEmpty = (value: unknown): value is string =>
