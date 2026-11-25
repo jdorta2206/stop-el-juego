@@ -118,3 +118,25 @@ test("rejects a symlink that escapes the data root", async () => {
     await rm(outside, { force: true });
   }
 });
+
+
+test("rejects unknown manifest fields instead of silently ignoring schema drift", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  Object.assign(manifest, { unexpectedFlag: true });
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /unknown field unexpectedFlag/);
+});
+
+test("rejects source revisions shorter than the schema minimum", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].revision = "abc";
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /revision must contain at least 7 characters/);
+});
+
+test("rejects invalid calendar dates in approval records", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].reviewedAt = "2026-02-30";
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /requires reviewer, date and approval reference/);
+});
