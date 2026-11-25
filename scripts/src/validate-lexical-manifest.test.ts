@@ -26,6 +26,7 @@ async function fixture(status: "approved" | "candidate" = "approved") {
   }
 
   const manifest = {
+    $schema: "./source-manifest.schema.json",
     schemaVersion: 1,
     bundleVersion,
     sources: [{
@@ -65,7 +66,7 @@ test("accepts an empty manifest without claiming vocabulary was imported", async
   const root = await mkdtemp(path.join(os.tmpdir(), "stop-lexical-empty-"));
   temporaryRoots.push(root);
   const manifestPath = path.join(root, "manifest.json");
-  await writeFile(manifestPath, JSON.stringify({ schemaVersion: 1, bundleVersion, sources: [] }));
+  await writeFile(manifestPath, JSON.stringify({ $schema: "./source-manifest.schema.json", schemaVersion: 1, bundleVersion, sources: [] }));
   assert.deepEqual(await validateManifest(manifestPath, root), { sourceCount: 0, bundleVersion });
 });
 
@@ -154,4 +155,12 @@ test("rejects impossible calendar dates in bundle versions", async () => {
   manifest.bundleVersion = "2026.02.30";
   await writeFile(manifestPath, JSON.stringify(manifest));
   await assert.rejects(validateManifest(manifestPath, root), /Invalid manifest header/);
+});
+
+
+test("rejects an empty schema reference when the optional field is present", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.$schema = "   ";
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /\$schema must be a non-empty string/);
 });
