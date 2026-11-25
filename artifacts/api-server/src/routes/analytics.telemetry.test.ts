@@ -73,6 +73,10 @@ describe("STOP gameplay telemetry allowlist", () => {
     expect(analyticsRouteSource).toContain('router.post("/game-start"');
   });
 
+  it("refreshes the stored app version when an existing passive session reports activity", () => {
+    expect(analyticsRouteSource).toContain("app_version = EXCLUDED.app_version, last_seen = NOW()");
+  });
+
   it("redacts secret-like key/value diagnostics before rendering STOP Analytics", () => {
     expect(adminAnalyticsRouteSource).toContain(
       "/(token|password|cookie|secret|authorization|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+/gi",
