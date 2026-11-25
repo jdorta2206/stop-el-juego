@@ -95,6 +95,12 @@ A fail-closed preflight command is available in `scripts`:
 
 ```sh
 pnpm --filter @workspace/scripts linguistics:preflight
+
+Run the fail-closed validator tests with:
+
+```sh
+pnpm --filter @workspace/scripts linguistics:test
+```
 ```
 
 It validates the manifest header and required source fields, rejects duplicate IDs/locales/files, blocks every source not explicitly marked `approved`, and requires an approval record plus commercial-use and redistribution permission. For each approved source it reads the listed dataset files and the exact license text from the supplied data root, rejects paths outside that root, and checks the SHA-256 digest.
