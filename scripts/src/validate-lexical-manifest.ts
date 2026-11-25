@@ -33,6 +33,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const nonEmpty = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
+const isCalendarDate = (value: string): boolean => {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+};
 const assertOnlyKeys = (value: Record<string, unknown>, allowed: readonly string[], context: string): void => {
   for (const key of Object.keys(value)) if (!allowed.includes(key)) fail(`${context}: unknown field ${key}`);
 };
@@ -65,6 +70,9 @@ function validateSourceShape(value: unknown, index: number): Source {
     fail(`${value.id}: invalid locales`);
   }
   if (new Set(value.locales).size !== value.locales.length) fail(`${value.id}: duplicate locale`);
+  if (!value.locales.every((locale) => locale.startsWith(`${value.language}-`))) {
+    fail(`${value.id}: locale language must match ${value.language}`);
+  }
   if (!nonEmpty(value.upstreamUrl)) fail(`${value.id}: invalid upstreamUrl`);
   try { const url = new URL(value.upstreamUrl); if (url.protocol !== "https:" && url.protocol !== "http:") fail(`${value.id}: invalid upstreamUrl`); } catch { fail(`${value.id}: invalid upstreamUrl`); }
   if (!nonEmpty(value.version)) fail(`${value.id}: missing version`);
