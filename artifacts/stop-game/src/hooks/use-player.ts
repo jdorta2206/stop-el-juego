@@ -224,7 +224,36 @@ export function usePlayer() {
     writeStoredPlayer(clean); setPlayer(clean); setNeedsAuth(false);
   };
 
-  const updateProfile = (updates: Partial<PlayerProfile>) => { const current = player ?? readStoredPlayer(); if (!current) return; savePlayer({ ...current, ...updates }); };
+  const updateProfile = async (updates: Partial<PlayerProfile>): Promise<boolean> => {
+    const current = player ?? readStoredPlayer();
+    if (!current) return false;
+    const nextName = String(updates.name ?? current.name).trim().slice(0, 14);
+    if (!nextName) return false;
+
+    // Authenticated names are canonical on the server because room joins use
+    // player_scores.player_name. Persist there before changing the local UI.
+    if (isLoggedInId(current.id) && nextName !== current.name) {
+      try {
+        const token = localStorage.getItem(SESSION_TOKEN_KEY) || sessionStorage.getItem(SESSION_TOKEN_KEY);
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["x-stop-token"] = token;
+        const response = await fetch(`${getApiUrl()}/api/auth/profile`, {
+          method: "POST",
+          credentials: "include",
+          headers,
+          body: JSON.stringify({ name: nextName }),
+        });
+        if (!response.ok) return false;
+        const result = await response.json();
+        if (result?.ok !== true || result.name !== nextName) return false;
+      } catch {
+        return false;
+      }
+    }
+
+    savePlayer({ ...current, ...updates, name: nextName });
+    return true;
+  };
   const saveFbToken = (token: string) => { const current = player ?? readStoredPlayer(); if (!current) return; try { sessionStorage.setItem("fb_access_token", token); } catch {} const updated = { ...current, fbAccessToken: token }; writeStoredPlayer(updated); setPlayer(updated); };
 
   const logout = () => {
