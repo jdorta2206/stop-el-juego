@@ -240,3 +240,39 @@ The code ga_IE denotes Irish (the Irish language), not English as used in Irelan
 | ga-IE | Irish-language dictionary, not English | Excluded from English locale coverage |
 
 No dictionary files have been downloaded, copied, transformed or included in STOP by this audit.
+
+
+
+## Follow-up audit: pinned English Hunspell release, exact upstream terms and tokenizer behavior
+
+Audit update: 2026-11-26. Primary source checked: the upstream Hunspell README at https://wordlist.aspell.net/hunspell-readme/ and release page https://github.com/en-wl/wordlist/releases/tag/rel-2026.02.25.
+
+### Release identity and format
+
+- The exact dictionary release is 2026.02.25, commit 7e99eda. The upstream README identifies it as English Hunspell dictionaries derived from SCOWL/SCOWLv2, generated with the upstream make-hunspell-dict script.
+- This is a dictionary-only release; it must not be described as a stable full SCOWL database release. Upstream announced that SCOWLv2 is a major architecture change and old scripts that combined files from the former final/ directory must be rewritten.
+- The release provides en_US, en_CA, en_GB-ise, en_GB-ize and en_AU. The normal dictionaries correspond to size 60. The size-70 "large" dictionaries are explicitly less carefully checked and can contain misspellings or problematic rare words.
+- Decision: if approved for STOP, pin and consume the released Hunspell artifacts (or their exact upstream generated word-list output), not ad-hoc combinations of SCOWLv2 internal files. Start with normal size 60; keep en_GB-ise and en_GB-ize as separate spelling tracks so both forms can be represented deliberately.
+
+### Exact permission and notice obligations
+
+The upstream README states that the word dictionaries inherit SCOWLv2 terms: use, copy, modify, distribute and sell are permitted without fee, provided the copyright notice is included in all copies and both copyright and permission notice appear in supporting documentation. It separately credits:
+- Kevin Atkinson, copyright 2000-2026, for SCOWL/SCOWLv2;
+- Alan Beale and the public-domain 12dicts/ENABLE2K source contributions;
+- Benjamin Titze's Australian English contribution, with its own copyright and permission notice;
+- Geoff Kuenning's Ispell-derived affix file, under its separate BSD-style terms, including source/binary notice retention, marking modifications, and no endorsement using his name without permission.
+
+Decision: this is a promising commercial-use source, but the STOP manifest must preserve the full exact per-locale upstream README and affix-file license text, not collapse all components into a single generic SPDX label. Each locale's archive, files, and notices still need to be downloaded from the official release and independently hashed before approval. This audit did not download or import any file.
+
+### Tokenization and normalization implications
+
+The upstream README records that U+2019 RIGHT SINGLE QUOTATION MARK was added to WORDCHARS, allowing Hunspell to recognize forms such as can't and can’t, while its tokenizer behavior differs for curly opening/closing quotation marks. STOP must test straight and typographic apostrophes explicitly and must not strip punctuation indiscriminately before lexical lookup.
+
+### Scope limits
+
+This source provides English spelling/morphology support, not a complete dictionary of meanings, categories, proper nouns, slang, or every national/regional term. It does not cover en_NZ, en_ZA or en_IE in this release. Those locales remain separate source-audit tasks; do not silently claim coverage by mapping them to en_GB or en_AU.
+
+Primary source inspected:
+- https://wordlist.aspell.net/hunspell-readme/
+- https://github.com/en-wl/wordlist/releases/tag/rel-2026.02.25
+- https://wordlist.aspell.net/dicts/
