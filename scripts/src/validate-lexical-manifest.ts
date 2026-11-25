@@ -105,7 +105,7 @@ async function main(): Promise<void> {
   for (const source of sources) {
     if (source.reviewStatus !== "approved") fail(`${source.id}: source is ${source.reviewStatus}; import is blocked`);
     const hash = createHash("sha256");
-    const paths = [...source.files, source.license.licenseTextPath].sort();
+    const paths = [...new Set([...source.files, source.license.licenseTextPath])].sort();
     for (const relativePath of paths) {
       const bytes = await readInsideRoot(relativePath, rootReal);
       hash.update(relativePath, "utf8");
