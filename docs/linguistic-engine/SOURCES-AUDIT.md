@@ -72,3 +72,41 @@ There is no single ready-made, legally uncomplicated dictionary that solves all 
 5. online and offline clients consuming the same approved data release.
 
 Do not treat a successful spellcheck as proof that a word is a correct answer to any category. Do not let an AI model certify unknown words on its own.
+
+
+## Concrete locale inventory discovered in LibreOffice dictionaries (preliminary)
+
+The upstream LibreOffice repository exposes a particularly useful coverage map:
+- Spanish package includes separate files for es_AR, es_BO, es_CL, es_CO, es_CR, es_CU, es_DO, es_EC, es_ES, es_GQ, es_GT, es_HN, es_MX, es_NI, es_PA, es_PE, es_PH, es_PR, es_PY, es_SV, es_US, es_UY and es_VE.
+- English package metadata lists en_AU, en_CA, en_GB and en_US; en_ZA is also listed in the package description.
+- Portuguese has distinct pt_BR and pt_PT directories.
+- French has a French dictionary package (fr_FR); separate Canadian French lexical coverage still needs a dedicated source audit.
+
+This is meaningful progress: the Spanish package already models many of the regional varieties that STOP needs, rather than forcing one generic Spanish list.
+
+### Exact license evidence checked (still subject to final legal review)
+
+| Locale/package | Evidence found upstream | Engineering decision |
+|---|---|---|
+| Spanish regional dictionaries | README states the .aff/.dic dictionary is dual/disjunctively available under GPL-3.0-or-later, LGPL-3.0-or-later, or MPL-1.1-or-later. | Candidate worth prioritizing; verify the exact current LICENSE.md, notices, and chosen license for the pinned release. Do not import yet. |
+| Portuguese Brazil (pt_BR) | README states LGPLv3 and Mozilla Public License; contributor credits are identified. | Candidate; pin exact release and retain both required notices/terms. |
+| Portuguese Portugal (pt_PT) | LICENSES.txt says spelling files are covered by GPL and BSD; extension distribution has GPL terms. | Do not import into the proprietary bundle until counsel confirms the exact file-level grant and distribution model. |
+| English variants | Package metadata confirms distinct regional packages. | Coverage confirmed, but each dictionary's own README/license still must be audited before use. |
+| French (fr_FR) | LibreOffice package points to Dicollecte/Grammalecte dictionary files; a current MPL-2.0 notice is visible in the upstream affix file. | Candidate, but audit the matching .dic, README, contributors, and exact release as a unit. Do not infer the entire package's license from the .aff header alone. |
+| French Canada (fr_CA) | Not established by the inspected LibreOffice package. | Separate source required; no coverage claim yet. |
+
+### Important implementation consequence
+
+These resources are spelling/morphology datasets. They are not a complete semantic dictionary and do not decide whether a response is an animal, fruit, object, place, name, or brand. The engine must use them as one lexical evidence layer, then separately verify category membership. A spelling dictionary may include proper names, technical terms, inflections, and compounds that need category-specific treatment.
+
+### Sources inspected
+
+- LibreOffice Spanish locale manifest: https://github.com/LibreOffice/dictionaries/blob/master/Dictionary_es.mk
+- Spanish Hunspell license statement: https://github.com/LibreOffice/dictionaries/blob/master/es/README_hunspell_es.txt
+- Brazilian Portuguese license statement: https://github.com/LibreOffice/dictionaries/blob/master/pt_BR/README_pt_BR.txt
+- European Portuguese license statement: https://github.com/LibreOffice/dictionaries/blob/master/pt_PT/LICENSES.txt
+- English locale package description: https://github.com/LibreOffice/dictionaries/blob/master/en/package-description.txt
+- French dictionary package manifest: https://github.com/LibreOffice/dictionaries/blob/master/Dictionary_fr.mk
+- RAE/ASALE legal notice: https://www.asale.org/info/asale/aviso-legal
+
+No file from these packages has been downloaded, copied, transformed, or included in STOP by this audit.
