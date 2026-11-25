@@ -27,8 +27,21 @@ interface DailyRanking {
 
 const API_BASE = getApiUrl();
 
-function getPlayerTimeZone() {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+function getPlayerTimeZone(): string {
+  try {
+    const candidate = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (typeof candidate === "string" && candidate.trim()) {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: candidate });
+        return candidate;
+      } catch {
+        // Fall through to the safe UTC default.
+      }
+    }
+  } catch {
+    // Fall through to the safe UTC default.
+  }
+  return "UTC";
 }
 
 function getTodayStr() {
