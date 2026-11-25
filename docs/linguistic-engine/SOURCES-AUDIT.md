@@ -156,3 +156,44 @@ Usito, developed at Université de Sherbrooke, explicitly describes standard Fre
 | fr-CA reference | Usito describes Quebec standard French; redistribution terms not established | Human research only; no import |
 
 This audit narrows the next implementation scope: only datasets with exact release, checksum, file-level license, and complete notices may be admitted. A locale alias must never be mistaken for a regionally curated wordlist.
+
+
+## Follow-up audit: English New Zealand/South Africa and French locale aliases
+
+Audit update: 2026-11-25.
+
+### English New Zealand (en_NZ) and South Africa (en_ZA)
+
+The Elastic Hunspell dictionary source configuration identifies separate upstream packages:
+- en_NZ: "English (New Zealand)", sourced from the Apache OpenOffice English New Zealand dictionary, metadata license LGPL 2.1.
+- en_ZA: "English (South Africa)", sourced from the Apache OpenOffice English dictionaries package, metadata license LGPL.
+
+This is stronger evidence than a generic en_GB fallback: distinct locale packages exist. However, this is a downstream packaging manifest, not the upstream license file or the exact wordlist release. The exact source archive, copyright notices, file-level license and redistribution terms still need to be checked at upstream before any import.
+
+- Decision: en_NZ and en_ZA become identified source leads, not approved datasets. Keep them out of the import until upstream files and license texts are pinned and reviewed.
+- en_IE (Ireland) remains unresolved: this audit did not establish a distinct Irish English Hunspell dataset. Do not silently map it to en_GB.
+
+Sources:
+- https://github.com/elastic/hunspell/blob/master/conf.yaml
+
+### French Canada and other French locale aliases
+
+A Solus package recipe for Grammalecte's French 7.7 dictionary installs the same fr_FR .aff/.dic files as symlinks for fr_BE, fr_CA, fr_CH and fr_LU. This confirms these locale codes are often compatibility aliases, not independently curated regional dictionaries.
+
+- Decision: keep fr_CA, fr_BE, fr_CH and fr_LU regional lexical coverage unproven by that package. A shared fr_FR spelling base may be useful as a baseline only after licensing review, but it must not be represented as regional vocabulary coverage.
+- The French dictionary's MPL-2.0 package metadata is a useful lead, but the upstream archive and its exact README/license notices must still be pinned and verified.
+- Sources:
+  - https://github.com/getsolus/packages/blob/main/packages/hunspell-fr/package.yml
+  - https://github.com/void-linux/void-packages/blob/master/srcpkgs/hunspell-fr_FR/template
+
+### Updated decision table
+
+| Locale | Evidence now found | Status |
+|---|---|---|
+| en-NZ | Separate OpenOffice dictionary package identified; downstream metadata says LGPL-2.1 | Source lead only; upstream archive/license audit pending |
+| en-ZA | Separate OpenOffice English package identified; downstream metadata says LGPL | Source lead only; upstream archive/license audit pending |
+| en-IE | No distinct dataset established | Open |
+| fr-CA / fr-BE / fr-CH / fr-LU | Some packages create aliases to fr_FR files | Not proof of regional lexical coverage |
+| fr-FR | Grammalecte/Dicollecte dictionary available; package metadata reports MPL-2.0 | Candidate baseline only; exact upstream archive and notices still need pinning |
+
+No additional dictionary files have been downloaded, copied, transformed, or added to STOP.
