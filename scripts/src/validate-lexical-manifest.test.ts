@@ -126,7 +126,8 @@ test("rejects modified source files through the checksum", async () => {
 
 test("rejects path traversal before reading a source file", async () => {
   const { root, manifestPath, manifest } = await fixture();
-  manifest.sources[0].files = ["../outside.dic"];
+  manifest.sources[0].files = ["../outside.dic", "source/rules.aff", "source/words.dic"];
+  manifest.sources[0].licenses[0].appliesTo = ["../outside.dic", "source/words.dic"];
   await writeFile(manifestPath, JSON.stringify(manifest));
   await assert.rejects(validateManifest(manifestPath, root), /Unsafe path/);
 });
