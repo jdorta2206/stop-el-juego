@@ -188,3 +188,48 @@ A second pass retained original capitalization before creating NFC/lowercase com
 The uppercase-only sample is strongly enriched for geographic names (for example, Spanish municipality names in es_ES and Mexican municipality names in es_MX). This makes capitalization a useful review signal, but not a definitive classifier: proper nouns can be lowercase in source data, and some valid common words may be capitalized for other reasons. The lowercase-only set also contains a mixture of potential regional vocabulary, inflections, archaic/technical forms, and items needing verification.
 
 Implementation rule for the future audit pipeline: preserve original display spelling and capitalization in provenance; compare normalized forms separately; flag capitalized candidates for proper-noun review rather than automatically discarding or accepting them. Do not use capitalization as the sole acceptance rule.
+
+
+## Full-dictionary capitalization profile across all 23 Spanish locales
+
+Audit date: 2026-11-26. This pass extends the earlier es_ES-versus-es_MX exclusive-root review to every locale pair in the same pinned snapshot. For each `.dic` file, the parser skipped the declared-count line, removed Hunspell flags after `/` and trailing morphology fields, normalized the retained spelling to NFC, deduplicated by Spanish-lowercased key, and counted the first retained spelling as uppercase or lowercase according to its original first character.
+
+| Locale | Distinct normalized roots | Uppercase-initial roots | Lowercase-initial roots | Uppercase share |
+|---|---:|---:|---:|---:|
+| es_AR | 54,912 | 1,172 | 53,740 | 2.13% |
+| es_BO | 54,394 | 972 | 53,422 | 1.79% |
+| es_CL | 54,675 | 1,136 | 53,539 | 2.08% |
+| es_CO | 58,548 | 5,573 | 52,975 | 9.52% |
+| es_CR | 54,203 | 850 | 53,353 | 1.57% |
+| es_CU | 54,340 | 987 | 53,353 | 1.82% |
+| es_DO | 54,102 | 850 | 53,252 | 1.57% |
+| es_EC | 54,249 | 850 | 53,399 | 1.57% |
+| es_ES | 55,638 | 1,319 | 54,319 | 2.37% |
+| es_GQ | 66,783 | 11,514 | 55,269 | 17.24% |
+| es_GT | 54,177 | 850 | 53,327 | 1.57% |
+| es_HN | 54,335 | 850 | 53,485 | 1.56% |
+| es_MX | 56,257 | 2,994 | 53,263 | 5.32% |
+| es_NI | 54,239 | 850 | 53,389 | 1.57% |
+| es_PA | 54,153 | 850 | 53,303 | 1.57% |
+| es_PE | 55,705 | 2,568 | 53,137 | 4.61% |
+| es_PH | 63,711 | 11,514 | 52,197 | 18.07% |
+| es_PR | 54,106 | 850 | 53,256 | 1.57% |
+| es_PY | 54,165 | 850 | 53,315 | 1.57% |
+| es_SV | 54,200 | 850 | 53,350 | 1.57% |
+| es_US | 53,842 | 850 | 52,992 | 1.58% |
+| es_UY | 54,313 | 850 | 53,463 | 1.57% |
+| es_VE | 54,531 | 1,150 | 53,381 | 2.11% |
+
+Interpretation:
+- The uppercase-initial share varies substantially. es_GQ and es_PH are especially high (both have 11,514 uppercase-initial roots); es_CO, es_MX and es_PE are also above the cluster around 1.6–2.4%.
+- The exact repeated counts and large uppercase clusters are a warning that these files may include substantial proper-name/geographic-name material or shared editorial blocks. They are not proof of regional common-word coverage.
+- The 850-entry baseline recurring across many locales suggests a shared block or common editorial pattern; it must not be interpreted as 850 valid regionalisms.
+- This is a triage signal only. Capitalization is not a reliable standalone proper-noun classifier: names may be lowercase, common words may be uppercase, and Hunspell entries can encode forms and metadata in ways this lightweight parser does not expand.
+- Preserve original spelling and source provenance, but send uppercase-heavy and anomalous groups to manual classification. Do not import these candidates into a runtime allowlist or reject them solely because of capitalization.
+- Counts here are not directly comparable to the earlier es_ES-only/es_MX-only capitalization counts: this table profiles each complete dictionary independently, while the earlier table profiled only roots exclusive to one side of a pairwise comparison.
+
+Reproducible source files at pinned commit `79195b017e6d70151337856c59e7d13d311d6630`:
+- Directory: https://github.com/LibreOffice/dictionaries/tree/79195b017e6d70151337856c59e7d13d311d6630/es
+- Each locale file follows the pattern `https://raw.githubusercontent.com/LibreOffice/dictionaries/79195b017e6d70151337856c59e7d13d311d6630/es/{locale}.dic`.
+
+No source was approved or imported. This analysis changes documentation only; it does not alter STOP runtime behavior.
