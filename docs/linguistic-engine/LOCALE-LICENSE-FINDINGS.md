@@ -274,3 +274,40 @@ The 233 roots present in all five files are a particularly useful review queue: 
 5. Keep lexical existence separate from category membership. Even a verified word must not automatically count as a valid answer in every STOP category.
 
 This comparison is still a first-pass Hunspell-root analysis: it does not expand affix rules, validate definitions or usage, establish frequency, or prove category suitability. No words were imported, approved, or added to runtime validation.
+
+
+## Independent lexicographic spot-check of shared candidates (ASALE)
+
+Audit date: 2026-11-26. A small, deliberately transparent sample of roots shared by the five regional Hunspell files (Argentina, Chile, Colombia, Peru and Venezuela) was checked against individual entries in the Asociación de Academias de la Lengua Española's *Diccionario de americanismos* (DA). The DA is a descriptive, dialectal and differential reference; its own presentation says it records geographic, social and cultural usage and is not a prescriptive guide.
+
+### Results of the sample
+
+| Candidate | Independent DA evidence | Preliminary interpretation for STOP |
+|---|---|---|
+| `abigeato` | DA marks use in Mexico, Honduras, Nicaragua, Panama, Venezuela, Ecuador, Bolivia, Chile, Argentina and Uruguay, among others; definition relates to cattle theft | Strongly corroborated regional lexical item; legal/agricultural semantic domain, so category suitability must be checked |
+| `abigeo` | DA records the meaning “cattle thief” in Honduras, Nicaragua, Ecuador and Peru, and less frequent use in Colombia, Chile, Paraguay and Argentina | Strongly corroborated regional lexical item; noun/person, not a universal category answer |
+| `bluyín` | DA records the garment meaning in Honduras, El Salvador, Nicaragua, Costa Rica, Panama, Cuba, Colombia, Venezuela, Peru and Chile | Corroborated regional form; retain accent and spelling exactly; do not normalize it to the English phrase |
+| `bombacha` | DA records distinct senses by country: underwear in Peru, Paraguay, Argentina and Uruguay (also Bolivia, masculine); loose trousers in southern Venezuela and Chile, with other country-specific senses | Corroborated, but strongly polysemous and country-dependent; category/meaning must be explicit |
+| `camote` | DA records the plant/tuber sense across Mexico, Central America and several South American countries; it also records multiple figurative and colloquial senses with different country marks | Corroborated, highly polysemous; STOP should validate the intended sense/category rather than treating the spelling as one meaning |
+| `cuy` | DA records the animal sense in Colombia, Ecuador, Peru, Bolivia and Argentina | Corroborated regional animal name; potentially suitable for animal categories where the country profile permits it |
+| `altoparlante` | DA records the loudspeaker sense across much of the Americas, and also marks use in the United States Spanish and Spain | Valid word, but not a good example of an exclusively American or regional-only word; likely a broad synonym of `altavoz` |
+
+### What this proves—and what it does not
+
+- This sample demonstrates that the Hunspell overlap method can surface genuine, independently documented Spanish vocabulary and country-specific senses.
+- It also demonstrates why “present in five files” cannot be treated as “exclusive to those five countries”: `altoparlante` is documented beyond them, and other entries have different country distributions or multiple senses.
+- The DA entry and country marks are independent linguistic corroboration, not permission to copy its definitions or database into STOP. This audit records short factual findings and source links only; no DA text or dataset is imported.
+- The seven checked words are not automatically approved for every category. Their lexical status, part of speech, sense, country distribution and category fit must remain separate fields in the future engine.
+- Do not infer that the other 226 shared candidates are valid or invalid from this small sample. They remain unreviewed.
+
+Primary references:
+- ASALE, *Diccionario de americanismos*, description and editorial scope: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+- `abigeato`: https://www.asale.org/damer/abigeato
+- `abigeo`: https://www.asale.org/damer/abigeo
+- `bluyín`: https://www.asale.org/damer/bluy%C3%ADn
+- `bombacha`: https://www.asale.org/damer/bombacha
+- `camote`: https://www.asale.org/damer/camote
+- `cuy`: https://www.asale.org/damer/cuy
+- `altoparlante`: https://www.asale.org/damer/altoparlante
+
+This is a seven-word spot-check, not a complete review of the 233-root set. No external lexicon was imported, no candidate was approved for runtime use, and no game behavior was changed.
