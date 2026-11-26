@@ -460,3 +460,28 @@ Audit date: 2026-11-26. This small supplementary pass uses current ASALE *Diccio
 - ASALE DA, `amancayo`: https://temporalweb.asale.org/damer/amancayo
 
 This supplementary audit records factual lexical findings and source links only. No ASALE definitions or database data were copied into STOP; no candidate was approved for runtime validation; no dictionary file or runtime code was changed.
+
+
+## Source verification correction for fifth semantic-control batch
+
+Audit date: 2026-11-26. The five ASALE lookups have now been checked directly. The core descriptions of `aplazado, -a`, `aplanchar(se)`, `apolillar(se)`, and `apandar` are supported by their individual DA entries. The `apandar` source is the temporal ASALE DA URL, not the historical-dictionary entry.
+
+The botanical control needs a more precise distinction than the initial summary:
+- ASALE's DA entry `amancay` records a Plumeria sense in southern Colombia, Venezuela, Ecuador and Peru, and a separate *Alstroemeria aurantiaca* sense in Chile and Argentina.
+- DA `amancaya` records the Plumeria sense in Peru and the *Alstroemeria aurantiaca* sense in southern Bolivia.
+- DA `amancayo` records the Plumeria sense in southern Colombia and Peru.
+- Historical `amacayo` is a separate historical entry derived from Quechua `amankay`, with a historical *Amaryllis/Sprekelia* referent and historical geographic descriptions. Do not collapse `amacayo` into the current DA `amancay` senses merely because the forms are related.
+
+This correction supersedes the broad wording in the fifth-batch table where it could imply that every related spelling has the same country distribution or botanical referent. The engine must retain each attested form, source, sense, region and taxon as separate linked records until a specialist confirms synonymy.
+
+Verified references:
+- ASALE DA, `aplazado`: https://www.asale.org/damer/aplazado
+- ASALE DA, `aplanchar`: https://www.asale.org/damer/aplanchar
+- ASALE DA, `apolillar`: https://www.asale.org/damer/apolillar
+- ASALE DA, `apandar`: https://temporalweb.asale.org/damer/apandar
+- ASALE DA, `amancay`: https://www.asale.org/damer/amancay
+- ASALE DA, `amancaya`: https://www.asale.org/damer/amancaya
+- ASALE DA, `amancayo`: https://temporalweb.asale.org/damer/amancayo
+- RAE-ASALE historical dictionary, `amacayo`: https://temporalweb.asale.org/tdhle/amacayo
+
+The source lookups support the distinctions above; they do not authorize copying the entries or importing their content into STOP.
