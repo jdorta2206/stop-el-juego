@@ -345,3 +345,52 @@ The regional files are discovery sources, not a boundary between “Spain Spanis
 - ASALE DA, `abigeo`: https://www.asale.org/damer/abigeo
 
 This batch is evidence documentation only. It does not grant redistribution rights, approve a runtime lexicon entry, or change game behavior. Remaining candidates stay unreviewed until checked individually.
+
+
+## Third independent lexicographic batch: fourteen additional candidates
+
+Audit date: 2026-11-26. Fourteen further roots from the regional comparison queue have direct entries in ASALE's *Diccionario de americanismos*. This is an evidence check, not a runtime approval.
+
+| Candidate | ASALE evidence summary | Classification and STOP caution |
+|---|---|---|
+| `agringar(se)` | ASALE records several senses across Central America, Mexico, the Caribbean and South America: adopting customs considered foreign/Anglo-American, or in some countries European/Italian customs | Valid verb, but senses and social connotations vary by country; some senses are marked colloquial or disapproving |
+| `aguarapar(se)` | ASALE records processes involving sugar-cane juice or fruit taking on the taste/quality of guarapo in Panama, Dominican Republic, Colombia, Venezuela and other countries; also a Chilean sense ‘agazaparse’ | Valid but highly polysemous; the Chilean sense is unrelated to fermentation and must not be conflated |
+| `¡ahijuna!` | ASALE records an interjection in Ecuador, southern Bolivia, Argentina and Uruguay, marked obsolete | Lexically documented, but obsolete interjection; likely unsuitable for ordinary categories unless the game explicitly supports interjections/archaic vocabulary |
+| `ahuesarse` | ASALE records Peruvian senses for becoming useless or losing prestige | Valid pronominal verb, country-specific and sense-dependent |
+| `ajicero` | ASALE records the container for ají sauce in the Dominican Republic, northern Colombia, Venezuela and Ecuador; also ‘person who likes ají’ in Peru and Bolivia, among other senses | Valid noun with gender/person/object senses; the entry form and intended sense matter |
+| `alinderar` | ASALE records the verb ‘mark the boundaries of land’ in Nicaragua, Dominican Republic, Colombia, Venezuela and Bolivia, with a less frequent Honduran use | Valid rural/land-related verb; category fit is narrow |
+| `amelcochar(se)` | ASALE records literal confectionery senses and several figurative senses across Mexico, Central America, the Caribbean and South America | Valid verb, strongly polysemous; do not reduce all meanings to the literal candy-making sense |
+| `ameritar` | ASALE records several senses across many American countries, including deserving/meriting, requiring a process or attention, and earning sufficient merit | Valid verb with broad country coverage; not a narrowly exclusive regionalism |
+| `andinismo` | ASALE records the mountaineering sport associated especially with the Andes in Colombia, Venezuela, Ecuador, Peru, Bolivia, Chile, Argentina and Uruguay | Valid noun; suitable for sport/activity categories |
+| `antipatizar` | ASALE records ‘feel antipathy towards’ in Mexico, Panama, Dominican Republic, Venezuela and Paraguay, with less frequent use in Chile and Argentina | Valid verb; category fit depends on whether verbs are accepted |
+| `apealar` | ASALE records an obsolete rural Chilean and Argentine verb for lassoing the legs of a running horse or bull to bring it down; cross-reference to `apialar` | Valid but explicitly obsolete and rural; preserve historical/register metadata |
+| `apunar(se)` | ASALE records altitude-sickness senses in Peru, Bolivia, Chile, Argentina and Uruguay, plus further regional vehicle/health senses | Valid verb; distinguish human/animal altitude sickness from vehicle-related uses |
+| `arrequintar(se)` | ASALE records multiple Venezuelan senses (attack forcefully, compel, intensify, hurry, grip tightly, harden with heat) and an obsolete Costa Rican sense | Valid but highly polysemous; country and sense are essential |
+| `aserruchar` | ASALE records ‘cut with a handsaw’ in Guatemala, Honduras, El Salvador, Nicaragua, Dominican Republic, Peru, Chile and Argentina, with popular/rural marks elsewhere; also figurative and Chilean senses | Valid verb and variant related to `serruchar`; do not treat it as a separate unrelated concept |
+
+### Quality findings from this batch
+
+- A candidate can be a genuine word and still be obsolete, rural, colloquial, figurative or narrowly technical. These are descriptive labels, not reasons to erase it from the language.
+- Some forms are polysemous across countries (`aguarapar`, `ajicero`, `amelcochar`, `arrequintar`, `aserruchar`). A future category engine must associate a candidate with a sense, not only a spelling.
+- The source explicitly marks `¡ahijuna!` and `apealar` as obsolete. This is a strong reason to preserve register metadata and make any game policy configurable rather than silently treating every attested form as equally current.
+- `andinismo` is a clear positive example for a sport/activity category, while terms such as `alinderar` and `apealar` have narrower semantic domains.
+- This check establishes dictionary evidence, not frequency in contemporary speech, universal acceptance, category membership, or permission to redistribute ASALE content.
+
+### References
+
+- ASALE DA, `agringar`: https://www.asale.org/damer/agringar
+- ASALE DA, `aguarapar`: https://www.asale.org/damer/aguarapar
+- ASALE DA, `¡ahijuna!`: https://www.asale.org/damer/%C2%A1ahijuna%21
+- ASALE DA, `ahuesarse`: https://www.asale.org/damer/ahuesarse
+- ASALE DA, `ajicero`: https://www.asale.org/damer/ajicero
+- ASALE DA, `alinderar`: https://www.asale.org/damer/alinderar
+- ASALE DA, `amelcochar`: https://www.asale.org/damer/amelcochar
+- ASALE DA, `ameritar`: https://www.asale.org/damer/ameritar
+- ASALE DA, `andinismo`: https://www.asale.org/damer/andinismo
+- ASALE DA, `antipatizar`: https://www.asale.org/damer/antipatizar
+- ASALE DA, `apealar`: https://www.asale.org/damer/apealar
+- ASALE DA, `apunar`: https://www.asale.org/damer/apunar
+- ASALE DA, `arrequintar`: https://www.asale.org/damer/arrequintar
+- ASALE DA, `aserruchar`: https://www.asale.org/damer/aserruchar
+
+This batch is documentation only. No ASALE definitions or database data were copied into STOP, no candidate was approved for runtime validation, and no game behavior was changed. The remaining review queue stays open.
