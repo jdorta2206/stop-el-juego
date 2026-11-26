@@ -296,3 +296,18 @@ Required correction before registering the first real source:
 Decision: do not work around this by splitting one upstream archive into artificial independent sources or by assigning the most permissive license to all files. Update the schema and validator together, then pin the official release archives and their original files. Until that correction and the independent archive/hash audit are complete, the English packages remain candidates and the manifest stays empty.
 
 This is a pre-import safeguard only. No runtime game code, word acceptance, scoring, timers, online/offline behavior, master branch, or production deployment is changed.
+
+
+## Resolution: manifest file-level licensing gate implemented
+
+Audit update: 2026-11-26.
+
+The limitation identified above has been addressed in manifest schema version 2 and its preflight validator:
+- A source now contains a non-empty `licenses` array rather than one global license object.
+- Each license record identifies its SPDX identifier, exact license-text path, and the source files it covers.
+- Every dataset file must be covered by at least one license record; references to files outside the source package are rejected.
+- All dataset files and all referenced license texts are included in the deterministic SHA-256 calculation.
+- The validator continues to block candidate/blocked sources and rejects missing files, path traversal, symlink escapes, and checksum mismatches.
+- Regression fixtures now model distinct word-list and affix licenses and test missing coverage, unknown file references, missing license texts, and license-text tampering.
+
+This improves provenance enforcement but does not itself determine legal compatibility or approve any real dataset. A human legal/source review remains required. The source manifest remains empty; no third-party word data has been imported.
