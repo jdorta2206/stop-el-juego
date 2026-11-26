@@ -311,3 +311,37 @@ Primary references:
 - `altoparlante`: https://www.asale.org/damer/altoparlante
 
 This is a seven-word spot-check, not a complete review of the 233-root set. No external lexicon was imported, no candidate was approved for runtime use, and no game behavior was changed.
+
+
+## Second independent lexicographic batch: eight additional candidates
+
+Audit date: 2026-11-26. Eight more candidates from the cross-country review queue were checked against individual ASALE entries or official ASALE/RAE material. This extends the seven-word initial sample; it does not complete the 233-root queue.
+
+| Candidate | Independent evidence | Linguistic classification / STOP caution |
+|---|---|---|
+| `abracar` | ASALE's *Diccionario de americanismos* records senses in Nicaragua, Panama and Cuba; ASALE's historical dictionary also documents broader historical use in America and parts of Spain | Valid verb with regional and historical distribution; not an invented spelling. Preserve the intended sense and region |
+| `acalambrar` | ASALE's DA records use across numerous American countries. An official RAE/ASALE 2023 release says the sense ‘producir un calambre’ lost the geographic label ‘América’ and is now treated as general Spanish | Valid, but do not mark as Latin-America-only; distinguish the general sense from figurative country-specific senses |
+| `acápite` | ASALE's DA records multiple senses across Panama, Cuba, Dominican Republic, Colombia, Venezuela, Ecuador, Peru, Bolivia, Chile, Paraguay, Argentina, Uruguay and other countries | Valid noun with several document/text-related senses; category suitability depends on sense |
+| `acolchonar` | ASALE's DA records the verb in Mexico, Central America, the Caribbean and South America, with additional senses in Panama, Cuba and the Dominican Republic | Valid verb; retain reflexive and non-reflexive forms/senses distinctly where needed |
+| `acolitar` | ASALE's DA records meanings including supporting someone in an activity (Colombia, Ecuador), acting as an acolyte (Nicaragua, Colombia; obsolete mark), and covering up an illicit action (Colombia) | Valid but strongly sense- and country-dependent; do not treat all senses as interchangeable |
+| `acreencia` | ASALE's DA records financial/legal senses in the Dominican Republic, Venezuela, Bolivia, Paraguay, Argentina, Puerto Rico, Colombia and Ecuador | Valid feminine noun; semantic domain is financial/legal, so not a fit for arbitrary categories |
+| `abigeato` | Reconfirmed: ASALE's DA records the cattle-theft sense across a broad set of American countries | Valid noun; category-specific |
+| `abigeo` | Reconfirmed: ASALE's DA records the cattle-thief sense in several Central and South American countries | Valid person noun; category-specific |
+
+### Important correction from the evidence
+
+The regional files are discovery sources, not a boundary between “Spain Spanish” and “Latin American Spanish”. In particular, `acalambrar` is explicitly treated as general Spanish for its ‘produce a cramp’ sense in RAE/ASALE's 2023 announcement. STOP must store country distribution as descriptive metadata and must not automatically reject a valid word merely because it is not labelled as regional.
+
+### References
+
+- ASALE DA, `abracar`: https://www.asale.org/damer/abracar
+- ASALE DA, `acalambrar`: https://www.asale.org/damer/acalambrar
+- RAE/ASALE 2023 announcement on the loss of the geographic label for `acalambrar`: https://www.asale.org/sites/default/files/2023-11/NdP_RAE_Los%20sin%C3%B3nimos%20y%20ant%C3%B3nimos%20se%20incorporan%20al%20%C2%ABDiccionario%20de%20la%20lengua%20espa%C3%B1ola%C2%BB%20en%20su%20actualizaci%C3%B3n%2023.7.pdf
+- ASALE DA, `acápite`: https://www.asale.org/damer/ac%C3%A1pite
+- ASALE DA, `acolchonar`: https://www.asale.org/damer/acolchonar
+- ASALE DA, `acolitar`: https://www.asale.org/damer/acolitar
+- ASALE DA, `acreencia`: https://www.asale.org/damer/acreencia
+- ASALE DA, `abigeato`: https://www.asale.org/damer/abigeato
+- ASALE DA, `abigeo`: https://www.asale.org/damer/abigeo
+
+This batch is evidence documentation only. It does not grant redistribution rights, approve a runtime lexicon entry, or change game behavior. Remaining candidates stay unreviewed until checked individually.
