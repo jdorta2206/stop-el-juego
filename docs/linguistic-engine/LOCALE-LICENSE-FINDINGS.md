@@ -233,3 +233,44 @@ Reproducible source files at pinned commit `79195b017e6d70151337856c59e7d13d311d
 - Each locale file follows the pattern `https://raw.githubusercontent.com/LibreOffice/dictionaries/79195b017e6d70151337856c59e7d13d311d6630/es/{locale}.dic`.
 
 No source was approved or imported. This analysis changes documentation only; it does not alter STOP runtime behavior.
+
+
+## Cross-country Spanish comparison: Argentina, Chile, Colombia, Peru and Venezuela
+
+Audit date: 2026-11-26. To move beyond the Spain–Mexico pair, five additional regional files were compared against `es_ES.dic` at the same pinned LibreOffice commit. The comparison used NFC-normalized, lowercase keys after removing Hunspell flags and trailing morphology fields. For each locale, the first source spelling was retained for display and capitalization review.
+
+### Lowercase-initial roots absent from es_ES
+
+| Locale compared with es_ES | Locale-only roots, all capitalization | Lowercase-initial subset |
+|---|---:|---:|
+| es_AR | 1,058 | 740 |
+| es_CL | 819 | 538 |
+| es_CO | 4,647 | 1,158 |
+| es_PE | 1,852 | 383 |
+| es_VE | 650 | 433 |
+
+These totals are raw lexical-file differences, not counts of confirmed regionalisms. The much larger es_CO difference is partly driven by uppercase-initial entries (3,489), so it must not be interpreted as Colombia having thousands more common words.
+
+### Cross-locale overlap among lowercase-initial candidates
+
+Across the five regional dictionaries, there are 7,515 distinct lowercase-initial roots that are absent from es_ES and occur in at least one of the five files. Their distribution by number of these five files containing each root is:
+
+| Number of regional files containing the root | Root count |
+|---:|---:|
+| 1 | 6,851 |
+| 2 | 324 |
+| 3 | 66 |
+| 4 | 41 |
+| 5 | 233 |
+
+The 233 roots present in all five files are a particularly useful review queue: examples from the source lists include `abigeato`, `abigeo`, `bluyín`, `bombacha`, `camote`, `cuy`, and `altoparlante`. These are examples of source overlap only, not a declaration that every term is a regionalism, is absent from all other Spanish dictionaries, or is valid for every STOP category. The overlap may reflect a common shared word-list block rather than independent evidence from five regional editorial teams.
+
+### Quality rules established by this comparison
+
+1. A word found in one regional file but absent from es_ES is only a candidate; absence from one reference dictionary does not establish that it is regionally exclusive.
+2. Agreement across multiple locale files increases review priority, but is not independent confirmation if the upstream files share common source material.
+3. Preserve source locale membership and original spelling; do not collapse the regional provenance into one undifferentiated Spanish list.
+4. Before any candidate is admitted, verify that it is a real lexical item using independent, appropriately licensed evidence; classify proper names, demonyms, abbreviations, inflections, archaic/technical forms, and spelling variants separately.
+5. Keep lexical existence separate from category membership. Even a verified word must not automatically count as a valid answer in every STOP category.
+
+This comparison is still a first-pass Hunspell-root analysis: it does not expand affix rules, validate definitions or usage, establish frequency, or prove category suitability. No words were imported, approved, or added to runtime validation.
