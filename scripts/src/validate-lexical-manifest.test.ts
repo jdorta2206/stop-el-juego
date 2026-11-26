@@ -13,10 +13,10 @@ async function fixture(status: "approved" | "candidate" = "approved") {
   const root = await mkdtemp(path.join(os.tmpdir(), "stop-lexical-preflight-"));
   temporaryRoots.push(root);
   await mkdir(path.join(root, "source"), { recursive: true });
-  await writeFile(path.join(root, "source", "words.dic"), "3\\ncasa\\nperro\\nárbol\\n", "utf8");
-  await writeFile(path.join(root, "source", "rules.aff"), "SET UTF-8\\n", "utf8");
-  await writeFile(path.join(root, "source", "LICENSE-WORDS"), "Word list license notice\\n", "utf8");
-  await writeFile(path.join(root, "source", "LICENSE-AFFIX"), "Affix rules license notice\\n", "utf8");
+  await writeFile(path.join(root, "source", "words.dic"), "3\ncasa\nperro\nárbol\n", "utf8");
+  await writeFile(path.join(root, "source", "rules.aff"), "SET UTF-8\n", "utf8");
+  await writeFile(path.join(root, "source", "LICENSE-WORDS"), "Word list license notice\n", "utf8");
+  await writeFile(path.join(root, "source", "LICENSE-AFFIX"), "Affix rules license notice\n", "utf8");
 
   const paths = ["source/words.dic", "source/rules.aff", "source/LICENSE-WORDS", "source/LICENSE-AFFIX"].sort();
   const hash = createHash("sha256");
@@ -114,13 +114,13 @@ test("rejects a missing license text", async () => {
 
 test("rejects license-text tampering through the checksum", async () => {
   const { root, manifestPath } = await fixture();
-  await writeFile(path.join(root, "source", "LICENSE-AFFIX"), "changed license terms\\n");
+  await writeFile(path.join(root, "source", "LICENSE-AFFIX"), "changed license terms\n");
   await assert.rejects(validateManifest(manifestPath, root), /SHA-256 mismatch/);
 });
 
 test("rejects modified source files through the checksum", async () => {
   const { root, manifestPath } = await fixture();
-  await writeFile(path.join(root, "source", "words.dic"), "3\\ncasa\\ngato\\nárbol\\n");
+  await writeFile(path.join(root, "source", "words.dic"), "3\ncasa\ngato\nárbol\n");
   await assert.rejects(validateManifest(manifestPath, root), /SHA-256 mismatch/);
 });
 
