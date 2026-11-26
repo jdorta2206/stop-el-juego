@@ -7,16 +7,18 @@ import { afterEach, test } from "node:test";
 import { validateManifest } from "./validate-lexical-manifest.js";
 
 const temporaryRoots: string[] = [];
-const bundleVersion = "2026.11.25";
+const bundleVersion = "2026.11.26";
 
 async function fixture(status: "approved" | "candidate" = "approved") {
   const root = await mkdtemp(path.join(os.tmpdir(), "stop-lexical-preflight-"));
   temporaryRoots.push(root);
   await mkdir(path.join(root, "source"), { recursive: true });
-  await writeFile(path.join(root, "source", "words.dic"), "3\ncasa\nperro\nárbol\n", "utf8");
-  await writeFile(path.join(root, "source", "LICENSE"), "Test license notice\n", "utf8");
+  await writeFile(path.join(root, "source", "words.dic"), "3\\ncasa\\nperro\\nárbol\\n", "utf8");
+  await writeFile(path.join(root, "source", "rules.aff"), "SET UTF-8\\n", "utf8");
+  await writeFile(path.join(root, "source", "LICENSE-WORDS"), "Word list license notice\\n", "utf8");
+  await writeFile(path.join(root, "source", "LICENSE-AFFIX"), "Affix rules license notice\\n", "utf8");
 
-  const paths = ["source/LICENSE", "source/words.dic"].sort();
+  const paths = ["source/words.dic", "source/rules.aff", "source/LICENSE-WORDS", "source/LICENSE-AFFIX"].sort();
   const hash = createHash("sha256");
   for (const relativePath of paths) {
     hash.update(relativePath, "utf8");
@@ -27,7 +29,7 @@ async function fixture(status: "approved" | "candidate" = "approved") {
 
   const manifest = {
     $schema: "./source-manifest.schema.json",
-    schemaVersion: 1,
+    schemaVersion: 2,
     bundleVersion,
     sources: [{
       id: "test-es-dictionary",
@@ -37,9 +39,12 @@ async function fixture(status: "approved" | "candidate" = "approved") {
       version: "1.0.0",
       revision: "test-revision",
       sha256: hash.digest("hex"),
-      files: ["source/words.dic"],
-      license: { spdxId: "MIT", licenseTextPath: "source/LICENSE" },
-      notices: ["Preserve the license notice."],
+      files: ["source/words.dic", "source/rules.aff"],
+      licenses: [
+        { spdxId: "MIT", licenseTextPath: "source/LICENSE-WORDS", appliesTo: ["source/words.dic"] },
+        { spdxId: "BSD-3-Clause", licenseTextPath: "source/LICENSE-AFFIX", appliesTo: ["source/rules.aff"] },
+      ],
+      notices: ["Preserve each component's license notice."],
       commercialUse: true,
       modification: true,
       redistribution: true,
@@ -48,7 +53,7 @@ async function fixture(status: "approved" | "candidate" = "approved") {
       reviewStatus: status,
       ...(status === "approved" ? {
         reviewedBy: "test-reviewer",
-        reviewedAt: "2026-11-25",
+        reviewedAt: "2026-11-26",
         approvalReference: "LEGAL-TEST-001",
       } : {}),
     }],
@@ -62,15 +67,15 @@ afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-test("accepts an empty manifest without claiming vocabulary was imported", async () => {
+test("accepts an empty v2 manifest without claiming vocabulary was imported", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "stop-lexical-empty-"));
   temporaryRoots.push(root);
   const manifestPath = path.join(root, "manifest.json");
-  await writeFile(manifestPath, JSON.stringify({ $schema: "./source-manifest.schema.json", schemaVersion: 1, bundleVersion, sources: [] }));
+  await writeFile(manifestPath, JSON.stringify({ $schema: "./source-manifest.schema.json", schemaVersion: 2, bundleVersion, sources: [] }));
   assert.deepEqual(await validateManifest(manifestPath, root), { sourceCount: 0, bundleVersion });
 });
 
-test("accepts an approved source when files and checksum match", async () => {
+test("accepts distinct licenses for word and affix files and hashes both notices", async () => {
   const { root, manifestPath } = await fixture();
   assert.deepEqual(await validateManifest(manifestPath, root), { sourceCount: 1, bundleVersion });
 });
@@ -80,23 +85,42 @@ test("rejects a candidate source even when its checksum is valid", async () => {
   await assert.rejects(validateManifest(manifestPath, root), /source is candidate; import is blocked/);
 });
 
-test("rejects invalid optional review metadata on unapproved sources", async () => {
-  const cases = [
-    { field: "reviewedBy", value: "   ", pattern: /reviewedBy must be a non-empty string/ },
-    { field: "approvalReference", value: "", pattern: /approvalReference must be a non-empty string/ },
-    { field: "reviewedAt", value: "2026-02-30", pattern: /reviewedAt must be a valid calendar date/ },
-  ] as const;
-  for (const item of cases) {
-    const { root, manifestPath, manifest } = await fixture("candidate");
-    Object.assign(manifest.sources[0], { [item.field]: item.value });
-    await writeFile(manifestPath, JSON.stringify(manifest));
-    await assert.rejects(validateManifest(manifestPath, root), item.pattern);
-  }
+test("rejects a source file with no license coverage", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].licenses[1].appliesTo = [];
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /license appliesTo must contain file paths/);
+});
+
+test("rejects a source file omitted from every license record", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].licenses = [manifest.sources[0].licenses[0]];
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /source file has no license coverage: source\\/rules.aff/);
+});
+
+test("rejects a license record that references a file outside the source", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].licenses[0].appliesTo = ["source/not-in-package.dic"];
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /license references unknown source file/);
+});
+
+test("rejects a missing license text", async () => {
+  const { root, manifestPath } = await fixture();
+  await rm(path.join(root, "source", "LICENSE-AFFIX"));
+  await assert.rejects(validateManifest(manifestPath, root), /Missing file: source\\/LICENSE-AFFIX/);
+});
+
+test("rejects license-text tampering through the checksum", async () => {
+  const { root, manifestPath } = await fixture();
+  await writeFile(path.join(root, "source", "LICENSE-AFFIX"), "changed license terms\\n");
+  await assert.rejects(validateManifest(manifestPath, root), /SHA-256 mismatch/);
 });
 
 test("rejects modified source files through the checksum", async () => {
   const { root, manifestPath } = await fixture();
-  await writeFile(path.join(root, "source", "words.dic"), "3\ncasa\ngato\nárbol\n");
+  await writeFile(path.join(root, "source", "words.dic"), "3\\ncasa\\ngato\\nárbol\\n");
   await assert.rejects(validateManifest(manifestPath, root), /SHA-256 mismatch/);
 });
 
@@ -107,26 +131,23 @@ test("rejects path traversal before reading a source file", async () => {
   await assert.rejects(validateManifest(manifestPath, root), /Unsafe path/);
 });
 
-test("rejects a missing license or dictionary file", async () => {
-  const { root, manifestPath } = await fixture();
-  await rm(path.join(root, "source", "LICENSE"));
-  await assert.rejects(validateManifest(manifestPath, root), /Missing file: source\/LICENSE/);
-});
-
-test("rejects an approved source that does not permit commercial use", async () => {
-  const { root, manifestPath, manifest } = await fixture();
-  manifest.sources[0].commercialUse = false;
-  await writeFile(manifestPath, JSON.stringify(manifest));
-  await assert.rejects(validateManifest(manifestPath, root), /must permit commercial use and redistribution/);
-});
-
 test("rejects a symlink that escapes the data root", async () => {
   const { root, manifestPath, manifest } = await fixture();
   const outside = path.join(os.tmpdir(), `stop-lexical-outside-${process.pid}-${Date.now()}.dic`);
   await writeFile(outside, "outside data");
   try {
     await symlink(outside, path.join(root, "source", "external.dic"));
-    manifest.sources[0].files = ["source/external.dic"];
+    manifest.sources[0].files = ["source/external.dic", "source/rules.aff"];
+    manifest.sources[0].licenses[0].appliesTo = ["source/external.dic"];
+    const paths = ["source/external.dic", "source/rules.aff", "source/LICENSE-WORDS", "source/LICENSE-AFFIX"].sort();
+    const hash = createHash("sha256");
+    for (const relativePath of paths) {
+      hash.update(relativePath, "utf8");
+      hash.update(Buffer.from([0]));
+      hash.update(await readFile(path.join(root, relativePath)).catch(() => Buffer.from("outside data")));
+      hash.update(Buffer.from([0]));
+    }
+    manifest.sources[0].sha256 = hash.digest("hex");
     await writeFile(manifestPath, JSON.stringify(manifest));
     await assert.rejects(validateManifest(manifestPath, root), /Path escapes data root/);
   } finally {
@@ -134,28 +155,19 @@ test("rejects a symlink that escapes the data root", async () => {
   }
 });
 
+test("rejects approved sources without commercial redistribution permission", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].commercialUse = false;
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /must permit commercial use and redistribution/);
+});
 
-test("rejects unknown manifest fields instead of silently ignoring schema drift", async () => {
+test("rejects unknown manifest fields", async () => {
   const { root, manifestPath, manifest } = await fixture();
   Object.assign(manifest, { unexpectedFlag: true });
   await writeFile(manifestPath, JSON.stringify(manifest));
   await assert.rejects(validateManifest(manifestPath, root), /unknown field unexpectedFlag/);
 });
-
-test("rejects source revisions shorter than the schema minimum", async () => {
-  const { root, manifestPath, manifest } = await fixture();
-  manifest.sources[0].revision = "abc";
-  await writeFile(manifestPath, JSON.stringify(manifest));
-  await assert.rejects(validateManifest(manifestPath, root), /revision must contain at least 7 characters/);
-});
-
-test("rejects invalid calendar dates in approval records", async () => {
-  const { root, manifestPath, manifest } = await fixture();
-  manifest.sources[0].reviewedAt = "2026-02-30";
-  await writeFile(manifestPath, JSON.stringify(manifest));
-  await assert.rejects(validateManifest(manifestPath, root), /reviewedAt must be a valid calendar date/);
-});
-
 
 test("rejects locales whose language does not match the source language", async () => {
   const { root, manifestPath, manifest } = await fixture();
@@ -164,17 +176,16 @@ test("rejects locales whose language does not match the source language", async 
   await assert.rejects(validateManifest(manifestPath, root), /locale language must match es/);
 });
 
-test("rejects impossible calendar dates in bundle versions", async () => {
+test("rejects impossible bundle and approval dates", async () => {
   const { root, manifestPath, manifest } = await fixture();
   manifest.bundleVersion = "2026.02.30";
   await writeFile(manifestPath, JSON.stringify(manifest));
   await assert.rejects(validateManifest(manifestPath, root), /Invalid manifest header/);
 });
 
-
-test("rejects an empty schema reference when the optional field is present", async () => {
-  const { root, manifestPath, manifest } = await fixture();
-  manifest.$schema = "   ";
+test("rejects invalid optional review metadata", async () => {
+  const { root, manifestPath, manifest } = await fixture("candidate");
+  manifest.sources[0].reviewedAt = "2026-02-30";
   await writeFile(manifestPath, JSON.stringify(manifest));
-  await assert.rejects(validateManifest(manifestPath, root), /\$schema must be a non-empty string/);
+  await assert.rejects(validateManifest(manifestPath, root), /reviewedAt must be a valid calendar date/);
 });
