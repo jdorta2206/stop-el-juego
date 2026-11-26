@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://stopjuegodepalabras.com/schemas/linguistic-source-manifest.schema.json",
   "title": "STOP linguistic source manifest",
-  "description": "Provenance and licensing gate for external lexical datasets. Schema definition only; it does not approve or include any dataset.",
+  "description": "Provenance and file-level licensing gate for external lexical datasets. Schema definition only; it does not approve or include any dataset.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "bundleVersion", "sources"],
   "properties": {
     "$schema": { "type": "string", "minLength": 1 },
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "bundleVersion": {
       "type": "string",
       "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}([+-][A-Za-z0-9.-]+)?$"
@@ -20,12 +20,27 @@
     }
   },
   "$defs": {
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spdxId", "licenseTextPath", "appliesTo"],
+      "properties": {
+        "spdxId": { "type": "string", "minLength": 1 },
+        "licenseTextPath": { "type": "string", "minLength": 1 },
+        "appliesTo": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "id", "language", "locales", "upstreamUrl", "version",
-        "revision", "sha256", "files", "license", "notices",
+        "revision", "sha256", "files", "licenses", "notices",
         "commercialUse", "modification", "redistribution",
         "shareAlike", "thirdPartyContent", "reviewStatus"
       ],
@@ -48,14 +63,10 @@
           "uniqueItems": true,
           "items": { "type": "string", "minLength": 1 }
         },
-        "license": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["spdxId", "licenseTextPath"],
-          "properties": {
-            "spdxId": { "type": "string", "minLength": 1 },
-            "licenseTextPath": { "type": "string", "minLength": 1 }
-          }
+        "licenses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/license" }
         },
         "notices": {
           "type": "array",
