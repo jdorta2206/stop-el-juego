@@ -96,7 +96,7 @@ test("rejects a source file omitted from every license record", async () => {
   const { root, manifestPath, manifest } = await fixture();
   manifest.sources[0].licenses = [manifest.sources[0].licenses[0]];
   await writeFile(manifestPath, JSON.stringify(manifest));
-  await assert.rejects(validateManifest(manifestPath, root), /source file has no license coverage: source\\/rules.aff/);
+  await assert.rejects(validateManifest(manifestPath, root), /source file has no license coverage: source\/rules\.aff/);
 });
 
 test("rejects a license record that references a file outside the source", async () => {
@@ -109,7 +109,7 @@ test("rejects a license record that references a file outside the source", async
 test("rejects a missing license text", async () => {
   const { root, manifestPath } = await fixture();
   await rm(path.join(root, "source", "LICENSE-AFFIX"));
-  await assert.rejects(validateManifest(manifestPath, root), /Missing file: source\\/LICENSE-AFFIX/);
+  await assert.rejects(validateManifest(manifestPath, root), /Missing file: source\/LICENSE-AFFIX/);
 });
 
 test("rejects license-text tampering through the checksum", async () => {
