@@ -117,3 +117,45 @@ Reproducible source locations:
 - Pinned directory: https://github.com/LibreOffice/dictionaries/tree/79195b017e6d70151337856c59e7d13d311d6630/es
 - Pinned Spanish manifest: https://github.com/LibreOffice/dictionaries/blob/79195b017e6d70151337856c59e7d13d311d6630/Dictionary_es.mk
 - Pinned Spanish license README: https://github.com/LibreOffice/dictionaries/blob/79195b017e6d70151337856c59e7d13d311d6630/es/README_hunspell_es.txt
+
+
+## First-pass Spanish Hunspell entry-count audit (pinned snapshot)
+
+Audit date: 2026-11-26. Each of the 23 canonical `.dic` files was fetched from the pinned LibreOffice commit `79195b017e6d70151337856c59e7d13d311d6630` and parsed as a first-pass inventory. The first line is treated as the declared entry count; each following non-empty line is counted as one dictionary entry. For the distinct-root estimate, the parser takes the text before the first Hunspell flag separator `/`, lowercases it using Spanish locale rules, and normalizes it to NFC.
+
+| Locale | Declared/parsed entries | Distinct normalized roots |
+|---|---:|---:|
+| es_AR | 57,437 | 54,912 |
+| es_BO | 56,899 | 54,394 |
+| es_CL | 57,174 | 54,675 |
+| es_CO | 62,280 | 58,548 |
+| es_CR | 56,699 | 54,203 |
+| es_CU | 56,892 | 54,340 |
+| es_DO | 56,581 | 54,102 |
+| es_EC | 56,749 | 54,249 |
+| es_ES | 58,221 | 55,638 |
+| es_GQ | 71,199 | 66,783 |
+| es_GT | 56,666 | 54,177 |
+| es_HN | 56,841 | 54,335 |
+| es_MX | 59,093 | 56,257 |
+| es_NI | 56,743 | 54,239 |
+| es_PA | 56,635 | 54,153 |
+| es_PE | 58,445 | 55,705 |
+| es_PH | 67,762 | 63,711 |
+| es_PR | 56,592 | 54,106 |
+| es_PY | 56,650 | 54,165 |
+| es_SV | 56,703 | 54,200 |
+| es_US | 56,293 | 53,842 |
+| es_UY | 56,833 | 54,313 |
+| es_VE | 57,108 | 54,531 |
+
+Interpretation and limits:
+- These counts confirm that the files contain substantially different numbers of dictionary entries; Equatorial Guinea and Philippines are notably larger in this snapshot. This is a signal for deeper review, not evidence that their dictionaries are more complete or better for those regions.
+- A Hunspell `.dic` file contains stems plus flags and may contain morphology metadata. This first-pass parser deliberately strips flags for the distinct-root estimate; it does not expand affix rules, validate spelling quality, or classify regionalisms.
+- The counts are not the number of playable accepted words. They must not be used as a runtime allowlist or as evidence that a word is exclusive to a locale.
+- The next linguistic comparison must compute cross-locale normalized set differences, inspect candidate terms in context, and then separately assess category suitability and regional legitimacy. Keep all 23 source pairs unapproved until the licensing and notice review is complete.
+
+Sources:
+- Pinned upstream directory and source files: https://github.com/LibreOffice/dictionaries/tree/79195b017e6d70151337856c59e7d13d311d6630/es
+- Pinned Spanish README: https://github.com/LibreOffice/dictionaries/blob/79195b017e6d70151337856c59e7d13d311d6630/es/README_hunspell_es.txt
+- Pinned Spanish license statement: https://github.com/LibreOffice/dictionaries/blob/79195b017e6d70151337856c59e7d13d311d6630/es/LICENSE.md
