@@ -276,3 +276,23 @@ Primary source inspected:
 - https://wordlist.aspell.net/hunspell-readme/
 - https://github.com/en-wl/wordlist/releases/tag/rel-2026.02.25
 - https://wordlist.aspell.net/dicts/
+
+
+## Follow-up: manifest v1 limitation found during source pinning
+
+Audit update: 2026-11-26.
+
+A code-level review of `source-manifest.schema.json` and `validate-lexical-manifest.ts` found a modeling gap before any dictionary is imported: manifest v1 stores exactly one `license` object per source, with one `licenseTextPath`. That is insufficient for the SCOWL Hunspell release because its word-list data and affix rules have distinct licensing/notice obligations, and the Australian contribution adds another notice. Treating the whole archive as if it had one SPDX license would lose file-level provenance.
+
+Required correction before registering the first real source:
+
+1. Replace the single license object with a non-empty array of license records.
+2. Each license record must identify its license expression/identifier, the exact license-text or notice file, and the source files to which it applies.
+3. Require every source file to be covered by at least one license record; reject unknown file references, duplicate coverage records where ambiguous, missing notice files, and paths escaping the data root.
+4. Include every referenced license/notice file in the deterministic SHA-256 calculation, not just one license text.
+5. Keep source-level obligations (commercial use, modification, redistribution, share-alike) conservative: a source is importable only if every applicable license record permits the intended distribution model.
+6. Add regression tests for mixed-license archives, uncovered files, missing license texts, path traversal, symlink escapes, and hash tampering.
+
+Decision: do not work around this by splitting one upstream archive into artificial independent sources or by assigning the most permissive license to all files. Update the schema and validator together, then pin the official release archives and their original files. Until that correction and the independent archive/hash audit are complete, the English packages remain candidates and the manifest stays empty.
+
+This is a pre-import safeguard only. No runtime game code, word acceptance, scoring, timers, online/offline behavior, master branch, or production deployment is changed.
