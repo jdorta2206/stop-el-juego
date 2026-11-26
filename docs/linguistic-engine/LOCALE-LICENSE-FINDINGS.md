@@ -394,3 +394,37 @@ Audit date: 2026-11-26. Fourteen further roots from the regional comparison queu
 - ASALE DA, `aserruchar`: https://www.asale.org/damer/aserruchar
 
 This batch is documentation only. No ASALE definitions or database data were copied into STOP, no candidate was approved for runtime validation, and no game behavior was changed. The remaining review queue stays open.
+
+
+## Fourth independent lexicographic batch: five candidates and two spelling controls
+
+Audit date: 2026-11-26. This batch deliberately includes spelling/etymology controls so STOP does not inflate its accepted vocabulary by counting related forms as unrelated words.
+
+| Candidate / control | Independent ASALE/RAE evidence | Classification and STOP decision signal |
+|---|---|---|
+| `arrimado` | ASALE's DA records several senses for a person living in another person's home, often at their expense, across Mexico, Central America, the Caribbean and much of South America; it also records a separate sense related to living in concubinage in Spain, Ecuador, Argentina and Uruguay | Attested adjective/noun with multiple country-specific senses. Do not reject it as “Latin-only”; preserve sense and register because some entries are marked derogatory |
+| `arruinado` | ASALE's DA records adjective/noun senses for a coward in Honduras, El Salvador and Nicaragua; lacking virtues/capacities or being a failure in Nicaragua; decadent appearance in Uruguay; and annoying/inopportune or mischievous people in Bolivia and Honduras | Attested adjective/noun, but these are colloquial/derogatory person senses, not merely the general financial sense of `arruinado`. Sense must be explicit |
+| `amacayo` | RAE-ASALE's *Tesoro de los diccionarios históricos* records the noun as a regional plant name (Amaryllis/Sprekelia), derived from Quechua `amankay`, with historical geographic descriptions for southern America and Mexico | Historically attested botanical common noun, not a proper name. Mark historical/botanical evidence; do not assume it is frequent or currently used throughout those regions |
+| `acriollar(se)` | RAE-ASALE's historical dictionary records the verb for adopting the customs of the Hispanic-American country where a foreigner lives, with historical examples and regional descriptions including Argentina, Chile, Peru and Cuba | Historically attested verb; preserve reflexive/non-reflexive forms and historical/register metadata. Current everyday frequency is not established by this source |
+| `arrimado` / `arrimarse` | RAE-ASALE's historical dictionary of Canarian Spanish documents `arrimarse` with a locally recorded sense ‘vivir maritalmente’; it also notes the DA's country distribution for `arrimado` | Related forms, but do not automatically merge the verb's Canarian sense with every adjective/noun sense of `arrimado`; model part of speech and sense separately |
+| `amacayo` / `amancayo` | The historical dictionary cross-references `amacayo` with `amancay`, `amancaya` and `amancayo`; its separate `amancayo` entry describes other regional plant names and taxa | Spelling-family control: do not count these as independent concepts without confirming botanical referents and regional usage. Similar-looking names can denote different plants |
+| `acriollar` / `acriollarse` | The historical entry gives both transitive and pronominal uses, with the pronominal form especially associated with adapting to local customs | Morphological control: store lemma and allowed inflection/reflexive behavior distinctly; do not treat every inflected form as a new lexical headword |
+
+### Quality findings
+
+- The dictionary evidence supports `arrimado` and `arruinado`, but some senses are socially marked (derogatory, popular or colloquial). A valid lexical entry should retain these labels rather than silently presenting all senses as neutral.
+- `amacayo` and `acriollar` are supported here by historical lexicographic evidence, not by a current DA entry. They should therefore carry a historical-source flag and must not be represented as proven high-frequency contemporary vocabulary.
+- Botanical names require special care: common names can refer to more than one species, and near-variant spellings may not be interchangeable. Category acceptance should rely on a sense/species mapping, not string similarity.
+- Inflections and reflexive forms are not independent concepts. The future engine should connect them to a lemma and part of speech while preserving legitimate regional spellings.
+- A source's failure to return a DA page is not evidence that a candidate is invalid. It only means that this particular independent reference did not corroborate it in this pass.
+
+### References
+
+- ASALE DA, `arrimado`: https://www.asale.org/damer/arrimado
+- ASALE DA, `arruinado`: https://www.asale.org/damer/arruinado
+- RAE-ASALE historical dictionary, `amacayo`: https://temporalweb.asale.org/tdhle/amacayo
+- RAE-ASALE historical dictionary, `acriollar`: https://temporalweb.asale.org/tdhle/acriollar
+- RAE-ASALE historical dictionary of Canarian Spanish, `arrimarse`: https://temporalweb.asale.org/tdhle/arrimarse
+- RAE-ASALE historical dictionary, `amancayo`: https://temporalweb.asale.org/tdhle/amancayo
+
+This batch records evidence and review controls only. No historical or ASALE definitions were copied into STOP; none of these candidates has been added to runtime validation. No dataset was imported and no game behavior was changed.
