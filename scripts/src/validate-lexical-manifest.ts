@@ -32,7 +32,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const nonEmpty = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 const isCalendarDate = (value: string): boolean => {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 };
@@ -40,8 +40,8 @@ const assertOnlyKeys = (value: Record<string, unknown>, allowed: readonly string
   for (const key of Object.keys(value)) if (!allowed.includes(key)) fail(`${context}: unknown field ${key}`);
 };
 const safeRelativePath = (value: string): boolean =>
-  value.length > 0 && !path.isAbsolute(value) && !value.split(/[\\\\/]/).includes("..") &&
-  !value.includes("\\0");
+  value.length > 0 && !path.isAbsolute(value) && !value.split(/[\\/]/).includes("..") &&
+  !value.includes("\0");
 
 async function readInsideRoot(relativePath: string, rootReal: string, dataRoot: string): Promise<Buffer> {
   if (!safeRelativePath(relativePath)) fail(`Unsafe path: ${relativePath}`);
@@ -144,7 +144,7 @@ export async function validateManifest(manifestPath: string, dataRoot: string): 
   }
   if (!isRecord(parsed) || parsed.schemaVersion !== 2 ||
       typeof parsed.bundleVersion !== "string" ||
-      !/^\\d{4}\\.\\d{2}\\.\\d{2}([+-][A-Za-z0-9.-]+)?$/.test(parsed.bundleVersion) ||
+      !/^\d{4}\.\d{2}\.\d{2}([+-][A-Za-z0-9.-]+)?$/.test(parsed.bundleVersion) ||
       !isCalendarDate(parsed.bundleVersion.slice(0, 10).replaceAll(".", "-")) ||
       !Array.isArray(parsed.sources)) {
     fail("Invalid manifest header: expected schemaVersion 2, dated bundleVersion and sources array");
