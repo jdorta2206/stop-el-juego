@@ -174,3 +174,17 @@ This is an important quality gate: future candidate extraction must classify ent
 Source files at pinned commit:
 - https://raw.githubusercontent.com/LibreOffice/dictionaries/79195b017e6d70151337856c59e7d13d311d6630/es/es_ES.dic
 - https://raw.githubusercontent.com/LibreOffice/dictionaries/79195b017e6d70151337856c59e7d13d311d6630/es/es_MX.dic
+
+
+## Case-sensitive signal for proper-noun review (es_ES vs es_MX)
+
+A second pass retained original capitalization before creating NFC/lowercase comparison keys. For roots exclusive to one locale after deduplication:
+
+| Direction | Unique exclusive roots | Entries beginning uppercase | Entries beginning lowercase |
+|---|---:|---:|---:|
+| es_ES only | 1,759 | 345 | 1,414 |
+| es_MX only | 2,378 | 1,827 | 551 |
+
+The uppercase-only sample is strongly enriched for geographic names (for example, Spanish municipality names in es_ES and Mexican municipality names in es_MX). This makes capitalization a useful review signal, but not a definitive classifier: proper nouns can be lowercase in source data, and some valid common words may be capitalized for other reasons. The lowercase-only set also contains a mixture of potential regional vocabulary, inflections, archaic/technical forms, and items needing verification.
+
+Implementation rule for the future audit pipeline: preserve original display spelling and capitalization in provenance; compare normalized forms separately; flag capitalized candidates for proper-noun review rather than automatically discarding or accepting them. Do not use capitalization as the sole acceptance rule.
