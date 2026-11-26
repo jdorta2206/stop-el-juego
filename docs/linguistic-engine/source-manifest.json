@@ -1,6 +1,6 @@
 {
   "$schema": "./source-manifest.schema.json",
-  "schemaVersion": 1,
-  "bundleVersion": "2026.11.25",
+  "schemaVersion": 2,
+  "bundleVersion": "2026.11.26",
   "sources": []
 }
