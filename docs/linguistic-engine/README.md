@@ -105,7 +105,7 @@ pnpm --filter @workspace/scripts linguistics:test
 
 It validates the manifest header and required source fields, rejects duplicate IDs/locales/files, blocks every source not explicitly marked `approved`, and requires an approval record plus commercial-use and redistribution permission. For each approved source it reads the listed dataset files and the exact license text from the supplied data root, rejects paths outside that root, and checks the SHA-256 digest.
 
-The digest is computed over the lexicographically sorted union of `files` and `license.licenseTextPath`; for each path, the hash stream is UTF-8 path, one NUL byte, file bytes, one NUL byte. This makes the check deterministic across operating systems.
+The manifest is schema version 2. Each source declares a non-empty `licenses` array; every license record contains an SPDX identifier, a path to its exact license text, and an `appliesTo` list naming the source files governed by that license. Every source file must be covered by at least one license record; a license may cover multiple files and multiple licenses may cover one file where the upstream grant is genuinely dual-licensed. Unknown file references and uncovered files are rejected. The digest is computed over the lexicographically sorted union of `files` and every `licenses[].licenseTextPath`; for each path, the hash stream is UTF-8 path, one NUL byte, file bytes, one NUL byte. This makes the check deterministic across operating systems and ensures each distinct license text is pinned.
 
 Optional CLI arguments are: manifest path (default `docs/linguistic-engine/source-manifest.json`) and data root (default repository root). Example:
 
@@ -113,4 +113,4 @@ Optional CLI arguments are: manifest path (default `docs/linguistic-engine/sourc
 pnpm --filter @workspace/scripts linguistics:preflight -- ./docs/linguistic-engine/source-manifest.json ./lexical-sources
 ```
 
-This is a preflight gate, not yet a wordlist parser or runtime importer. The current manifest is intentionally empty, so a successful run confirms only that no unapproved source is being admitted; it does not mean STOP has gained new vocabulary. The next implementation stage is fixture-based tests for rejected candidates, missing files, path traversal, checksum mismatch, and approved-source acceptance before any real dataset is considered.
+This is a preflight gate, not yet a wordlist parser or runtime importer. The current manifest is intentionally empty, so a successful run confirms only that no unapproved source is being admitted; it does not mean STOP has gained new vocabulary. The next implementation stage is fixture-based tests for rejected candidates, missing files, path traversal, checksum mismatch, and approved-source acceptance before any real dataset is considered. The tests include mixed word-list/affix licenses, missing file coverage, unknown license references, missing license texts, and license-text tampering.
