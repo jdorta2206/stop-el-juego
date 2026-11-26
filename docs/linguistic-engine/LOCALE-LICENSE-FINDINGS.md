@@ -428,3 +428,35 @@ Audit date: 2026-11-26. This batch deliberately includes spelling/etymology cont
 - RAE-ASALE historical dictionary, `amancayo`: https://temporalweb.asale.org/tdhle/amancayo
 
 This batch records evidence and review controls only. No historical or ASALE definitions were copied into STOP; none of these candidates has been added to runtime validation. No dataset was imported and no game behavior was changed.
+
+
+## Fifth semantic-control batch: regional senses, related plant names and register
+
+Audit date: 2026-11-26. This small supplementary pass uses current ASALE *Diccionario de americanismos* entries to test engine rules that a spelling-only allowlist would miss. These are semantic controls, not an increase to the 233-root shared-candidate queue: queue membership for each item has not been re-established in this pass, so none is counted toward the 31 individually reviewed queue candidates.
+
+| Lemma / control | Independent ASALE evidence | Engine implication |
+|---|---|---|
+| `aplazado, -a` | ASALE records a student who has not passed an exam/course across Honduras, El Salvador, Nicaragua, Costa Rica, Dominican Republic, Venezuela, Ecuador, Peru, Bolivia, Argentina and Uruguay; it also records a separate Dominican Republic sense meaning a person in a consensual union | One spelling carries an educational sense and a separate social sense. Category matching must select the intended sense; don't treat all senses as interchangeable |
+| `aplanchar(se)` | ASALE records ‘iron clothes’ in Guatemala, Honduras, Nicaragua and Venezuela; Colombian senses include discouraging someone or losing motivation; other Central American senses also refer to ironing | The lemma is not necessarily exclusive to the Americas; the regional meaning and country distribution belong on the sense, not as a blanket label on the spelling |
+| `apolillar(se)` | ASALE records ‘sleep/be asleep’ in Bolivia, Paraguay, Argentina and Uruguay, and a separate Peruvian sense ‘remain unmarried’ (of a woman) | Preserve distinct senses and register. A word can be a valid answer in one category/sense and unsuitable in another |
+| `apandar` | ASALE records Mexican senses involving confinement in a punishment cell and, by extension, segregating someone; Cuban usage includes accumulating more of something than needed | A valid verb with sharply different country-specific meanings; a generic “word exists” flag is insufficient for category validation |
+| `amancay` / `amancaya` / `amancayo` | ASALE records several botanical senses: in Colombia, Venezuela, Ecuador and Peru, plant/flower names associated with *Plumeria*; in Chile and Argentina, a different plant/flower associated with *Alstroemeria aurantiaca*. Related forms are not always botanically interchangeable | Botanical entries need a sense-to-taxon mapping. Do not merge similar spellings into one concept or infer species from string similarity |
+
+### Findings
+
+- This pass reinforces the core model: lexical headword → part of speech → sense → geographic distribution → register/domain → category eligibility.
+- Country marks attach to a particular sense, not automatically to every use of a lemma.
+- Botanical common names are especially risky for category scoring because one name can refer to different taxa in different regions.
+- These examples are not approved runtime entries and do not change the 233-root queue count. They are evidence and test cases for future deterministic sense-aware validation.
+
+### References
+
+- ASALE DA, `aplazado`: https://www.asale.org/damer/aplazado
+- ASALE DA, `aplanchar`: https://www.asale.org/damer/aplanchar
+- ASALE DA, `apolillar`: https://www.asale.org/damer/apolillar
+- ASALE DA, `apandar`: https://temporalweb.asale.org/damer/apandar
+- ASALE DA, `amancay`: https://www.asale.org/damer/amancay
+- ASALE DA, `amancaya`: https://www.asale.org/damer/amancaya
+- ASALE DA, `amancayo`: https://temporalweb.asale.org/damer/amancayo
+
+This supplementary audit records factual lexical findings and source links only. No ASALE definitions or database data were copied into STOP; no candidate was approved for runtime validation; no dictionary file or runtime code was changed.
