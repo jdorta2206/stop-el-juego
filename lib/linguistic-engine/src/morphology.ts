@@ -1,5 +1,5 @@
 import { normalizeLexicalForm } from "./index";
-import type { LexicalAttestationRecord, LexicalSourceRecord } from "./source-registry";
+import { validateLexicalSource, type LexicalAttestationRecord, type LexicalSourceRecord } from "./source-registry";
 
 export interface MorphologicalAttestationRecord {
   recordId: string;
@@ -21,7 +21,7 @@ export type MorphologyValidation =
   | { valid: true }
   | { valid: false; errors: string[] };
 
-const nonBlank = (value: unknown): value is string =>
+const ALLOWED_FEATURES = new Set([\n  "number:singular", "number:plural",\n  "gender:masculine", "gender:feminine", "gender:common",\n  "person:first", "person:second", "person:third",\n  "tense:present", "tense:past", "tense:future", "tense:imperfect", "tense:preterite", "tense:conditional",\n  "mood:indicative", "mood:subjunctive", "mood:imperative", "mood:infinitive", "mood:gerund", "mood:participle",\n  "degree:positive", "degree:comparative", "degree:superlative",\n  "form:affirmative", "form:negative", "form:clitic",\n]);\n\nconst nonBlank = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
 const validUtcTimestamp = (value: string): boolean => {
@@ -54,7 +54,7 @@ export function validateMorphologicalAttestation(
 
   if (form && form.reviewStatus !== "approved") errors.push("surface_form_not_approved");
   if (lemma && lemma.reviewStatus !== "approved") errors.push("lemma_not_approved");
-  if (source && (source.reviewStatus !== "approved" || source.language !== record.language || source.locale !== record.locale)) {
+  if (source && (!validateLexicalSource(source).valid || source.reviewStatus !== "approved" || source.language !== record.language || source.locale !== record.locale)) {
     errors.push("morphology_source_not_approved_for_locale");
   }
   if (form && (form.language !== record.language || form.locale !== record.locale)) {
@@ -76,6 +76,17 @@ export function validateMorphologicalAttestation(
   if (!Array.isArray(record.grammaticalFeatures) || record.grammaticalFeatures.length === 0 ||
       record.grammaticalFeatures.some((item) => !nonBlank(item))) {
     errors.push("grammatical_features_required");
+  } else {
+    if (new Set(record.grammaticalFeatures).size !== record.grammaticalFeatures.length) {
+      errors.push("duplicate_grammatical_feature");
+    }
+    if (record.grammaticalFeatures.some((item) => !ALLOWED_FEATURES.has(item))) {
+      errors.push("unsupported_grammatical_feature");
+    }
+    for (const dimension of ["number", "gender", "person", "tense", "mood", "degree"]) {
+      const values = record.grammaticalFeatures.filter((item) => item.startsWith(dimension + ":"));
+      if (values.length > 1) errors.push("conflicting_" + dimension + "_features");
+    }
   }
   if (!nonBlank(record.citationLocator) || record.citationLocator.trim().length < 3) {
     errors.push("morphology_citation_required");
