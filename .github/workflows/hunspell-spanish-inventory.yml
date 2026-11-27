@@ -86,7 +86,7 @@ jobs:
           locale_forms = {}
           status_totals = Counter()
           raw_total = 0
-          for path in sorted(Path("research/output/hunspell-es").glob("*.jsonl")):
+          for path in sorted(Path("research/output/hunspell-es").glob("es_*.jsonl")):
               records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
               source, candidates = records[0], records[1:]
               forms = {unicodedata.normalize("NFC", item["word"]).casefold() for item in candidates}
