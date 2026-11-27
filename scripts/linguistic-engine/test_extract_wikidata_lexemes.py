@@ -68,6 +68,28 @@ class WikidataLexemeExtractorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "grammaticalFeatures"):
             extract_lexeme(entity)
 
+    def test_reads_wikidata_array_wrapped_line_oriented_dump(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "wikidata-dump.json"
+            output = root / "records.jsonl"
+            entities = [spanish_lexeme("Q1084", "L123"), spanish_lexeme("Q147276", "L124")]
+            source.write_text(
+                "[\\n"
+                + json.dumps(entities[0], ensure_ascii=False) + ",\\n"
+                + json.dumps(entities[1], ensure_ascii=False) + "\\n"
+                + "]\\n",
+                encoding="utf-8",
+            )
+            summary = extract_jsonl(source, output, "Q1321")
+            rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(summary["entitiesRead"], 2)
+            self.assertEqual(summary["spanishLexemes"], 2)
+            self.assertEqual(summary["records"], 4)
+            self.assertEqual(summary["properNameRecords"], 2)
+            self.assertTrue(summary["streaming"])
+            self.assertTrue(all(row["lexicalApproval"] is False for row in rows))
+
     def test_jsonl_output_is_research_only_and_counts_proper_names(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -86,6 +108,7 @@ class WikidataLexemeExtractorTests(unittest.TestCase):
             self.assertTrue(summary["allLexicalApprovalFalse"])
             self.assertTrue(summary["allCategoryApprovalFalse"])
             self.assertEqual(summary["records"], 4)
+            self.assertTrue(summary["streaming"])
 
 
 if __name__ == "__main__":
