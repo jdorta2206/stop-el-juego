@@ -114,3 +114,29 @@ pnpm --filter @workspace/scripts linguistics:preflight -- ./docs/linguistic-engi
 ```
 
 This is a preflight gate, not yet a wordlist parser or runtime importer. The current manifest is intentionally empty, so a successful run confirms only that no unapproved source is being admitted; it does not mean STOP has gained new vocabulary. The next implementation stage is fixture-based tests for rejected candidates, missing files, path traversal, checksum mismatch, and approved-source acceptance before any real dataset is considered. The tests include mixed word-list/affix licenses, missing file coverage, unknown license references, missing license texts, and license-text tampering.
+
+
+## Validation gap audit — current server and offline behavior
+
+Audit date: 2026-11-27. Scope: read-only inspection of the current `master` implementation; no runtime files were changed by this audit.
+
+### Confirmed defects
+
+1. **Open categories bypass lexical existence.** In `artifacts/api-server/src/routes/game.ts`, `isWordValid` returns true for any safe input of at least three normalized characters in configured open categories, provided it starts with the round letter. This means a fabricated string can score in categories such as name/place/object/brand.
+2. **Offline repeats the same permissive rule.** `artifacts/stop-game/src/lib/offlineGame.ts` independently returns true for the same three-character condition. A server-only correction would leave offline play inconsistent.
+3. **The AI fallback is explicitly permissive.** `artifacts/api-server/src/lib/aiWordValidator.ts` instructs the model to be generous, accept plausible colloquialisms and accept when uncertain; its yes/no answer is cached as a durable validity verdict. That is incompatible with evidence-based lexical acceptance.
+4. **Prefix matching can over-accept.** Closed-category membership currently accepts a submitted form whenever it starts with a listed entry (for example, any longer string sharing a listed prefix), without verifying that the longer form is a documented inflection or derivative.
+5. **The same AI validator is used by the Impossible challenge.** Its scoring decision also relies on the permissive yes/no verdict, so the remediation must inspect this route rather than fixing only the solo round.
+
+### Required remediation order
+
+- Define a tri-state internal decision: `valid` (traceable lexical evidence and category fit), `invalid` (evidence disproves the answer or game rules reject it), and `unknown` (not enough evidence; never award points automatically).
+- Replace the three-character shortcut with a source-backed lookup. Names, places, brands, and other proper-noun categories need their own curated/evidenced registries; a general spelling dictionary alone cannot prove that a brand or place exists.
+- Remove AI yes/no as an authoritative source. AI may suggest a candidate and supporting references for review, but cannot create a valid cache verdict. Existing cached AI verdicts must not be trusted as lexical evidence during migration.
+- Replace prefix acceptance with explicit canonical-form/inflection relations from a reviewed morphological source. Do not accept arbitrary longer strings just because they share a prefix.
+- Implement the same deterministic rules and versioned data for API and offline play. If the evidence bundle is missing or stale, fail safely without awarding points and surface an understandable pending/unknown result where the UI supports it.
+- Add regression tests for invented strings in every open category, real documented regional words, valid words in the wrong category, unverified AI suggestions, prefix lookalikes, and parity between online/offline validation.
+
+### Release guard
+
+This audit is a finding, not a production fix. No scoring behavior, database rows, cache entries, Android artifacts, or production services were changed. Do not merge this PR or claim the issue fixed until the server, offline mirror, AI cache policy, and Impossible route have all been corrected and tested together.
