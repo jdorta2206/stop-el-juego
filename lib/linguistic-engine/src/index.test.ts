@@ -212,3 +212,9 @@ test("lexical evidence cannot be approved from a malformed citation locator", ()
   assert.equal(result.valid, false);
   if (!result.valid) assert.ok(result.errors.includes("citationLocator_required"));
 });
+
+test("source approval rejects impossible UTC calendar timestamps", () => {
+  const result = validateLexicalSource({ ...sourceRecord, reviewedAt: "2026-02-30T10:00:00Z" });
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("source_approval_audit_required"));
+});
