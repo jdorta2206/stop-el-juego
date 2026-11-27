@@ -72,6 +72,9 @@ function validateLicenseShape(value: unknown, sourceId: string, index: number): 
   if (!nonEmpty(value.spdxId) || !nonEmpty(value.licenseTextPath)) {
     fail(`${sourceId}: license requires spdxId and licenseTextPath`);
   }
+  if (!BUNDLE_LICENSES.has(value.spdxId)) {
+    fail(`${sourceId}: license ${value.spdxId} is not approved by STOP bundle policy`);
+  }
   if (!Array.isArray(value.appliesTo) || value.appliesTo.length === 0 || !value.appliesTo.every(nonEmpty)) {
     fail(`${sourceId}: license appliesTo must contain file paths`);
   }
