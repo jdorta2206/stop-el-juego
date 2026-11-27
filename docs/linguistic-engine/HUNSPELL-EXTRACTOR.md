@@ -57,3 +57,9 @@ python3 -m unittest discover -s scripts/linguistic-engine -p 'test_*.py' -v
 ```
 
 These tests use a small fake Hunspell executable to verify the extractor contract. They do not replace integration tests against the actual Hunspell binary and real upstream dictionary files.
+
+## Spanish regional inventory workflow
+
+The branch also defines `.github/workflows/hunspell-spanish-inventory.yml`. A push to the dedicated feature branch (or a pull-request update) downloads the 21 Spanish regional pairs in the pinned LibreOffice revision, runs the extractor with the official Hunspell CLI, and uploads a seven-day, review-only artifact. The locales are Spain plus the American regional files; Equatorial Guinea and Philippines are intentionally outside this first regional batch.
+
+The workflow artifact includes one JSONL per locale and a summary table. It is not committed to the repository and does not change the game dictionary. The workflow must complete successfully before any inventory totals are reported as measured results.
