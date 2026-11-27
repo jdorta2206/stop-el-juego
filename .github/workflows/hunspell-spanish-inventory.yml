@@ -1,0 +1,100 @@
+name: Hunspell Spanish candidate inventory
+
+on:
+  pull_request:
+    paths:
+      - "scripts/linguistic-engine/**"
+      - "docs/linguistic-engine/HUNSPELL-EXTRACTOR.md"
+      - ".github/workflows/hunspell-spanish-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hunspell-spanish-inventory-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  extract-spanish-candidates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout STOP branch
+        uses: actions/checkout@v4
+      - name: Install official Hunspell CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes hunspell
+          hunspell --version
+      - name: Download pinned LibreOffice Spanish dictionaries
+        env:
+          UPSTREAM_REVISION: 79195b017e6d70151337856c59e7d13d311d6630
+        run: |
+          set -euo pipefail
+          mkdir -p research/hunspell/es research/output/hunspell-es
+          locales=(
+            es_AR es_BO es_CL es_CO es_CR es_CU es_DO es_EC es_ES es_GT
+            es_HN es_MX es_NI es_PA es_PE es_PR es_PY es_SV es_US es_UY es_VE
+          )
+          for locale in "${locales[@]}"; do
+            for extension in dic aff; do
+              url="https://raw.githubusercontent.com/LibreOffice/dictionaries/${UPSTREAM_REVISION}/es/${locale}.${extension}"
+              curl --fail --location --retry 3 --silent --show-error \
+                "$url" --output "research/hunspell/es/${locale}.${extension}"
+            done
+            echo "Downloaded ${locale}"
+          done
+      - name: Run extractor against all 21 Spanish locales
+        run: |
+          set -euo pipefail
+          for dic in research/hunspell/es/*.dic; do
+            locale="$(basename "$dic" .dic)"
+            python3 scripts/linguistic-engine/extract_hunspell_candidates.py \
+              --dic "$dic" \
+              --aff "research/hunspell/es/${locale}.aff" \
+              --locale "${locale//_/-}" \
+              --revision 79195b017e6d70151337856c59e7d13d311d6630 \
+              --hunspell hunspell \
+              --output "research/output/hunspell-es/${locale}.jsonl"
+          done
+      - name: Build inventory summary
+        run: |
+          python3 - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          lines = ["| Locale | Candidates | Accepted by Hunspell | Rejected by Hunspell | Manual review |", "|---|---:|---:|---:|---:|"]
+          totals = Counter()
+          for path in sorted(Path("research/output/hunspell-es").glob("*.jsonl")):
+              records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+              source = records[0]
+              counts = Counter(record["status"] for record in records[1:])
+              totals.update(counts)
+              lines.append(
+                  f"| {source['locale']} | {len(records)-1:,} | "
+                  f"{counts['accepted_by_hunspell']:,} | "
+                  f"{counts['rejected_by_hunspell']:,} | "
+                  f"{counts['manual_review']:,} |"
+              )
+          lines.extend([
+              "",
+              f"**Total candidates:** {sum(totals.values()):,}",
+              f"**Accepted by Hunspell:** {totals['accepted_by_hunspell']:,}",
+              f"**Rejected by Hunspell:** {totals['rejected_by_hunspell']:,}",
+              f"**Manual review:** {totals['manual_review']:,}",
+              "",
+              "Hunspell acceptance is not lexical approval and does not establish category eligibility.",
+              "All records remain research-only; no STOP runtime dictionary is modified.",
+          ])
+          Path("research/output/hunspell-es/SUMMARY.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          Path(__import__("os").environ["GITHUB_STEP_SUMMARY"]).write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+      - name: Upload review-only candidate inventories
+        uses: actions/upload-artifact@v4
+        with:
+          name: hunspell-spanish-candidates-79195b0
+          path: research/output/hunspell-es/
+          if-no-files-found: error
+          retention-days: 7
