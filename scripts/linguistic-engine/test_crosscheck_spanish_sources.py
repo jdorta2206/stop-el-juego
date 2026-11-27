@@ -62,13 +62,14 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
             path = Path(directory) / "candidates.jsonl"
             path.write_text(
                 json.dumps({"identity": "casa", "spellings": ["casa"], "locales": ["es-ES"]}) + "\n"
-                + json.dumps({"identity": "inventada", "spellings": ["inventada"], "locales": ["es-MX"]}) + "\n",
+                + json.dumps({"identity": "inventada", "spellings": ["inventada"], "locales": ["es-MX"]}) + "\n"
+                + json.dumps({"identity": "hablaste", "spellings": ["hablaste"], "locales": ["es-AR"]}) + "\n",
                 encoding="utf-8",
             )
             rows, summary = build_crosscheck(
                 path,
-                {"casa": [42]},
-                {"casa": ["00000001-n"]},
+                {"casa": [42], "hablar": [99]},
+                {"casa": ["00000001-n"], "hablar": ["00000002-v"]},
                 {"00000001-n": "construcción para habitar"},
                 {"hablaste": [{"lemma": "hablar", "tag": "VMSP2S0", "partOfSpeech": "verb"}]},
             )
@@ -79,6 +80,9 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
             self.assertEqual(rows[0]["rlaWordlistLines"], [42])
             self.assertEqual(rows[0]["freelingArgentineAnalyses"], [])
             self.assertEqual(rows[1]["evidence"], "no_match_in_checked_sources")
+            self.assertEqual(rows[2]["freelingArgentineAnalyses"][0]["lemmaEvidence"], "mcr_lemma_attested")
+            self.assertEqual(rows[2]["freelingArgentineAnalyses"][0]["lemmaMcrSynsetIds"], ["00000002-v"])
+            self.assertEqual(summary["freeling_lemma_mcr_attested"], 1)
             self.assertTrue(all(row["lexicalApproval"] is False for row in rows))
             self.assertTrue(all(row["categoryApproval"] is False for row in rows))
             self.assertEqual(summary["both_sources_match"], 1)
