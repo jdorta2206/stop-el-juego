@@ -80,3 +80,82 @@ test("reviewed category evidence can authorize the exact category", () => {
     { eligible: true, reason: "category_attested" },
   );
 });
+
+import {
+  validateCategoryAttestation,
+  validateLexicalAttestation,
+  validateLexicalSource,
+  type LexicalSourceRecord,
+  type LexicalAttestationRecord,
+} from "./source-registry";
+
+const sourceRecord: LexicalSourceRecord = {
+  sourceId: "source-001",
+  title: "Reference dictionary",
+  provider: "Publisher",
+  referenceUrl: "https://example.org/dictionary",
+  licenseId: "license-reviewed-separately",
+  licenseUrl: "https://example.org/license",
+  attribution: "Attribution text required by the source license",
+  language: "es",
+  locale: "es-MX",
+  edition: "2026",
+  retrievedAt: "2026-11-27T10:00:00Z",
+};
+
+const lexicalRecord: LexicalAttestationRecord = {
+  recordId: "lex-001",
+  sourceId: "source-001",
+  form: "carro",
+  normalizedForm: "carro",
+  language: "es",
+  locale: "es-MX",
+  citationLocator: "entry:carro",
+  reviewStatus: "approved",
+  reviewedBy: "reviewer-id",
+  reviewedAt: "2026-11-27T10:05:00Z",
+};
+
+test("source registry rejects missing provenance and license metadata", () => {
+  const result = validateLexicalSource({ ...sourceRecord, licenseId: "", edition: "" });
+  assert.equal(result.valid, false);
+  if (!result.valid) {
+    assert.ok(result.errors.includes("licenseId_required"));
+    assert.ok(result.errors.includes("edition_required"));
+  }
+});
+
+test("approved lexical attestation requires registered source and review audit", () => {
+  assert.equal(validateLexicalAttestation(lexicalRecord, [sourceRecord]).valid, true);
+  const unreviewed = { ...lexicalRecord, reviewedBy: "", reviewedAt: "" };
+  const result = validateLexicalAttestation(unreviewed, [sourceRecord]);
+  assert.equal(result.valid, false);
+});
+
+test("category approval cannot substitute for missing lexical approval", () => {
+  const category = {
+    recordId: "cat-001",
+    lexicalRecordId: "lex-001",
+    normalizedForm: "carro",
+    categoryId: "vehicle",
+    citationLocator: "entry:carro#vehicle",
+    reviewStatus: "approved" as const,
+    reviewedBy: "reviewer-id",
+    reviewedAt: "2026-11-27T10:10:00Z",
+  };
+  assert.equal(validateCategoryAttestation(category, [{ ...lexicalRecord, reviewStatus: "pending" }]).valid, false);
+  assert.equal(validateCategoryAttestation(category, [lexicalRecord]).valid, true);
+});
+
+test("category attestation must match the exact lexical form", () => {
+  const category = {
+    recordId: "cat-002",
+    lexicalRecordId: "lex-001",
+    normalizedForm: "carroinventado",
+    categoryId: "vehicle",
+    citationLocator: "entry:carro#vehicle",
+    reviewStatus: "pending" as const,
+  };
+  const result = validateCategoryAttestation(category, [lexicalRecord]);
+  assert.equal(result.valid, false);
+});
