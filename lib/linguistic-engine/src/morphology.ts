@@ -1,5 +1,5 @@
 import { normalizeLexicalForm } from "./index";
-import { validateLexicalSource, type LexicalAttestationRecord, type LexicalSourceRecord } from "./source-registry";
+import { validateLexicalAttestation, validateLexicalSource, type LexicalAttestationRecord, type LexicalSourceRecord } from "./source-registry";
 
 export interface MorphologicalAttestationRecord {
   recordId: string;
@@ -54,6 +54,8 @@ export function validateMorphologicalAttestation(
 
   if (form && form.reviewStatus !== "approved") errors.push("surface_form_not_approved");
   if (lemma && lemma.reviewStatus !== "approved") errors.push("lemma_not_approved");
+  if (form && !validateLexicalAttestation(form, sources).valid) errors.push("surface_form_lexical_evidence_invalid");
+  if (lemma && !validateLexicalAttestation(lemma, sources).valid) errors.push("lemma_lexical_evidence_invalid");
   if (source && (!validateLexicalSource(source).valid || source.reviewStatus !== "approved" || source.language !== record.language || source.locale !== record.locale)) {
     errors.push("morphology_source_not_approved_for_locale");
   }
