@@ -219,7 +219,8 @@ test("clitic combinations cannot be fabricated from unsupported pronouns or inva
   assert.equal(missingOrder.valid, false);
   if (!missingOrder.valid) assert.ok(missingOrder.errors.includes("two_clitics_require_indirect_direct_order"));
 });
-\ntest("morphology cannot link a surface form to an unapproved lemma", () => {
+
+test("morphology cannot link a surface form to an unapproved lemma", () => {
   const surface = { ...lexicalRecord, recordId: "lex-cantamos", form: "cantamos", normalizedForm: "cantamos" };
   const lemma = { ...lexicalRecord, recordId: "lex-cantar", form: "cantar", normalizedForm: "cantar", reviewStatus: "pending" as const };
   const morphology = {
