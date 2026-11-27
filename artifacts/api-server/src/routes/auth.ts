@@ -1240,4 +1240,35 @@ router.post("/logout", (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+
+
+// Update the canonical OAuth profile name used by server-side room joins.
+// Guests remain client-owned; only a valid signed OAuth session can use this route.
+router.post("/profile", async (req: Request, res: Response) => {
+  const playerId = readPlayerId(req);
+  if (!playerId || !isLoggedInId(playerId) || await isPlayerRevoked(playerId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const requestedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!requestedName) {
+    return res.status(400).json({ error: "invalid_name" });
+  }
+  const playerName = requestedName.slice(0, 14);
+
+  try {
+    const rows = await db.update(playerScoresTable)
+      .set({ playerName, updatedAt: new Date() })
+      .where(eq(playerScoresTable.playerId, playerId))
+      .returning({ playerId: playerScoresTable.playerId });
+    if (!rows.length) {
+      return res.status(404).json({ error: "profile_not_found" });
+    }
+    return res.json({ ok: true, name: playerName });
+  } catch (err: any) {
+    console.error("[auth/profile] name update failed:", err?.message ?? err);
+    return res.status(503).json({ error: "profile_update_unavailable" });
+  }
+});
+
 export default router;
