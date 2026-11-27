@@ -22,13 +22,17 @@ export type MorphologyValidation =
   | { valid: false; errors: string[] };
 
 const ALLOWED_FEATURES = new Set([
-  "pos:verb", "pos:noun", "pos:adjective",\n  "number:singular", "number:plural",
+  "pos:verb", "pos:noun", "pos:adjective",
+  "number:singular", "number:plural",
   "gender:masculine", "gender:feminine", "gender:common",
   "person:first", "person:second", "person:third",
   "tense:present", "tense:past", "tense:future", "tense:imperfect", "tense:preterite", "tense:conditional",
   "mood:indicative", "mood:subjunctive", "mood:imperative", "mood:infinitive", "mood:gerund", "mood:participle",
   "degree:positive", "degree:comparative", "degree:superlative",
-  "form:affirmative", "form:negative", "form:clitic",\n  "clitic:me", "clitic:te", "clitic:se", "clitic:lo", "clitic:la",\n  "clitic:los", "clitic:las", "clitic:le", "clitic:les", "clitic:nos", "clitic:os",\n  "clitic-order:indirect-direct",
+  "form:affirmative", "form:negative", "form:clitic",
+  "clitic:me", "clitic:te", "clitic:se", "clitic:lo", "clitic:la",
+  "clitic:los", "clitic:las", "clitic:le", "clitic:les", "clitic:nos", "clitic:os",
+  "clitic-order:indirect-direct",
 ]);
 
 const nonBlank = (value: unknown): value is string =>
