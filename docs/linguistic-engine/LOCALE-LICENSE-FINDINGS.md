@@ -858,3 +858,33 @@ Audit date: 2026-11-27. The next four not-yet-reviewed entries after `descachaza
 - ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+## Eighteenth independent lexicographic batch: one ASALE-confirmed candidate and three evidence-status controls
+
+Audit date: 2026-11-27. The next four forms in the reconstructed shared regional-root queue were reviewed. Only `despresar` has an individual *Diccionario de americanismos* entry in the sources checked and is added to the positively corroborated ASALE queue count. The other three are retained with their actual evidence status; historical or grammatical evidence is not silently upgraded to a dialect-dictionary confirmation.
+
+| Candidate | Independent evidence | Classification and STOP caution |
+|---|---|---|
+| `despilaramiento` | Listed by the ASALE Tesoro de los diccionarios históricos as an unpublished entry from the 1933–1936 historical-dictionary materials. The accessible record establishes historical lexicographic documentation, but this lookup did not expose a usable definition or current regional distribution | Historical lead only. Do not infer a modern sense, country, frequency or category suitability without the underlying historical record and contemporary evidence |
+| `despilarar` | Also listed in the ASALE historical Tesoro among unpublished 1933–1936 dictionary materials. No current regional sense or geographic label was established in this pass | Historical lead only; keep distinct from the derived-looking noun `despilaramiento`. Do not infer their meanings or grammatical relationship solely from spelling |
+| `despresar` | ASALE records a transitive verb in Colombia, Venezuela, Ecuador, Bolivia, Chile, Paraguay, Argentina and Uruguay for cutting a bird, hare or rabbit into pieces at the joints. A second sense in Colombia, Venezuela, Ecuador and northern Argentina means butchering/cutting up a cow or pig | Transitive food-preparation/butchery verb. Preserve the two animal-related senses and their separate geographic scope; do not treat it as a generic verb meaning to cut anything |
+| `diarismo` | ASALE's *Nueva gramática de la lengua española* explains the formation of `diarismo` from `diario` and notes that in some American countries it alternates with `periodismo`. The ASALE historical Tesoro also lists the form among unpublished 1933–1936 historical-dictionary materials | Masculine noun associated with journalism/the press. The grammatical discussion supports the form and an American usage contrast, but does not supply a country-by-country distribution; do not invent one or count this as an individual ASALE Americanisms-dictionary entry |
+
+### Quality findings
+
+- One further item in the 233-root queue has an individual ASALE *Diccionario de americanismos* entry. The positively reviewed individual-entry count advances from 76 to **77 of 233**.
+- `despresar` is a verb whose two senses have different country coverage; the engine must attach geography to each sense, not merely to the spelling.
+- `despilaramiento` and `despilarar` have historical-source traces only in this pass. An unpublished historical-dictionary record is not proof of current usage.
+- `diarismo` has useful ASALE grammatical evidence for an American usage, but that is a different evidence class from an individual *Diccionario de americanismos* entry. The audit keeps those classes separate.
+- ASALE's sources corroborate lexical research; they do not grant permission to copy definitions or database content. No candidate in this batch is approved for runtime import.
+
+### References
+
+- ASALE DA, `despresar`: https://www.asale.org/damer/despresar
+- ASALE historical Tesoro, `despilaramiento`: https://temporalweb.asale.org/tdhle/despilaramiento
+- ASALE historical Tesoro, `despilarar`: https://temporalweb.asale.org/tdhle/despilarar
+- ASALE *Nueva gramática*, section on the suffix `-ismo` (discussion of `diarismo`): https://temporalweb.asale.org/gram%C3%A1tica/morfolog%C3%ADa/nombres-de-cualidad-estado-y-condici%C3%B3n-iv-el-sufijo-ismo
+- ASALE historical Tesoro, `diarismo`: https://temporalweb.asale.org/tdhle/diarismo
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
