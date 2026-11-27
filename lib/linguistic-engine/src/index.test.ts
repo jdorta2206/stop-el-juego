@@ -292,3 +292,44 @@ test("same spelling in separate languages remains separate and does not cross-va
   const portugueseRecord = { ...lexicalRecord, recordId: "lex-pt", sourceId: "source-pt-br", language: "pt", locale: "pt-BR" };
   assert.equal(validateLexicalCorpus([lexicalRecord, portugueseRecord], [sourceRecord, portugueseSource]).valid, true);
 });
+
+
+import { auditLexicalDiscrepancies } from "./source-registry";
+
+test("approved and rejected attestations for the same locale and sense are blocked as a conflict", () => {
+  const rejected = { ...lexicalRecord, recordId: "lex-rejected", sourceId: "source-002", reviewStatus: "rejected" as const };
+  const audit = auditLexicalDiscrepancies([lexicalRecord, rejected]);
+  assert.equal(audit.groups[0].status, "conflict");
+  assert.deepEqual(audit.publishableRecordIds, []);
+  assert.deepEqual(audit.blockedRecordIds, ["lex-001", "lex-rejected"]);
+});
+
+test("pending independent evidence blocks publication until reviewed", () => {
+  const pending = { ...lexicalRecord, recordId: "lex-pending", sourceId: "source-002", reviewStatus: "pending" as const };
+  const audit = auditLexicalDiscrepancies([lexicalRecord, pending]);
+  assert.equal(audit.groups[0].status, "pending_review");
+  assert.deepEqual(audit.publishableRecordIds, []);
+});
+
+test("different regional locales are not treated as contradictory evidence", () => {
+  const regional = { ...lexicalRecord, recordId: "lex-es", sourceId: "source-es", locale: "es-ES" };
+  const audit = auditLexicalDiscrepancies([lexicalRecord, regional]);
+  assert.equal(audit.groups.length, 2);
+  assert.ok(audit.groups.every((group) => group.status === "approved"));
+  assert.equal(audit.publishableRecordIds.length, 2);
+});
+
+test("homographs in different languages and distinct parts of speech remain separate", () => {
+  const portuguese = { ...lexicalRecord, recordId: "lex-pt", language: "pt", locale: "pt-BR" };
+  const noun = { ...lexicalRecord, recordId: "lex-noun", partOfSpeech: "noun" };
+  const verb = { ...lexicalRecord, recordId: "lex-verb", partOfSpeech: "verb" };
+  const audit = auditLexicalDiscrepancies([lexicalRecord, portuguese, noun, verb]);
+  assert.equal(audit.groups.length, 4);
+  assert.ok(audit.groups.every((group) => group.status === "approved"));
+});
+
+test("different definition summaries alone do not create an automatic conflict", () => {
+  const otherMeaning = { ...lexicalRecord, recordId: "lex-meaning-2", sourceId: "source-002", definitionSummary: "Another documented meaning" };
+  const audit = auditLexicalDiscrepancies([lexicalRecord, otherMeaning]);
+  assert.equal(audit.groups[0].status, "approved");
+});
