@@ -13,6 +13,12 @@ const BUNDLE_LICENSES = new Set([
 ]);
 type Source = {
   id: string;
+  title: string;
+  provider: string;
+  attribution: string;
+  edition: string;
+  retrievedAt: string;
+  referenceUrl: string;
   language: "es" | "en" | "pt" | "fr";
   locales: string[];
   upstreamUrl: string;
@@ -77,14 +83,23 @@ function validateLicenseShape(value: unknown, sourceId: string, index: number): 
 
 function validateSourceShape(value: unknown, index: number): Source {
   if (!isRecord(value)) fail(`sources[${index}] must be an object`);
-  assertOnlyKeys(value, ["id", "language", "locales", "upstreamUrl", "version", "revision", "sha256", "files", "licenses", "notices", "commercialUse", "modification", "redistribution", "shareAlike", "thirdPartyContent", "reviewStatus", "reviewedBy", "reviewedAt", "approvalReference"], `sources[${index}]`);
+  assertOnlyKeys(value, ["id", "title", "provider", "attribution", "edition", "retrievedAt", "referenceUrl", "language", "locales", "upstreamUrl", "version", "revision", "sha256", "files", "licenses", "notices", "commercialUse", "modification", "redistribution", "shareAlike", "thirdPartyContent", "reviewStatus", "reviewedBy", "reviewedAt", "approvalReference"], `sources[${index}]`);
   const required = [
-    "id", "language", "locales", "upstreamUrl", "version", "revision", "sha256",
+    "id", "title", "provider", "attribution", "edition", "retrievedAt", "referenceUrl", "language", "locales", "upstreamUrl", "version", "revision", "sha256",
     "files", "licenses", "notices", "commercialUse", "modification",
     "redistribution", "shareAlike", "thirdPartyContent", "reviewStatus",
   ];
   for (const key of required) if (!(key in value)) fail(`sources[${index}] missing ${key}`);
   if (!nonEmpty(value.id) || !/^[a-z0-9][a-z0-9._-]{2,79}$/.test(value.id)) fail(`sources[${index}] has invalid id`);
+  for (const field of ["title", "provider", "attribution", "edition"] as const) {
+    if (!nonEmpty(value[field])) fail(`${value.id}: ${field} is required`);
+  }
+  if (!nonEmpty(value.retrievedAt) || !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$/.test(value.retrievedAt) || !Number.isFinite(Date.parse(value.retrievedAt))) {
+    fail(`${value.id}: retrievedAt must be a UTC ISO timestamp`);
+  }
+  if (!nonEmpty(value.referenceUrl)) fail(`${value.id}: referenceUrl is required`);
+  try { const ref = new URL(value.referenceUrl); if (ref.protocol !== "https:" || !ref.hostname) fail(`${value.id}: referenceUrl must use HTTPS`); }
+  catch { fail(`${value.id}: invalid referenceUrl`); }
   if (!["es", "en", "pt", "fr"].includes(String(value.language))) fail(`${value.id}: unsupported language`);
   if (!Array.isArray(value.locales) || value.locales.length === 0 ||
       !value.locales.every((v) => typeof v === "string" && /^[a-z]{2}-[A-Z]{2}$/.test(v))) {
