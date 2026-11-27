@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Extract a review-only candidate inventory from a Hunspell .dic/.aff pair.
 
-This tool does not generate inflections, decide lexical truth, assign categories,
-or modify STOP's runtime dictionary. It uses the official Hunspell CLI to check
-simple alphabetic entries against the matching .aff rules. Non-simple entries
-are retained as manual-review records.
+The extractor does not generate inflections, decide lexical truth, assign
+categories, or modify STOP's runtime dictionary. It checks simple alphabetic
+entries with the official Hunspell CLI and leaves other entries for review.
 """
 from __future__ import annotations
 
@@ -17,7 +16,6 @@ import sys
 import unicodedata
 from pathlib import Path
 from typing import Iterable
-
 
 SIMPLE_WORD = re.compile(r"^[^\W\d_]+$", re.UNICODE)
 
@@ -35,19 +33,14 @@ def comparison_form(value: str) -> str:
 
 
 def split_dic_entry(line: str) -> tuple[str, str, str]:
-    """Return word, flags and trailing morphology without interpreting flags."""
+    """Parse word[/flags] and optional morphology without breaking phrases."""
     body = line.rstrip("\r\n")
-    metadata = ""
     if not body:
         raise ValueError("empty dictionary entry")
-    first_space = re.search(r"\s", body)
-    if first_space:
-        metadata = body[first_space.start():].strip()
-        body = body[:first_space.start()]
 
     separator = -1
-    start = 1 if body.startswith("/") else 0
     escaped = False
+    start = 1 if body.startswith("/") else 0
     for index in range(start, len(body)):
         char = body[index]
         if char == "/" and not escaped:
@@ -59,13 +52,17 @@ def split_dic_entry(line: str) -> tuple[str, str, str]:
             escaped = False
 
     if separator < 0:
-        word, flags = body, ""
+        word, flags, morphology = body, "", ""
     else:
-        word, flags = body[:separator], body[separator + 1:]
+        word = body[:separator]
+        tail = body[separator + 1:]
+        match = re.match(r"([^\s]*)(?:\s+(.*))?$", tail)
+        flags = match.group(1) if match else ""
+        morphology = (match.group(2) or "") if match else ""
     word = word.replace("\\/", "/")
     if not word:
         raise ValueError("dictionary entry has an empty word")
-    return word, flags, metadata
+    return word, flags, morphology
 
 
 def read_dictionary(path: Path) -> tuple[int, list[dict[str, str]]]:
@@ -105,7 +102,8 @@ def verify_affix_file(path: Path) -> None:
 def hunspell_rejections(
     binary: str, dictionary_base: Path, words: Iterable[str]
 ) -> set[str]:
-    payload = "".join(word + "\n" for word in words)
+    word_list = list(words)
+    payload = "".join(word + "\n" for word in word_list)
     if not payload:
         return set()
     completed = subprocess.run(
@@ -123,10 +121,8 @@ def hunspell_rejections(
             f"Hunspell failed ({completed.returncode}): "
             f"{completed.stderr.strip() or completed.stdout.strip()}"
         )
-    # Only simple alphabetic inputs are sent to Hunspell, one per line, so
-    # every returned token must map back to an exact normalized input form.
-    inputs = {comparison_form(word) for word in words}
-    rejected = set()
+    inputs = {comparison_form(word) for word in word_list}
+    rejected: set[str] = set()
     for output_line in completed.stdout.splitlines():
         token = output_line.strip()
         if not token:
@@ -146,9 +142,8 @@ def build_inventory(
 ) -> list[dict[str, object]]:
     verify_affix_file(aff_path)
     declared, records = read_dictionary(dic_path)
-    base = dic_path.with_suffix("")
     simple_words = [r["word"] for r in records if SIMPLE_WORD.fullmatch(r["word"])]
-    rejected = hunspell_rejections(hunspell, base, simple_words)
+    rejected = hunspell_rejections(hunspell, dic_path.with_suffix(""), simple_words)
 
     result: list[dict[str, object]] = [{
         "recordType": "source",
@@ -162,8 +157,8 @@ def build_inventory(
         "parsedEntryCount": len(records),
         "hunspellBinary": hunspell,
         "classificationNote": (
-            "accepted_by_hunspell means only that the pinned .dic/.aff pair "
-            "accepts this form; it is not proof of lexical truth or category eligibility"
+            "accepted_by_hunspell means only that the paired .dic/.aff accepts "
+            "the form; it is not proof of lexical truth or category eligibility"
         ),
     }]
     for record in records:
@@ -195,9 +190,8 @@ def main() -> int:
     parser.add_argument("--locale", required=True, help="For example es-ES or pt-BR")
     parser.add_argument("--revision", required=True, help="Immutable upstream commit or release")
     parser.add_argument("--hunspell", default="hunspell", help="Hunspell CLI executable")
-    parser.add_argument("--output", required=True, type=Path, help="Output JSONL path")
+    parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-
     try:
         records = build_inventory(
             args.dic, args.aff, args.locale, args.revision, args.hunspell
