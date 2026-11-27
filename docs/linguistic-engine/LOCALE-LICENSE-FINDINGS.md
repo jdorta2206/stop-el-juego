@@ -588,3 +588,25 @@ This entry illustrates why the engine should store the semantic role (instrument
 - ASALE historical dictionary, `carpidora`: https://temporalweb.asale.org/tdhle/carpidora
 
 This supplementary check is documentation only. No ASALE definitions or database data were copied into STOP, no dictionary was imported, and no runtime or game behavior was changed.
+
+
+## Ninth supplementary lexicographic check: animal name and polysemous regional form
+
+Audit date: 2026-11-27. Two additional ASALE entries adjacent to the current alphabetical review area were checked as supplementary controls. Their membership in the original 233-root intersection queue was not re-established in this pass; neither changes the reviewed-candidate count.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `carpincho` | ASALE records the masculine zoological sense in Ecuador, Peru, Bolivia, Paraguay, Argentina and Uruguay, identifying the species `Hydrochoerus hydrochaeris`. It also records a separate Bolivian colloquial sense of `carpincho, -a` meaning a carpenter | Keep the animal and occupational/person senses distinct. The animal sense can be evaluated for animal categories; the Bolivian colloquial person sense must not be conflated with the animal |
+| `carretilla` | ASALE records several unrelated regional senses: a thread/wire reel in Mexico, Panama and Chile; a fast-talking person or rapid speech in parts of the Caribbean and northern South America; a small street-vending cart in Honduras, El Salvador and Peru; lower jaw in Chile, Paraguay, Argentina and Uruguay; and a football tackle in Peru, among others | This is a high-polysemy lemma. Store senses separately with country, grammatical gender and register; do not accept it as a generic object or vehicle without sense/category matching |
+
+### Quality finding
+
+These entries reinforce that a lemma-level country tag is insufficient. The lexical record must attach region, part of speech, register and semantic domain to each individual sense. A single spelling may denote an animal, a person, a tool, a body part or an action depending on locale.
+
+### References
+
+- ASALE DA, `carpincho`: https://www.asale.org/damer/carpincho
+- ASALE DA, `carretilla`: https://www.asale.org/damer/carretilla
+- ASALE, description and scope of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+
+This supplementary check is documentation only. No dictionary data was copied or imported, no candidate was approved for runtime validation, and no game behavior was changed.
