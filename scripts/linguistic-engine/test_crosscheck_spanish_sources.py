@@ -46,9 +46,9 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "AR.verb"
             path.write_text(
-                "abalancés abalanzar VMSP2S0\\n"
-                "abalanzá abalanzar VMM02S0\\n"
-                "ABALANZÁ abalanzar VMM02S0\\n",
+                "abalancés abalanzar VMSP2S0\n"
+                "abalanzá abalanzar VMM02S0\n"
+                "ABALANZÁ abalanzar VMM02S0\n",
                 encoding="utf-8",
             )
             matches = read_freeling_argentina(path)
