@@ -47,28 +47,42 @@ def read_rla(path: Path) -> dict[str, list[int]]:
     return matches
 
 
-def read_mcr(path: Path) -> dict[str, list[str]]:
+def read_mcr(path: Path) -> tuple[dict[str, list[str]], dict[str, str]]:
     matches: dict[str, list[str]] = {}
-    for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    definitions: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
         if not raw or raw.startswith("#"):
             continue
         columns = raw.split("\t")
-        if len(columns) < 3 or columns[1] != "spa:lemma":
+        if len(columns) < 3:
             continue
-        synset, _, lemma = columns[0], columns[1], columns[2]
-        lemma = lemma.strip()
-        if not lemma:
-            continue
-        values = matches.setdefault(identity(lemma), [])
-        if synset not in values:
-            values.append(synset)
-    return {key: sorted(value) for key, value in matches.items()}
+        synset, record_type = columns[0], columns[1]
+        if record_type == "spa:lemma":
+            lemma = columns[2].strip()
+            if lemma:
+                values = matches.setdefault(identity(lemma), [])
+                if synset not in values:
+                    values.append(synset)
+        elif record_type == "spa:def":
+            definition = columns[-1].strip()
+            if definition:
+                definitions[synset] = definition
+    return (
+        {key: sorted(value) for key, value in matches.items()},
+        definitions,
+    )
+
+
+def mcr_pos(synset: str) -> str:
+    suffix = synset.rsplit("-", 1)[-1]
+    return {"n": "noun", "v": "verb", "a": "adjective", "r": "adverb"}.get(suffix, "unknown")
 
 
 def build_crosscheck(
     candidates_path: Path,
     rla_matches: dict[str, list[int]],
     mcr_matches: dict[str, list[str]],
+    mcr_definitions: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     output: list[dict[str, Any]] = []
     counts = Counter()
@@ -79,7 +93,17 @@ def build_crosscheck(
         key = candidate["identity"]
         rla_lines = rla_matches.get(key, [])
         synsets = mcr_matches.get(key, [])
+        definitions = mcr_definitions or {}
+        sense_details = [
+            {
+                "synsetId": synset,
+                "partOfSpeech": mcr_pos(synset),
+                "definition": definitions.get(synset, ""),
+            }
+            for synset in synsets
+        ]
         counts["candidates"] += 1
+        counts["mcr_synsets_with_definition"] += sum(bool(item["definition"]) for item in sense_details)
         counts["rla_wordlist_match"] += bool(rla_lines)
         counts["mcr_synset_match"] += bool(synsets)
         counts["both_sources_match"] += bool(rla_lines and synsets)
@@ -90,6 +114,8 @@ def build_crosscheck(
             "locales": candidate.get("locales", []),
             "rlaWordlistLines": rla_lines,
             "mcrSynsetIds": synsets,
+            "mcrSenses": sense_details,
+            "properNameReview": "required_when_category_or_answer_rules_distinguish_proper_names",
             "evidence": (
                 "mcr_synset_match" if synsets else
                 "rla_wordlist_match_lineage_unverified" if rla_lines else
