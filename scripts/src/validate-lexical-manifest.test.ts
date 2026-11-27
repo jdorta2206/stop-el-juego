@@ -190,3 +190,31 @@ test("rejects invalid optional review metadata", async () => {
   await writeFile(manifestPath, JSON.stringify(manifest));
   await assert.rejects(validateManifest(manifestPath, root), /reviewedAt must be a valid calendar date/);
 });
+
+test("rejects an unrecognized or unapproved SPDX identifier", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].licenses[0].spdxId = "MADE-UP-LICENSE";
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /not approved by STOP bundle policy/);
+});
+
+test("rejects approved sources that do not permit modification", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].modification = false;
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /permit commercial use, modification and redistribution/);
+});
+
+test("rejects share-alike sources from the proprietary game bundle", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].shareAlike = true;
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /share-alike source is not approved/);
+});
+
+test("rejects non-HTTPS upstream references", async () => {
+  const { root, manifestPath, manifest } = await fixture();
+  manifest.sources[0].upstreamUrl = "http://example.org/dictionary";
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(validateManifest(manifestPath, root), /upstreamUrl must use HTTPS/);
+});
