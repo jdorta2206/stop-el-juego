@@ -110,7 +110,7 @@ def hunspell_rejections(
     if not payload:
         return set()
     completed = subprocess.run(
-        [binary, "-l", "-1", "-d", str(dictionary_base)],
+        [binary, "-l", "-1", "-i", "UTF-8", "--no-default-personal", "-d", str(dictionary_base)],
         input=payload,
         text=True,
         encoding="utf-8",
