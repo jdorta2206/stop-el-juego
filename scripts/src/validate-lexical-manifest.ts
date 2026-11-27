@@ -97,7 +97,7 @@ function validateSourceShape(value: unknown, index: number): Source {
   for (const field of ["title", "provider", "attribution", "edition"] as const) {
     if (!nonEmpty(value[field])) fail(`${value.id}: ${field} is required`);
   }
-  if (!nonEmpty(value.retrievedAt) || !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$/.test(value.retrievedAt) || !Number.isFinite(Date.parse(value.retrievedAt))) {
+  if (!nonEmpty(value.retrievedAt) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value.retrievedAt) || !Number.isFinite(Date.parse(value.retrievedAt))) {
     fail(`${value.id}: retrievedAt must be a UTC ISO timestamp`);
   }
   if (!nonEmpty(value.referenceUrl)) fail(`${value.id}: referenceUrl is required`);
