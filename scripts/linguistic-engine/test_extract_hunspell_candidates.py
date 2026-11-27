@@ -31,7 +31,7 @@ class HunspellExtractorTests(unittest.TestCase):
 
     def test_handles_escaped_slash(self):
         self.assertEqual(
-            MODULE.split_dic_entry(r"casa\\/rural/X"),
+            MODULE.split_dic_entry(r"casa\/rural/X"),
             ("casa/rural", "X", ""),
         )
 
