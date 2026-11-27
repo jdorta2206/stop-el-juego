@@ -17,13 +17,13 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
     def test_git_blob_hash_uses_git_object_header(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sample.txt"
-            path.write_bytes(b"hello\\n")
+            path.write_bytes(b"hello\n")
             self.assertEqual(git_blob_sha(path), "ce013625030ba8dba906f756967f9e9ca394464a")
 
     def test_rla_reader_keeps_line_provenance(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "rla.txt"
-            path.write_text("casa\\n\\nCasa\\nperro\\n", encoding="utf-8")
+            path.write_text("casa\n\nCasa\nperro\n", encoding="utf-8")
             self.assertEqual(read_rla(path)["casa"], [1, 3])
             self.assertEqual(read_rla(path)["perro"], [4])
 
@@ -31,10 +31,10 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "mcr.tab"
             path.write_text(
-                "# header\\n00000001\\tspa:lemma\\tcasa\\n"
-                "00000001\\tspa:def\\t0\\tconstrucción\\n"
-                "00000002\\teng:lemma\\thouse\\n"
-                "00000003\\tspa:lemma\\tcasa\\n",
+                "# header\n00000001\tspa:lemma\tcasa\n"
+                "00000001\tspa:def\t0\tconstrucción\n"
+                "00000002\teng:lemma\thouse\n"
+                "00000003\tspa:lemma\tcasa\n",
                 encoding="utf-8",
             )
             self.assertEqual(read_mcr(path)["casa"], ["00000001", "00000003"])
@@ -44,8 +44,8 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "candidates.jsonl"
             path.write_text(
-                json.dumps({"identity": "casa", "spellings": ["casa"], "locales": ["es-ES"]}) + "\\n"
-                + json.dumps({"identity": "inventada", "spellings": ["inventada"], "locales": ["es-MX"]}) + "\\n",
+                json.dumps({"identity": "casa", "spellings": ["casa"], "locales": ["es-ES"]}) + "\n"
+                + json.dumps({"identity": "inventada", "spellings": ["inventada"], "locales": ["es-MX"]}) + "\n",
                 encoding="utf-8",
             )
             rows, summary = build_crosscheck(path, {"casa": [42]}, {"casa": ["00000001"]})
