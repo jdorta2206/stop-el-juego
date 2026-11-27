@@ -52,11 +52,16 @@ def split_dic_entry(line: str) -> tuple[str, str, str]:
             escaped = False
 
     if separator < 0:
-        word, flags, morphology = body, "", ""
+        morph_match = re.search(r"\\s+(?=[a-z]{2}:)", body)
+        if morph_match:
+            word = body[:morph_match.start()]
+            flags, morphology = "", body[morph_match.start() + 1:]
+        else:
+            word, flags, morphology = body, "", ""
     else:
         word = body[:separator]
         tail = body[separator + 1:]
-        match = re.match(r"([^\s]*)(?:\s+(.*))?$", tail)
+        match = re.match(r"([^\\s]*)(?:\\s+(.*))?$", tail)
         flags = match.group(1) if match else ""
         morphology = (match.group(2) or "") if match else ""
     word = word.replace("\\/", "/")
