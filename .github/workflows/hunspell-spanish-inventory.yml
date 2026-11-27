@@ -73,6 +73,28 @@ jobs:
       - name: Build deduplicated review-only catalogue
         run: |
           python3 scripts/linguistic-engine/build_hunspell_catalogue.py --input-dir research/output/hunspell-es --output research/output/hunspell-es/DEDUPLICATED-CANDIDATES.jsonl --summary research/output/hunspell-es/CATALOGUE-SUMMARY.json
+      - name: Download pinned independent lexical source snapshots
+        run: |
+          set -euo pipefail
+          mkdir -p research/sources/spanish
+          curl --fail --location --retry 3 --silent --show-error \\
+            https://raw.githubusercontent.com/olea/lemarios/e4f3043c6d7c15e454d43e6e62dfba0c68378ecf/lemario-general-del-espanol.txt \\
+            --output research/sources/spanish/lemario-general-del-espanol.txt
+          curl --fail --location --retry 3 --silent --show-error \\
+            https://raw.githubusercontent.com/omwn/omw-data/f75be19ec590da12a7a5665e361690b5badb7a25/wns/mcr/wn-data-spa.tab \\
+            --output research/sources/spanish/wn-data-spa.tab
+          curl --fail --location --retry 3 --silent --show-error \\
+            https://raw.githubusercontent.com/omwn/omw-data/f75be19ec590da12a7a5665e361690b5badb7a25/wns/mcr/LICENSE \\
+            --output research/sources/spanish/MCR-LICENSE
+      - name: Cross-check candidates against pinned lexical sources (research only)
+        run: |
+          python3 scripts/linguistic-engine/crosscheck_spanish_sources.py \\
+            --candidates research/output/hunspell-es/DEDUPLICATED-CANDIDATES.jsonl \\
+            --rla research/sources/spanish/lemario-general-del-espanol.txt \\
+            --mcr research/sources/spanish/wn-data-spa.tab \\
+            --mcr-license research/sources/spanish/MCR-LICENSE \\
+            --output research/output/hunspell-es/LEXICAL-CROSSCHECK.jsonl \\
+            --summary research/output/hunspell-es/LEXICAL-CROSSCHECK-SUMMARY.json
       - name: Build inventory summary
         run: |
           python3 - <<'PY'
