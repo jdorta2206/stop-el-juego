@@ -29,14 +29,11 @@ export interface LexicalDecision {
   reason: "attested_exact_form" | "no_attestation" | "invalid_input" | "language_mismatch";
 }
 
-/** Normalize conservatively for lookup while preserving ñ as a distinct letter. */
+/** Normalize canonical Unicode representation without erasing meaningful accents. */
 export function normalizeLexicalForm(value: string): string {
-  return value.toLocaleLowerCase("und").trim()
-    .replace(/ñ/g, "~")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/~/g, "ñ")
-    .normalize("NFC");
+  // NFC makes composed and decomposed encodings compare equally, while keeping
+  // Spanish distinctions such as ano/año and si/sí intact.
+  return value.toLocaleLowerCase("und").trim().normalize("NFC");
 }
 
 export function isLexicallySafeInput(value: string): boolean {
