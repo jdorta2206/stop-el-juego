@@ -610,3 +610,31 @@ These entries reinforce that a lemma-level country tag is insufficient. The lexi
 - ASALE, description and scope of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
 
 This supplementary check is documentation only. No dictionary data was copied or imported, no candidate was approved for runtime validation, and no game behavior was changed.
+
+
+
+## Tenth independent lexicographic batch: three further candidates from the shared regional queue
+
+Audit date: 2026-11-27. The next three entries in the reproducibly reconstructed 233-root intersection queue after the previously reviewed alphabetical section were checked against individual entries in ASALE's *Diccionario de americanismos*. These are lexical corroborations only; they do not approve runtime acceptance.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `cebado, -a` | ASALE records an adjective for a wild animal that has eaten human flesh and is therefore more dangerous in Colombia, Venezuela, Peru, Bolivia, Paraguay, Argentina and Uruguay; a separate sense describes an animal that regularly visits a place to hunt in Colombia, Venezuela, Ecuador and Chile. Person senses include someone unable to abandon a bad habit in northwestern Argentina and Uruguay, someone who assumes a one-time benefit will continue in Panama and Chile, and youth slang for someone skilled or excellent in Chile | This is an adjective, not a generic noun for food or bait. Keep animal and person senses separate, with country, register and evaluative tone. It should not be offered as a neutral animal label without the intended sense |
+| `chambonear` | ASALE records working carelessly or without skill in Colombia, Venezuela, Bolivia, Argentina and Uruguay; making a botched job in Bolivia, Argentina and Uruguay, with youth use in Guatemala and Honduras. Separate senses include doing vulgar things to someone in Nicaragua, dancing reggaetón in Puerto Rico (youth), and preparing a firearm to shoot in Puerto Rico (youth) | Polysemous verb with neutral-ish colloquial work senses and separate vulgar / firearm-related senses. Preserve transitivity, region and register; do not surface sensitive senses as ordinary game hints |
+| `chicotear` | ASALE records whipping someone in Mexico, Guatemala, Honduras, Nicaragua, Panama, Peru, Dominican Republic, Bolivia, Ecuador and Cuba (with varying usage labels); whipping an animal in Chile, Argentina, Uruguay and other marked varieties; and further senses including bothering someone, urging someone to hurry, moving a vehicle's rear end erratically in Argentina, throwing mortar onto a wall in Chile/Argentina, threshing rice in eastern Ecuador, and a vulgar sexual sense in Bolivia | Highly polysemous verb with physical punishment, construction, agricultural, figurative, slang and vulgar senses. Keep each sense and its transitivity/register separate; a spelling match alone is insufficient for category acceptance |
+
+### Quality findings
+
+- All three forms have individual ASALE entry evidence and belong to the reconstructed 233-root queue; this batch therefore adds three positively corroborated candidates to the queue review count.
+- `cebado` shows that adjectival senses and noun-category eligibility must not be conflated.
+- `chambonear` and `chicotear` show why verbs require sense-level grammatical behavior, country and register metadata; one lemma can include unrelated or sensitive meanings.
+- The *Diccionario de americanismos* is descriptive and dialectal, and its own description emphasizes geographic, social and cultural information attached to individual senses. Its entries are evidence for review, not a license to copy its definitions or database.
+
+### References
+
+- ASALE DA, `cebado`: https://www.asale.org/damer/cebado
+- ASALE DA, `chambonear`: https://www.asale.org/damer/chambonear
+- ASALE DA, `chicotear`: https://www.asale.org/damer/chicotear
+- ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+
+This batch is documentation only. No ASALE definitions or database data were copied into STOP, no dictionary was imported, no runtime candidate was approved, and no game behavior or production system was changed.
