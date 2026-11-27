@@ -146,6 +146,69 @@ const lexicalRecord: LexicalAttestationRecord = {
   reviewedAt: "2026-11-27T10:05:00Z",
 };
 
+import { validateMorphologicalAttestation } from "./morphology";
+
+test("morphology requires an explicitly reviewed surface-form to lemma link", () => {
+  const surface = { ...lexicalRecord, recordId: "lex-cantamos", form: "cantamos", normalizedForm: "cantamos" };
+  const lemma = { ...lexicalRecord, recordId: "lex-cantar", form: "cantar", normalizedForm: "cantar" };
+  const morphology = {
+    recordId: "morph-cantamos",
+    formRecordId: "lex-cantamos",
+    lemmaRecordId: "lex-cantar",
+    sourceId: "source-001",
+    language: "es",
+    locale: "es-MX",
+    grammaticalFeatures: ["verb", "present", "first-person", "plural"],
+    citationLocator: "entry:cantar#present-1p-pl",
+    reviewStatus: "approved" as const,
+    reviewedBy: "morphology-reviewer",
+    reviewedAt: "2026-11-27T10:20:00Z",
+  };
+  assert.equal(validateMorphologicalAttestation(morphology, [surface, lemma], [sourceRecord]).valid, true);
+});
+
+test("morphology cannot link a surface form to an unapproved lemma", () => {
+  const surface = { ...lexicalRecord, recordId: "lex-cantamos", form: "cantamos", normalizedForm: "cantamos" };
+  const lemma = { ...lexicalRecord, recordId: "lex-cantar", form: "cantar", normalizedForm: "cantar", reviewStatus: "pending" as const };
+  const morphology = {
+    recordId: "morph-cantamos-pending",
+    formRecordId: "lex-cantamos",
+    lemmaRecordId: "lex-cantar",
+    sourceId: "source-001",
+    language: "es",
+    locale: "es-MX",
+    grammaticalFeatures: ["verb", "present", "first-person", "plural"],
+    citationLocator: "entry:cantar#present-1p-pl",
+    reviewStatus: "approved" as const,
+    reviewedBy: "morphology-reviewer",
+    reviewedAt: "2026-11-27T10:20:00Z",
+  };
+  const result = validateMorphologicalAttestation(morphology, [surface, lemma], [sourceRecord]);
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("lemma_not_approved"));
+});
+
+test("morphology rejects links that cross regional locales", () => {
+  const surface = { ...lexicalRecord, recordId: "lex-cantamos", form: "cantamos", normalizedForm: "cantamos" };
+  const lemma = { ...lexicalRecord, recordId: "lex-cantar", form: "cantar", normalizedForm: "cantar", locale: "es-ES" };
+  const morphology = {
+    recordId: "morph-cantamos-locale",
+    formRecordId: "lex-cantamos",
+    lemmaRecordId: "lex-cantar",
+    sourceId: "source-001",
+    language: "es",
+    locale: "es-MX",
+    grammaticalFeatures: ["verb", "present", "first-person", "plural"],
+    citationLocator: "entry:cantar#present-1p-pl",
+    reviewStatus: "approved" as const,
+    reviewedBy: "morphology-reviewer",
+    reviewedAt: "2026-11-27T10:20:00Z",
+  };
+  const result = validateMorphologicalAttestation(morphology, [surface, lemma], [sourceRecord]);
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("lemma_language_locale_mismatch"));
+});
+
 test("source registry rejects missing provenance and license metadata", () => {
   const result = validateLexicalSource({ ...sourceRecord, licenseId: "", edition: "" });
   assert.equal(result.valid, false);
