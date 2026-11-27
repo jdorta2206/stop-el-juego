@@ -715,3 +715,33 @@ test("dictionary import plan rejects missing or ambiguous evidence references", 
   assert.ok(plan.rejected[0].reasons.includes("lexical_record_missing_or_ambiguous"));
   assert.ok(plan.rejected[0].reasons.includes("category_record_missing_or_ambiguous"));
 });
+
+
+test("numeric BCP 47 region es-419 is accepted for reviewed Spanish evidence", () => {
+  const latinAmericanSource = { ...sourceRecord, sourceId: "source-es-419", locale: "es-419" };
+  const latinAmericanLexeme = {
+    ...lexicalRecord,
+    recordId: "lex-es-419",
+    sourceId: "source-es-419",
+    locale: "es-419",
+  };
+  assert.equal(validateLexicalSource(latinAmericanSource).valid, true);
+  assert.equal(validateLexicalAttestation(latinAmericanLexeme, [latinAmericanSource]).valid, true);
+
+  const surface = { ...latinAmericanLexeme, recordId: "lex-es-419-cantamos", form: "cantamos", normalizedForm: "cantamos" };
+  const lemma = { ...latinAmericanLexeme, recordId: "lex-es-419-cantar", form: "cantar", normalizedForm: "cantar" };
+  const morphology = {
+    recordId: "morph-es-419-cantamos",
+    formRecordId: surface.recordId,
+    lemmaRecordId: lemma.recordId,
+    sourceId: "source-es-419",
+    language: "es",
+    locale: "es-419",
+    grammaticalFeatures: ["pos:verb", "tense:present", "person:first", "number:plural", "mood:indicative"],
+    citationLocator: "entry:cantar#present-1p-pl",
+    reviewStatus: "approved" as const,
+    reviewedBy: "morphology-reviewer",
+    reviewedAt: "2026-11-27T10:20:00Z",
+  };
+  assert.equal(validateMorphologicalAttestation(morphology, [surface, lemma], [latinAmericanSource]).valid, true);
+});
