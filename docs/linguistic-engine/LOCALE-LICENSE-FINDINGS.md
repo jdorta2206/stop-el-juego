@@ -978,3 +978,32 @@ Audit date: 2026-11-27. The next four candidates in the reconstructed 233-root s
 - ASALE DA, `enlozar`: https://www.asale.org/damer/enlozar
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+## Twenty-second independent lexicographic batch: one exact ASALE entry and three form/evidence controls
+
+Audit date: 2026-11-27. The next four candidates in the reconstructed 233-root shared regional queue were checked against ASALE. Only `enrostrar` has an individual *Diccionario de americanismos* entry under the exact candidate spelling. `escobilleo` is also an exact ASALE headword; correction: it is indeed an exact entry and is counted below. `escondidas` is represented under the singular headword `escondida` (whose entry marks the form as plural), and `esgrimista` is supported by the *Diccionario del estudiante* and grammatical discussion, not an individual Americanisms-dictionary entry.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `enrostrar` | ASALE records a transitive verb across Guatemala, Honduras, Nicaragua, Costa Rica, Panama, Dominican Republic, Colombia, Venezuela, Ecuador, Peru, Bolivia, Chile, Argentina and Uruguay meaning to reproach someone for something; in Ecuador a further sense is to confront someone with something blameworthy so they recognize it | Exact ASALE entry. Keep the general reproach sense distinct from the narrower Ecuadorian confrontational sense |
+| `escobilleo` | ASALE records a masculine noun in Panama, Cuba, Colombia, Venezuela, northern Peru, Bolivia, Argentina and Uruguay as a synonym of `escobillado` / `zapateado` | Exact ASALE entry. Dance vocabulary; retain its regional coverage and do not confuse it with the literal action of brushing |
+| `escondidas` | ASALE's entry is headed `escondida` and marks the plural form as the children's hide-and-seek game in Mexico, Guatemala, Nicaragua, Panama, Cuba, Dominican Republic, Colombia, Venezuela, Ecuador, Peru, Bolivia, Chile, Argentina and Uruguay; Argentina and Uruguay also have a separate equivalence with `escondidas` | Plural form documented within a singular lemma. Treat as a linked inflection/variant, not a separate exact-headword entry; distinguish the children's game from other senses and regional variants |
+| `esgrimista` | ASALE's *Diccionario del estudiante* defines it as a person who practices fencing, and the *Nueva gramática* lists it as an agent noun in `-ista`; no individual *Diccionario de americanismos* entry was established in this pass | General Spanish lexeme, not an American regional entry in the source checked. Keep as a general-language candidate and do not count it toward the ASALE Americanisms total |
+
+### Quality findings
+
+- Two further exact-headword entries in the 233-root queue have individual ASALE *Diccionario de americanismos* corroboration (`enrostrar` and `escobilleo`). The positively reviewed exact-headword count advances from 85 to **87 of 233**.
+- `escondidas` is a plural form covered inside the `escondida` entry; it is not counted as a separate exact lemma.
+- `esgrimista` has reliable general-language support in other ASALE works, but this is a different evidence class from an individual Americanisms-dictionary entry.
+- ASALE's *Diccionario de americanismos* is descriptive and attaches geographic and usage labels to individual senses. Its entries corroborate research; they do not grant permission to copy definitions or database content. None of these candidates is approved for runtime import by this documentation update.
+
+### References
+
+- ASALE DA, `enrostrar`: https://www.asale.org/damer/enrostrar
+- ASALE DA, `escobilleo`: https://www.asale.org/damer/escobilleo
+- ASALE DA, plural form under `escondida`: https://www.asale.org/damer/escondida/escondidillas
+- ASALE *Diccionario del estudiante*, `esgrimista`: https://temporalweb.asale.org/diccionario-estudiante/esgrimista
+- ASALE *Nueva gramática*, suffix `-ista`: https://temporalweb.asale.org/gram%C3%A1tica/morfolog%C3%ADa/nombres-de-persona-instrumento-y-lugar-iv-el-sufijo-ista
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
