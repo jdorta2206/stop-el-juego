@@ -75,10 +75,10 @@ class WikidataLexemeExtractorTests(unittest.TestCase):
             output = root / "records.jsonl"
             entities = [spanish_lexeme("Q1084", "L123"), spanish_lexeme("Q147276", "L124")]
             source.write_text(
-                "[\\n"
-                + json.dumps(entities[0], ensure_ascii=False) + ",\\n"
-                + json.dumps(entities[1], ensure_ascii=False) + "\\n"
-                + "]\\n",
+                "[\n"
+                + json.dumps(entities[0], ensure_ascii=False) + ",\n"
+                + json.dumps(entities[1], ensure_ascii=False) + "\n"
+                + "]\n",
                 encoding="utf-8",
             )
             summary = extract_jsonl(source, output, "Q1321")
