@@ -162,7 +162,7 @@ def build_crosscheck(
         counts["rla_wordlist_match"] += bool(rla_lines)
         counts["mcr_synset_match"] += bool(synsets)
         counts["both_sources_match"] += bool(rla_lines and synsets)
-        counts["no_source_match"] += not (rla_lines or synsets)
+        counts["no_source_match"] += not (rla_lines or synsets or freeling_analyses)
         output.append({
             "identity": key,
             "spellings": candidate.get("spellings", []),
