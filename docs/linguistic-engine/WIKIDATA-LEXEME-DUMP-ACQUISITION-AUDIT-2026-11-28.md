@@ -18,12 +18,25 @@ This is not approval to import all records into the STOP runtime dictionary. Wik
   - A lexeme can be a word, phrase, or prefix and has a language, lexical category, lemmas, senses, and forms.
 - Spanish lexicographical documentation: https://www.wikidata.org/wiki/Wikidata:Lexicographical_data/Documentation/es
 
+## Dated dump located
+
+The official directory was inspected on 2026-11-28:
+
+- Directory: https://dumps.wikimedia.org/wikidatawiki/entities/20261125/
+- Dated file: `wikidata-20261125-lexemes.json.bz2`
+- Published size: 496,618,794 bytes
+- Official SHA-1 manifest: `wikidata-20261125-sha1sums.txt`
+- Published SHA-1: `e0c5cbf9c5c9f64dc23b22301a30748ae1023851`
+- Alternative gzip file: `wikidata-20261125-lexemes.json.gz`, 672,475,150 bytes; published SHA-1 `84e6eb368a918a33a601bd8ce723af421c419b7b`.
+
+The dated JSON Lexeme dump is the preferred first feasibility target because the current extractor already expects one JSON Lexeme entity per line. The official general dump documentation describes JSON entities as line-readable objects. The exact dated lexeme file has not yet been downloaded or independently checksummed with SHA-256; the published SHA-1 above is the official manifest value, not a locally verified checksum.
+
 ## Acquisition approach
 
-1. Use the official Lexeme RDF dump, not the general JSON entity dump assumed by the existing JSONL extractor.
-2. Select a dated, completed dump release from the official Wikimedia dump directory. Record the exact dump filename, dump date, byte size, download URL, and SHA-256 checksum in the audit manifest before processing.
-3. Do not rely on a moving `latest` URL as the reproducible source identity. Pin the dated artifact and checksum for each inventory run.
-4. Parse the RDF Lexeme representation with a dedicated, tested parser or a documented conversion step. Do not feed RDF directly to `extract_wikidata_lexemes.py`, which currently expects one JSON Lexeme entity per JSONL line.
+1. Prefer the dated JSON Lexeme dump above over RDF for the first feasibility test. Do not use the moving `latest` alias as the reproducible source identity.
+2. Download the dated compressed file in a research-only workflow or local feasibility test. Verify its SHA-1 against the official manifest and compute SHA-256 locally; record both.
+3. Confirm the decompressed structure is newline-delimited Lexeme entity JSON and compatible with `extract_wikidata_lexemes.py`. If it is a single JSON array or another structure, add a tested streaming adapter rather than loading the full dump into memory.
+4. Pin the exact dated artifact, filename, size, URL, SHA-1, and SHA-256 for each inventory run.
 5. Filter by Spanish language entity Q1321 and explicitly retain language tags and regional variants. Do not silently collapse locale evidence.
 6. Extract lemma representations, lexical category, form representations, grammatical features, usage labels, and entity identifiers where present. Keep original spellings; use NFC plus casefold only for comparison keys.
 7. Keep proper-noun categories and common-noun categories distinguishable. A proper-noun sense/category must not automatically disqualify an identical spelling that also has a separately attested common-noun lexeme.
@@ -48,7 +61,7 @@ The CC0 status applies to Wikidata structured data in the Lexeme namespace as do
 
 ## Current implementation boundary
 
-The existing `scripts/linguistic-engine/extract_wikidata_lexemes.py` accepts JSONL Lexeme entity objects and performs conservative candidate extraction. It is not yet a parser for the official RDF Lexeme dump. A separate RDF-to-candidate path must be implemented and tested before any dump workflow is enabled.
+The existing `scripts/linguistic-engine/extract_wikidata_lexemes.py` accepts JSONL Lexeme entity objects and performs conservative candidate extraction. It may be directly reusable for the dated JSON dump if the decompressed file is confirmed to have the expected one-entity-per-line structure. No full-dump compatibility has been demonstrated yet. The RDF Lexeme dump remains an alternative if JSON structure or streaming behavior proves unsuitable.
 
 ## Conclusion
 
