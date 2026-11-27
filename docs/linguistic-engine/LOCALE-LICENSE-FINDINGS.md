@@ -948,3 +948,33 @@ Audit date: 2026-11-27. The next four forms in the reconstructed 233-root shared
 - ASALE DA, `enancar(se)`: https://www.asale.org/damer/enancar
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+## Twenty-first independent lexicographic batch: one exact ASALE entry and three related-form leads
+
+Audit date: 2026-11-27. The next four candidates in the reconstructed 233-root shared regional queue were checked against ASALE. Only `enlozar` has an individual *Diccionario de americanismos* entry under the exact candidate spelling. The other three have related entries with different grammatical forms or derivational status and are not counted as exact-headword confirmations.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `encamotar` | ASALE's entry is headed `encamotarse`: a popular/colloquial pronominal verb meaning to fall deeply in love in Peru, Bolivia, Chile, Argentina and Uruguay, and among young people in Ecuador; a further sense in Costa Rica and Peru is to become attached to someone or something | Related pronominal form, not an exact confirmation of non-pronominal `encamotar`. Preserve the reflexive construction, senses and register labels |
+| `encasquillador` | The ASALE entry consulted is `encasquillar(se)`, with senses including shoeing a horse in the Dominican Republic, Puerto Rico and rural Panama; dental/metal or precious-metal covering in Bolivia; and pronominal senses in Cuba and Panama. A secondary academic article quotes the Americanisms dictionary's derived occupational noun `encasquillador` for Cuba, Mexico, Uruguay and Venezuela, but that is not an independently inspected ASALE headword entry in this pass | Derived agent noun / occupational label. Keep it separate from the verb and do not infer gender or present-day frequency from the masculine historical wording in the secondary quotation |
+| `enguarapar` | ASALE's entry is headed `enguaraparse`: pronominal senses in Nicaragua, Panama and Puerto Rico for becoming drunk; in Puerto Rico, drinking so much guarapo or water as to feel stomach heaviness; and in Panama, taking on the quality or taste of guarapo | Related pronominal form, not an exact confirmation of non-pronominal `enguarapar`. Preserve the reflexive construction and separate senses; do not treat all meanings as equivalent |
+| `enlozar` | ASALE records a transitive verb in Mexico, Honduras, Nicaragua, Costa Rica, Panama, Colombia, Ecuador, Peru, Bolivia, Chile, Paraguay, Argentina and Uruguay for covering a vessel or utensil with vitreous enamel; in Bolivia, a further sense means lining walls with ceramic | Exact ASALE entry. Keep the utensil-enamelling sense separate from the Bolivian wall-cladding sense |
+
+### Quality findings
+
+- One further exact-headword entry in the 233-root queue has individual ASALE *Diccionario de americanismos* corroboration. The positively reviewed exact-headword count advances from 84 to **85 of 233**.
+- `encamotarse` and `enguaraparse` are related pronominal forms, not interchangeable with the queue's non-pronominal spellings.
+- `encasquillador` is supported here by a secondary quotation of the dictionary, while the directly consulted ASALE entry is the verb `encasquillar(se)`. It remains a related-form lead, not an exact-headword count.
+- `enlozar` has broad regional coverage for its first sense but a narrower Bolivian second sense. Geography belongs to each sense, not merely to the lemma.
+- ASALE's *Diccionario de americanismos* is descriptive and attaches geographic and usage labels to individual senses. Its entries corroborate research; they do not grant permission to copy definitions or database content. None of these candidates is approved for runtime import by this documentation update.
+
+### References
+
+- ASALE DA, related form `encamotarse`: https://www.asale.org/damer/encamotarse
+- ASALE DA, `encasquillar(se)`: https://www.asale.org/damer/encasquillar
+- Academic discussion quoting the ASALE `encasquillador` entry: https://hispadoc.es/descarga/articulo/8710950.pdf
+- ASALE DA, related form `enguaraparse`: https://www.asale.org/damer/enguaraparse
+- ASALE DA, `enlozar`: https://www.asale.org/damer/enlozar
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
