@@ -39,6 +39,46 @@ The LibreOffice Hunspell inventory is a candidate-discovery source, not independ
 7. DBnary dataset license and language coverage: https://kaiko.getalp.org/about-dbnary/download/
 8. Gonzaga Corpus del Español record and usage restrictions: https://repository.gonzaga.edu/corp_span/68/
 
+
+## Exact pinned snapshots verified
+
+### RLA-ES / olea general lemario
+
+- Repository revision: `e4f3043c6d7c15e454d43e6e62dfba0c68378ecf` (2021-09-21).
+- File: `lemario-general-del-espanol.txt`.
+- Size: 872,590 bytes; 87,899 non-empty lines.
+- Git blob SHA-1: `d087616b163c15af3561796be11cb65cf1c6e8d5`.
+- The repository README and `COPYRIGHT` explicitly dedicate published content to the public domain.
+- **Lineage warning:** the repository says its original goal was to collect material for the RLA-ES spellchecker. This may overlap with Hunspell's Spanish dictionary lineage. Until that lineage is traced, RLA matches are recorded only as a wordlist cross-check, not as independent confirmation.
+- The file itself is a mixed lemario, not a curated modern headword-only dictionary. Inspection shows entries such as multiword expressions, uppercase forms and proper names; presence alone is not a game approval.
+
+Pinned raw URL:
+https://raw.githubusercontent.com/olea/lemarios/e4f3043c6d7c15e454d43e6e62dfba0c68378ecf/lemario-general-del-espanol.txt
+
+### MCR Spanish WordNet
+
+- Distribution: `omw-data` release tag `v2.0`, published 2026-02-01.
+- Tag commit: `f75be19ec590da12a7a5665e361690b5badb7a25`.
+- Spanish package: `omw-es-2.0.tar.xz`, release asset SHA-256 `d8450d42885cd51f3db39fe64219a7a003eeb432b4caa00428285fe6ab224303` (3,232,924 bytes).
+- Pinned Spanish data file: `wns/mcr/wn-data-spa.tab`, 5,995,146 bytes; Git blob SHA-1 `86c9e367d64a794300b414e55c78b54dbb07eb27`.
+- Pinned license file: `wns/mcr/LICENSE`; Git blob SHA-1 `bee06f5b0102f3648b374210fbb9dad8315e230f`.
+- The release index identifies Spanish as the MCR Spanish package and declares CC BY 3.0. The package license states that all non-English WordNet data are CC BY 3.0.
+- The Spanish TSV contains lemma, definition and example records. The comparator reads only rows explicitly marked `spa:lemma` and retains synset IDs; it does not treat definitions or examples as game answers.
+- Attribution required: Aitor Gonzalez-Agirre, Egoitz Laparra and German Rigau (2012), “Multilingual Central Repository version 3.0: upgrading a very large lexical knowledge base”, Proceedings of the 6th Global WordNet Conference.
+- **License gate remains closed:** CC BY 3.0 is not in the current STOP import allowlist. The source is used only for temporary research cross-checks, with attribution recorded in the output. It is not copied into the runtime dictionary.
+
+Pinned references:
+- Release: https://github.com/omwn/omw-data/releases/tag/v2.0
+- Spanish package index: https://raw.githubusercontent.com/omwn/omw-data/v2.0/index.toml
+- Spanish data: https://raw.githubusercontent.com/omwn/omw-data/f75be19ec590da12a7a5665e361690b5badb7a25/wns/mcr/wn-data-spa.tab
+- License: https://raw.githubusercontent.com/omwn/omw-data/f75be19ec590da12a7a5665e361690b5badb7a25/wns/mcr/LICENSE
+
+## Reproducible cross-check pipeline
+
+The Hunspell inventory workflow now downloads only these pinned files, verifies their Git blob hashes, and runs `scripts/linguistic-engine/crosscheck_spanish_sources.py` against the deduplicated candidate catalogue. It emits a per-candidate evidence file and summary into the short-lived CI artifact.
+
+The output keeps RLA line numbers and MCR synset IDs. Every candidate remains `lexicalApproval: false` and `categoryApproval: false`. RLA's lineage is explicitly marked unverified; MCR matches are a useful independent lexical signal but cannot provide full regional coverage. No candidate is automatically accepted or added to STOP's runtime dictionary.
+
 ## Next verification task
 
 Acquire only the exact pinned RLA-ES general lemario and MCR-3.0 metadata/artifact for a local, reproducible comparison. First record source version, hashes, license and attribution. Then compare candidate spellings as evidence only, retaining the exact source record and POS/sense. Do not auto-approve, and do not change the STOP runtime dictionary until the independent evidence and category gates are satisfied.
