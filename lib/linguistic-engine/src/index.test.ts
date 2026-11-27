@@ -170,7 +170,7 @@ test("morphology requires an explicitly reviewed surface-form to lemma link", ()
 
 test("Spanish enclitic forms require approved exact forms and a licensed, explicit clitic analysis", () => {
   const cases = [
-    { surface: "dímelo", lemma: "decir", features: ["pos:verb", "mood:imperative", "person:second", "number:singular", "form:affirmative", "form:clitic", "clitic:me", "clitic:lo"] },
+    { surface: "dímelo", lemma: "decir", features: ["pos:verb", "mood:imperative", "person:second", "number:singular", "form:affirmative", "form:clitic", "clitic:me", "clitic:lo", "clitic-order:indirect-direct"] },
     { surface: "sentémonos", lemma: "sentar", features: ["pos:verb", "mood:imperative", "person:first", "number:plural", "form:affirmative", "form:clitic", "clitic:nos"] },
   ];
   for (const [index, item] of cases.entries()) {
