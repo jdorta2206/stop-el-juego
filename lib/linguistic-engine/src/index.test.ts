@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   decideLexicalStatus,
+  decideCategoryEligibility,
   isLexicallySafeInput,
   normalizeLexicalForm,
   type LexicalEvidence,
@@ -44,4 +45,38 @@ test("unsafe inputs are invalid before lexical lookup", () => {
   assert.equal(isLexicallySafeInput(""), false);
   assert.equal(isLexicallySafeInput("aaaa"), false);
   assert.equal(decideLexicalStatus("aaaa", "es", reviewedEvidence).status, "invalid");
+});
+
+
+test("a real word is not automatically valid for every category", () => {
+  const categoryEvidence = [{
+    normalizedForm: "carro",
+    category: "vehiculo",
+    sourceId: "reviewed-category-001",
+    reviewed: true,
+  }];
+  assert.deepEqual(
+    decideCategoryEligibility("carro", "animal", categoryEvidence),
+    { eligible: false, reason: "category_not_attested" },
+  );
+});
+
+test("missing category evidence remains pending and cannot award points", () => {
+  assert.deepEqual(
+    decideCategoryEligibility("carro", "vehiculo", []),
+    { eligible: null, reason: "category_evidence_missing" },
+  );
+});
+
+test("reviewed category evidence can authorize the exact category", () => {
+  const categoryEvidence = [{
+    normalizedForm: "carro",
+    category: "vehiculo",
+    sourceId: "reviewed-category-001",
+    reviewed: true,
+  }];
+  assert.deepEqual(
+    decideCategoryEligibility("CARRO", "VEHICULO", categoryEvidence),
+    { eligible: true, reason: "category_attested" },
+  );
 });
