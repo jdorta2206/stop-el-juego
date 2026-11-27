@@ -212,3 +212,71 @@ export function validateLexicalCorpus(
 
   return errors.length ? { valid: false, errors: [...new Set(errors)] } : { valid: true };
 }
+
+
+export interface LexicalDiscrepancyGroup {
+  normalizedForm: string;
+  language: string;
+  locale: string;
+  partOfSpeech: string | null;
+  recordIds: string[];
+  status: "conflict" | "pending_review" | "approved" | "rejected" | "unresolved";
+}
+
+export interface LexicalDiscrepancyAudit {
+  groups: LexicalDiscrepancyGroup[];
+  publishableRecordIds: string[];
+  blockedRecordIds: string[];
+}
+
+/**
+ * Compare independent attestations only within the same spelling, language,
+ * locale and part of speech. Different locales/languages and grammatical
+ * senses are intentionally kept separate. Divergent definitions alone are
+ * not treated as contradictions: a human reviewer must establish that.
+ */
+export function auditLexicalDiscrepancies(
+  records: readonly LexicalAttestationRecord[],
+): LexicalDiscrepancyAudit {
+  const groups = new Map<string, LexicalAttestationRecord[]>();
+  for (const record of records) {
+    const key = [
+      record.normalizedForm,
+      record.language,
+      record.locale,
+      record.partOfSpeech?.trim().toLocaleLowerCase("und") ?? "",
+    ].join("\u0000");
+    const group = groups.get(key) ?? [];
+    group.push(record);
+    groups.set(key, group);
+  }
+
+  const findings: LexicalDiscrepancyGroup[] = [];
+  const publishableRecordIds: string[] = [];
+  const blockedRecordIds: string[] = [];
+
+  for (const group of groups.values()) {
+    const approved = group.filter((item) => item.reviewStatus === "approved");
+    const rejected = group.filter((item) => item.reviewStatus === "rejected");
+    const pending = group.filter((item) => item.reviewStatus === "pending");
+    const status: LexicalDiscrepancyGroup["status"] =
+      approved.length > 0 && rejected.length > 0 ? "conflict" :
+      pending.length > 0 ? "pending_review" :
+      approved.length > 0 ? "approved" :
+      rejected.length > 0 ? "rejected" : "unresolved";
+
+    findings.push({
+      normalizedForm: group[0].normalizedForm,
+      language: group[0].language,
+      locale: group[0].locale,
+      partOfSpeech: group[0].partOfSpeech ?? null,
+      recordIds: group.map((item) => item.recordId),
+      status,
+    });
+
+    if (status === "approved") publishableRecordIds.push(...approved.map((item) => item.recordId));
+    else blockedRecordIds.push(...group.map((item) => item.recordId));
+  }
+
+  return { groups: findings, publishableRecordIds, blockedRecordIds };
+}
