@@ -485,3 +485,40 @@ Verified references:
 - RAE-ASALE historical dictionary, `amacayo`: https://temporalweb.asale.org/tdhle/amacayo
 
 The source lookups support the distinctions above; they do not authorize copying the entries or importing their content into STOP.
+
+
+
+## Sixth independent lexicographic batch: six corroborated candidates and one non-match control
+
+Audit date: 2026-11-27. Six further roots from the 233-item shared Hunspell comparison queue were checked against individual entries in ASALE's *Diccionario de americanismos*. One additional candidate was checked as a negative lookup control. These checks record lexical evidence and sense distinctions; they do not approve runtime entries.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `afiebrar(se)` | ASALE records the pronominal sense ‘begin to have a fever’ in Mexico, Honduras, Panama, Cuba, Dominican Republic, Colombia, Ecuador, Peru, Bolivia, Chile, Paraguay, Argentina and Uruguay. It also records a less frequent transitive fever-causing sense in Colombia and Uruguay, plus separate figurative senses in Colombia, Honduras and Nicaragua | Valid verb with medical and figurative senses. Keep the intended sense and pronominal/transitive behavior separate; the spelling alone does not establish category fit |
+| `atrenzo` | ASALE records the masculine noun in Argentina with the meaning ‘conflict, trouble or difficulty’ | Valid regional noun with a narrow abstract meaning; likely suitable only for categories that accept situations or abstract concepts |
+| `atrincar(se)` | ASALE records several senses: tying/securing with ropes across Mexico, Central America, the Caribbean and much of South America; tightening/compressing in several countries; and distinct country-specific senses including wearing tight clothes, fighting, getting drunk, or feeling sudden pain | Valid but highly polysemous and often marked rural, popular or vulgar. The game must match the country-specific sense, register and category rather than accepting every sense everywhere |
+| `azarear(se)` | ASALE records pronominal senses for becoming confused/disturbed in Spain, Panama, Ecuador and Bolivia; becoming irritated in Honduras, El Salvador and Bolivia; and becoming embarrassed in Guatemala, Nicaragua and Panama. It also records transitive ‘embarrass someone’ in Guatemala and Nicaragua | Valid verb with multiple distinct regional senses. Preserve pronominal vs transitive behavior and the geographic distribution of each sense |
+| `azua` | ASALE records a feminine noun in central Ecuador meaning `asua` or `chicha de jora` | Valid food/drink-related noun, with a narrowly marked Ecuadorian sense; category matching should be based on the fermented corn drink sense |
+| `bicicletero, -a` | ASALE records the masculine noun for tight knee-length shorts in Colombia; a bicycle-parking rack in Chile and Uruguay; a bicycle repairer/builder in Venezuela, Peru, Chile, Argentina and Uruguay; and additional adjective/person senses in Cuba and Chile, plus a colloquial Argentine sense for a swindler | Valid noun/adjective with unrelated senses and gender/person/object distinctions. Do not assign one universal definition or category to the spelling |
+| `ajizal` (negative lookup control) | ASALE explicitly reports that `ajizal` is not an entry and suggests the related forms `ajisal` and `ajizar` | This lookup does not prove `ajizal` is invalid, but it does not corroborate it either. Do not silently substitute a suggested related form or merge it without separate evidence |
+
+### Quality findings
+
+- All six positively corroborated forms have sense-level information that a simple word-exists flag would lose.
+- `afiebrar` and `atrincar` show why part of speech, reflexivity, register and country must be attached to a particular sense, not merely to the lemma.
+- `atrenzo` and `azua` are clear examples of geographically narrow nouns whose category eligibility depends on the category model.
+- `bicicletero` demonstrates that one headword can name an object, a profession, a person, an adjective or a colloquial social role in different countries.
+- A failed dictionary lookup is recorded only as “not corroborated by this source”; it is not evidence that the form is fabricated or invalid.
+- The six positive lookups are additional individually corroborated candidates from the existing 233-root queue. They do not establish that the other unreviewed roots are valid, nor do they authorize copying ASALE definitions or database content.
+
+### References
+
+- ASALE DA, `afiebrar`: https://www.asale.org/damer/afiebrar
+- ASALE DA, `atrenzo`: https://www.asale.org/damer/atrenzo
+- ASALE DA, `atrincar`: https://www.asale.org/damer/atrincar
+- ASALE DA, `azarear`: https://www.asale.org/damer/azarear
+- ASALE DA, `azua`: https://www.asale.org/damer/azua
+- ASALE DA, `bicicletero`: https://www.asale.org/damer/bicicletero
+- ASALE DA negative lookup, `ajizal`: https://www.asale.org/damer/ajizal
+
+This batch is documentation only. No ASALE definitions or database data were copied into STOP, no candidate was approved for runtime validation, no dictionary was imported, and no game behavior was changed.
