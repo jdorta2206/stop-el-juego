@@ -158,7 +158,7 @@ test("morphology requires an explicitly reviewed surface-form to lemma link", ()
     sourceId: "source-001",
     language: "es",
     locale: "es-MX",
-    grammaticalFeatures: ["verb", "present", "first-person", "plural"],
+    grammaticalFeatures: ["pos:verb", "tense:present", "person:first", "number:plural", "mood:indicative"],
     citationLocator: "entry:cantar#present-1p-pl",
     reviewStatus: "approved" as const,
     reviewedBy: "morphology-reviewer",
@@ -167,7 +167,59 @@ test("morphology requires an explicitly reviewed surface-form to lemma link", ()
   assert.equal(validateMorphologicalAttestation(morphology, [surface, lemma], [sourceRecord]).valid, true);
 });
 
-test("morphology cannot link a surface form to an unapproved lemma", () => {
+
+test("Spanish enclitic forms require approved exact forms and a licensed, explicit clitic analysis", () => {
+  const cases = [
+    { surface: "dímelo", lemma: "decir", features: ["pos:verb", "mood:imperative", "person:second", "number:singular", "form:affirmative", "form:clitic", "clitic:me", "clitic:lo"] },
+    { surface: "sentémonos", lemma: "sentar", features: ["pos:verb", "mood:imperative", "person:first", "number:plural", "form:affirmative", "form:clitic", "clitic:nos"] },
+  ];
+  for (const [index, item] of cases.entries()) {
+    const surface = { ...lexicalRecord, recordId: `lex-enclitic-surface-${index}`, form: item.surface, normalizedForm: item.surface };
+    const lemma = { ...lexicalRecord, recordId: `lex-enclitic-lemma-${index}`, form: item.lemma, normalizedForm: item.lemma };
+    const morphology = {
+      recordId: `morph-enclitic-${index}`,
+      formRecordId: surface.recordId,
+      lemmaRecordId: lemma.recordId,
+      sourceId: "source-001",
+      language: "es",
+      locale: "es-MX",
+      grammaticalFeatures: item.features,
+      citationLocator: `entry:${item.lemma}#form:${item.surface}`,
+      reviewStatus: "approved" as const,
+      reviewedBy: "morphology-reviewer",
+      reviewedAt: "2026-11-27T10:20:00Z",
+    };
+    assert.equal(validateMorphologicalAttestation(morphology, [surface, lemma], [sourceRecord]).valid, true);
+  }
+});
+
+test("clitic combinations cannot be fabricated from unsupported pronouns or invalid order", () => {
+  const surface = { ...lexicalRecord, recordId: "lex-clitic-surface", form: "dímelox", normalizedForm: "dímelox" };
+  const lemma = { ...lexicalRecord, recordId: "lex-clitic-lemma", form: "decir", normalizedForm: "decir" };
+  const base = {
+    recordId: "morph-clitic-invalid",
+    formRecordId: surface.recordId,
+    lemmaRecordId: lemma.recordId,
+    sourceId: "source-001",
+    language: "es",
+    locale: "es-MX",
+    grammaticalFeatures: ["pos:verb", "mood:imperative", "form:clitic", "clitic:me", "clitic:lo"],
+    citationLocator: "entry:decir#form:dímelox",
+    reviewStatus: "approved" as const,
+    reviewedBy: "morphology-reviewer",
+    reviewedAt: "2026-11-27T10:20:00Z",
+  };
+  const unsupported = validateMorphologicalAttestation(
+    { ...base, grammaticalFeatures: [...base.grammaticalFeatures, "clitic:xyz"] },
+    [surface, lemma], [sourceRecord],
+  );
+  assert.equal(unsupported.valid, false);
+  if (!unsupported.valid) assert.ok(unsupported.errors.includes("unsupported_grammatical_feature"));
+  const missingOrder = validateMorphologicalAttestation(base, [surface, lemma], [sourceRecord]);
+  assert.equal(missingOrder.valid, false);
+  if (!missingOrder.valid) assert.ok(missingOrder.errors.includes("two_clitics_require_indirect_direct_order"));
+});
+\ntest("morphology cannot link a surface form to an unapproved lemma", () => {
   const surface = { ...lexicalRecord, recordId: "lex-cantamos", form: "cantamos", normalizedForm: "cantamos" };
   const lemma = { ...lexicalRecord, recordId: "lex-cantar", form: "cantar", normalizedForm: "cantar", reviewStatus: "pending" as const };
   const morphology = {
@@ -177,7 +229,7 @@ test("morphology cannot link a surface form to an unapproved lemma", () => {
     sourceId: "source-001",
     language: "es",
     locale: "es-MX",
-    grammaticalFeatures: ["verb", "present", "first-person", "plural"],
+    grammaticalFeatures: ["pos:verb", "tense:present", "person:first", "number:plural", "mood:indicative"],
     citationLocator: "entry:cantar#present-1p-pl",
     reviewStatus: "approved" as const,
     reviewedBy: "morphology-reviewer",
