@@ -150,7 +150,7 @@ jobs:
               "",
               "All results are research-only. No STOP runtime dictionary is modified and no word is approved for scoring.",
           ])
-          report = "\\n".join(lines) + "\\n"
+          report = "\n".join(lines) + "\n"
           Path("research/output/hunspell-es/SUMMARY.md").write_text(report, encoding="utf-8")
           Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text(report, encoding="utf-8")
           PY
