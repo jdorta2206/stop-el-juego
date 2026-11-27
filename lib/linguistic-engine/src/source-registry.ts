@@ -89,6 +89,7 @@ export function validateLexicalSource(source: LexicalSourceRecord): RegistryVali
     if (!nonBlank(source[field])) errors.push(field + "_required");
   }
   if (!nonBlank(source.referenceUrl) || !validHttpsUrl(source.referenceUrl)) errors.push("referenceUrl_must_be_https");
+  if (!/^[a-z]{2}-[A-Z]{2}$/.test(source.locale) || !source.locale.startsWith(`${source.language}-`)) errors.push("source_locale_language_mismatch");
   if (source.licenseUrl !== undefined && !validHttpsUrl(source.licenseUrl)) errors.push("licenseUrl_must_be_https");
   for (const field of ["commercialUse", "modification", "redistribution", "shareAlike"] as const) {
     if (typeof source[field] !== "boolean") errors.push(field + "_must_be_boolean");
@@ -134,6 +135,7 @@ export function validateLexicalAttestation(
     errors.push("normalized_form_does_not_match_form");
   }
   if (!nonBlank(record.language) || !nonBlank(record.locale)) errors.push("language_and_locale_required");
+  if (nonBlank(record.language) && nonBlank(record.locale) && (!/^[a-z]{2}-[A-Z]{2}$/.test(record.locale) || !record.locale.startsWith(`${record.language}-`))) errors.push("record_locale_language_mismatch");
   if (source && (record.language !== source.language || record.locale !== source.locale)) errors.push("source_language_locale_mismatch");
   if (!nonBlank(record.citationLocator) || record.citationLocator.trim().length < 3) errors.push("citationLocator_required");
   if (!["pending", "approved", "rejected"].includes(record.reviewStatus)) errors.push("reviewStatus_invalid");
@@ -167,4 +169,46 @@ export function validateCategoryAttestation(
     if (!nonBlank(record.reviewedAt) || !validTimestamp(record.reviewedAt)) errors.push("reviewedAt_required_for_approval");
   }
   return errors.length ? { valid: false, errors } : { valid: true };
+}
+
+
+/**
+ * Whole-corpus structural audit. Identical spellings in different languages
+ * or regional locales remain separate evidence; they are never merged merely
+ * because their normalized form matches.
+ */
+export function validateLexicalCorpus(
+  records: readonly LexicalAttestationRecord[],
+  sources: readonly LexicalSourceRecord[],
+): RegistryValidation {
+  const errors: string[] = [];
+  const recordIds = new Set<string>();
+  const attestationKeys = new Set<string>();
+
+  for (const record of records) {
+    if (recordIds.has(record.recordId)) errors.push("duplicate_lexical_record_id");
+    recordIds.add(record.recordId);
+
+    const key = [record.sourceId, record.normalizedForm, record.language, record.locale, record.citationLocator].join("\u0000");
+    if (attestationKeys.has(key)) errors.push("duplicate_lexical_attestation");
+    attestationKeys.add(key);
+
+    const sourceMatches = sources.filter((source) => source.sourceId === record.sourceId);
+    if (sourceMatches.length !== 1) {
+      errors.push(sourceMatches.length === 0 ? "source_not_registered" : "duplicate_source_id");
+      continue;
+    }
+    const source = sourceMatches[0];
+    if (!validateLexicalSource(source).valid || source.reviewStatus !== "approved") errors.push("source_not_approved");
+    if (record.language !== source.language || record.locale !== source.locale) errors.push("source_language_locale_mismatch");
+    if (record.reviewStatus === "approved" &&
+        (!nonBlank(record.reviewedBy) || !nonBlank(record.reviewedAt) || !validTimestamp(record.reviewedAt))) {
+      errors.push("approved_record_missing_review_audit");
+    }
+    if (!nonBlank(record.form) || !nonBlank(record.normalizedForm) ||
+        normalizeLexicalForm(record.form) !== record.normalizedForm) errors.push("normalized_form_does_not_match_form");
+    if (!nonBlank(record.citationLocator) || record.citationLocator.trim().length < 3) errors.push("citationLocator_required");
+  }
+
+  return errors.length ? { valid: false, errors: [...new Set(errors)] } : { valid: true };
 }
