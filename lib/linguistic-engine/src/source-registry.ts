@@ -53,7 +53,7 @@ const nonBlank = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
 const validTimestamp = (value: string): boolean =>
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\\.\d+)?Z$/.test(value) &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value) &&
   Number.isFinite(Date.parse(value));
 
 const validHttpsUrl = (value: string): boolean => {
