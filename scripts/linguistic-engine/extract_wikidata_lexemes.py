@@ -139,7 +139,7 @@ def extract_jsonl(input_path: Path, output_path: Path, spanish_language_id: str)
             if entity.get("type") == "lexeme" and entity.get("language") == spanish_language_id:
                 counts["spanishLexemes"] += 1
             for record in extracted:
-                handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\\n")
+                handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
                 counts["records"] += 1
                 counts["properNameRecords"] += int(record["properNameEvidence"])
                 counts["lemmaRecords"] += int(record["recordType"] == "lemma")
