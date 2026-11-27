@@ -134,9 +134,30 @@ def build_crosscheck(
             }
             for synset in synsets
         ]
-        freeling_analyses = (freeling_argentina or {}).get(key, [])
+        raw_freeling_analyses = (freeling_argentina or {}).get(key, [])
+        freeling_analyses = []
+        for analysis in raw_freeling_analyses:
+            lemma = analysis["lemma"]
+            lemma_synsets = mcr_matches.get(identity(lemma), [])
+            lemma_rla_lines = rla_matches.get(identity(lemma), [])
+            freeling_analyses.append({
+                **analysis,
+                "lemmaMcrSynsetIds": lemma_synsets,
+                "lemmaRlaWordlistLines": lemma_rla_lines,
+                "lemmaEvidence": (
+                    "mcr_lemma_attested" if lemma_synsets else
+                    "rla_lemma_match_lineage_unverified" if lemma_rla_lines else
+                    "lemma_not_found_in_checked_sources"
+                ),
+            })
         counts["candidates"] += 1
         counts["freeling_argentine_morph_match"] += bool(freeling_analyses)
+        counts["freeling_lemma_mcr_attested"] += any(item["lemmaMcrSynsetIds"] for item in freeling_analyses)
+        counts["freeling_lemma_rla_match"] += any(item["lemmaRlaWordlistLines"] for item in freeling_analyses)
+        counts["freeling_lemma_without_checked_attestation"] += bool(freeling_analyses) and not any(
+            item["lemmaMcrSynsetIds"] or item["lemmaRlaWordlistLines"] for item in freeling_analyses
+        )
+        counts["freeling_ambiguous_analysis"] += len(freeling_analyses) > 1
         counts["mcr_synsets_with_definition"] += sum(bool(item["definition"]) for item in sense_details)
         counts["rla_wordlist_match"] += bool(rla_lines)
         counts["mcr_synset_match"] += bool(synsets)
