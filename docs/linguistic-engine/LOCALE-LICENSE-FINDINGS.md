@@ -825,3 +825,36 @@ Audit date: 2026-11-27. The next four not-yet-reviewed entries after `cunchu` in
 - ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+
+## Seventeenth independent lexicographic batch: four further candidates from the shared regional queue
+
+Audit date: 2026-11-27. The next four not-yet-reviewed entries after `descachazar` in the reconstructed 233-root intersection queue were checked against individual ASALE *Diccionario de americanismos* entries. The entry for `descuajeringar` is presented in ASALE under the pronominal form `descuajeringarse`; preserve that construction rather than flattening it into a generic transitive verb.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `descuajeringar(se)` | ASALE records the pronominal verb in Nicaragua, Dominican Republic, Peru, Bolivia and Paraguay for neglecting one's appearance or way of dressing. The related adjective `descuajeringado, -a` is recorded in Mexico, Nicaragua, Cuba, Dominican Republic, Ecuador, Peru, Bolivia, Chile, Paraguay and Uruguay, and rurally in Panama, for a person with a careless appearance or untidy clothing | Keep the pronominal verb and adjective as related but distinct grammatical entries. Do not infer the verb's country coverage from the adjective's broader distribution |
+| `desguañangar(se)` | ASALE records several senses: damaging or wrenching something out of shape in Honduras, Panama, Dominican Republic, Venezuela, Chile and Argentina; falling or hurting oneself in Panama, Dominican Republic, Puerto Rico and Venezuela; coming apart or becoming dislocated in Honduras, Nicaragua, Bolivia and Chile; and further Puerto Rican/Bolivian senses including causing harm, becoming exhausted, losing courage or giving up | Highly polysemous colloquial verb with transitive and pronominal/intransitive constructions. Preserve each sense, region and register; do not treat it as one generic synonym for breaking |
+| `desmalezar` | ASALE records a transitive verb in Mexico, Panama, Colombia, Venezuela, Peru, eastern Bolivia, Chile, Argentina and Uruguay, and rurally in Cuba and Puerto Rico, meaning to weed, clear brush or remove unwanted vegetation | Agricultural/gardening verb with a clear action sense. Preserve transitivity and the distinction between weeding and broader land clearing |
+| `despercudir(se)` | ASALE records pronominal senses for skin becoming lighter/clearer in Mexico, Honduras, Nicaragua, Panama, Cuba, Colombia and Venezuela, with marked popular/rural or occasional usage in Peru and Chile; other senses concern removing ingrained dirt from objects or fabrics, whitening clothes, cleaning skin, and (in Peru/Chile, with Panama obsolete) waking someone up or becoming alert | Strongly polysemous and potentially sensitive: skin-colour senses must not be surfaced as neutral beauty/identity labels. Keep cleaning, skin, clothing and waking senses separate, with grammatical construction, country and usage labels |
+
+### Quality findings
+
+- Four further entries in the 233-root queue have individual ASALE corroboration. The positively reviewed ASALE queue count advances from 72 to 76 of 233.
+- `descuajeringar(se)` illustrates why a related adjective cannot be used to expand a verb's regional coverage automatically.
+- `desguañangar(se)` contains multiple unrelated colloquial senses and several grammatical constructions; the engine must resolve the intended sense before category matching.
+- `desmalezar` is a relatively clear agricultural action, but it remains a verb and should not be accepted as a noun merely because the spelling is in the dictionary.
+- `despercudir(se)` includes skin-colour descriptions. Attestation is not a reason to present sensitive descriptions as neutral player-facing content.
+- ASALE's *Diccionario de americanismos* is descriptive and records geographic and usage labels at sense level. Its entries corroborate review; they do not grant permission to copy definitions or database content.
+
+### References
+
+- ASALE DA, `descuajeringarse`: https://www.asale.org/damer/descuajeringarse
+- ASALE DA, related adjective `descuajeringado`: https://www.asale.org/damer/descuajeringado
+- ASALE DA, `desguañangar(se)`: https://www.asale.org/damer/desgua%C3%B1angar
+- ASALE DA, `desmalezar`: https://www.asale.org/damer/desmalezar
+- ASALE DA, `despercudir(se)`: https://www.asale.org/damer/despercudir
+- ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
