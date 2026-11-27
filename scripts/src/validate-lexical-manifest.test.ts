@@ -33,6 +33,12 @@ async function fixture(status: "approved" | "candidate" = "approved") {
     bundleVersion,
     sources: [{
       id: "test-es-dictionary",
+      title: "Test Spanish word list",
+      provider: "Fixture provider",
+      attribution: "Fixture attribution",
+      edition: "1.0",
+      retrievedAt: "2026-11-26T10:00:00Z",
+      referenceUrl: "https://example.org/dictionary",
       language: "es",
       locales: ["es-ES"],
       upstreamUrl: "https://example.org/dictionary",
