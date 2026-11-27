@@ -89,7 +89,9 @@
             "required": ["reviewedBy", "reviewedAt", "approvalReference"],
             "properties": {
               "commercialUse": { "const": true },
+              "modification": { "const": true },
               "redistribution": { "const": true },
+              "shareAlike": { "const": false },
               "thirdPartyContent": { "enum": ["none-known", "present-audited"] }
             }
           }
