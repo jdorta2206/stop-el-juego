@@ -729,3 +729,35 @@ Audit date: 2026-11-27. The next four terms in the reconstructed 233-root inters
 - ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+
+## Fourteenth independent lexicographic batch: four further candidates from the shared regional queue
+
+Audit date: 2026-11-27. The next positively corroborated entries in the reconstructed 233-root intersection queue were checked against individual ASALE *Diccionario de americanismos* entries. The intervening form `corar` was not positively corroborated in this source during this pass and is therefore not counted; absence from this dictionary is not evidence that a form is invalid.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `controversial` | ASALE records an adjective for a person or thing that provokes debate or discussion in the United States, Mexico, Nicaragua, Costa Rica, Cuba, Dominican Republic, Puerto Rico, Colombia, Venezuela, Ecuador, Peru, Bolivia, Paraguay, Argentina and Uruguay; Chile is marked as cultured-to-standard usage | Adjective, not a noun meaning “controversy”. Preserve its grammatical category and country labels; do not infer suitability for noun-only categories |
+| `correntoso, -a` | ASALE records an adjective in Honduras, Nicaragua, Puerto Rico, Colombia, Ecuador, Peru, Bolivia, Chile, Argentina and Uruguay, marked obsolete in the entry, referring to a river or watercourse with a rapid, forceful flow; it gives `torrentoso` as a related equivalent | Geographical/hydrological adjective with an obsolete label. Keep the watercourse sense and regional status; do not generalize it to any fast-moving object |
+| `coyotero, -a` | ASALE records in Mexico an adjective for a dog trained to pursue coyotes, and in Ecuador a noun sense equivalent to a person who handles procedures or paperwork (the broader `coyote` entry also cross-refers to `coyotero` for intermediary/agent senses) | Preserve the Mexican canine adjective separately from the Ecuadorian person/occupation noun. Do not flatten this into the animal name `coyote` or assume all countries share the same sense |
+| `criandera` | ASALE records a feminine noun in Honduras and Cuba for a wet nurse; Honduras also has a rural sense for a cow or mare that is raising young | Feminine noun with distinct human-care and livestock senses. Preserve the rural label and semantic domain; do not treat it as a generic animal or profession without sense matching |
+
+### Quality findings
+
+- Four further entries in the 233-root queue have individual ASALE corroboration. The positively reviewed queue count advances from 62 to 66 of 233.
+- `controversial` is a useful adjective-category control: lexical existence does not make an adjective eligible for a noun category.
+- `correntoso` carries an obsolete label in the source; historical or obsolete attestation must not be silently presented as ordinary current usage.
+- `coyotero` has unrelated grammatical and semantic roles by country, demonstrating why part of speech and sense-level region are mandatory.
+- `criandera` has human-care and animal-husbandry senses, which must remain distinct.
+- ASALE's *Diccionario de americanismos* is descriptive and records geographic and usage labels at sense level. Its entries are corroboration for review, not permission to copy definitions or database content.
+
+### References
+
+- ASALE DA, `controversial`: https://www.asale.org/damer/controversial
+- ASALE DA, `correntoso`: https://www.asale.org/damer/correntoso
+- ASALE DA, `coyotero`: https://www.asale.org/damer/coyotero
+- ASALE DA, `criandera`: https://www.asale.org/damer/criandera
+- ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
