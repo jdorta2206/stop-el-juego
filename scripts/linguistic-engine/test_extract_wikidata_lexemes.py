@@ -59,6 +59,11 @@ class WikidataLexemeExtractorTests(unittest.TestCase):
 
     def test_rejects_malformed_form_or_feature_ids(self):
         entity = spanish_lexeme()
+        entity["forms"][0]["id"] = "L123-Foops"
+        with self.assertRaisesRegex(ValueError, "invalid form ID"):
+            extract_lexeme(entity)
+
+        entity = spanish_lexeme()
         entity["forms"][0]["grammaticalFeatures"] = ["not-an-item"]
         with self.assertRaisesRegex(ValueError, "grammaticalFeatures"):
             extract_lexeme(entity)
