@@ -29,7 +29,7 @@ def sha256_file(path: Path) -> str:
 
 
 def comparison_form(value: str) -> str:
-    return unicodedata.normalize("NFC", value).casefold()
+    return unicodedata.normalize("NFC", value)
 
 
 def split_dic_entry(line: str) -> tuple[str, str, str]:
