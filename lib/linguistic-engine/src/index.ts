@@ -81,3 +81,54 @@ export function decideLexicalStatus(
     reason: "attested_exact_form",
   };
 }
+
+
+export interface CategoryEvidence {
+  /** Exact normalized form covered by this category record. */
+  normalizedForm: string;
+  /** Canonical STOP category identifier. */
+  category: string;
+  /** Same source record that supports the lexical form. */
+  sourceId: string;
+  reviewed: boolean;
+}
+
+export interface CategoryDecision {
+  eligible: boolean | null;
+  reason: "category_attested" | "category_not_attested" | "category_evidence_missing";
+}
+
+/**
+ * Category membership is independent from lexical existence.
+ * null means not enough reviewed category evidence; it must never award points.
+ */
+export function decideCategoryEligibility(
+  value: string,
+  category: string,
+  evidence: readonly CategoryEvidence[],
+): CategoryDecision {
+  if (!isLexicallySafeInput(value) || !category.trim()) {
+    return { eligible: false, reason: "category_not_attested" };
+  }
+
+  const normalizedForm = normalizeLexicalForm(value);
+  const normalizedCategory = normalizeLexicalForm(category);
+  const reviewedMatch = evidence.some((item) =>
+    item.reviewed &&
+    item.normalizedForm === normalizedForm &&
+    normalizeLexicalForm(item.category) === normalizedCategory &&
+    item.sourceId.trim().length > 0
+  );
+
+  if (reviewedMatch) {
+    return { eligible: true, reason: "category_attested" };
+  }
+
+  const hasReviewedLexicalCategoryRecord = evidence.some((item) =>
+    item.reviewed && item.normalizedForm === normalizedForm
+  );
+
+  return hasReviewedLexicalCategoryRecord
+    ? { eligible: false, reason: "category_not_attested" }
+    : { eligible: null, reason: "category_evidence_missing" };
+}
