@@ -668,3 +668,33 @@ Audit date: 2026-11-27. The next four terms in the reconstructed 233-root inters
 - ASALE DA, related form `collofe`: https://www.asale.org/damer/collofe
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+## Twelfth independent lexicographic batch: four further candidates from the shared regional queue
+
+Audit date: 2026-11-27. The next four terms in the reconstructed 233-root intersection queue after the preceding alphabetical batch were checked against individual entries in ASALE's *Diccionario de americanismos*. The source records regional senses and usage labels; the evidence is not automatic approval for every STOP category.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `coimear` | ASALE records a transitive sense in Nicaragua, Panama, Peru, Bolivia, Chile, Paraguay, Argentina and Uruguay meaning giving money or gifts to obtain something illicitly; an intransitive sense in Peru, Bolivia, Argentina and Uruguay for giving or receiving a bribe; and a separate Honduran sense meaning earning money | Verb directly associated with bribery/corruption in most listed regions, plus a distinct Honduran meaning. Preserve transitivity, region and register; do not collapse the Honduran sense into the bribery senses or present illegal conduct as a neutral activity |
+| `coloniaje` | ASALE records a masculine noun across Mexico, Central America, the Caribbean and much of South America for the historical period in which some American countries were colonies of Spain; the entry carries historical/loanword and usage labels | Historical noun with broad regional documentation. Category fit depends on whether STOP accepts historical periods or events; don't confuse it with a generic colony or colonial building |
+| `complotar(se)` | ASALE records pronominal senses for conspiring/confabulating in Mexico, Guatemala, Honduras, Cuba, Dominican Republic, Peru, Bolivia, Chile, Argentina and Uruguay; joining together against another person or group, generally for political purposes, in Venezuela, Peru, Bolivia and Chile; conspiring in Guatemala, Dominican Republic, Ecuador and Uruguay; and a Chilean sense where two or more causes combine to produce a result | Verb with pronominal and intransitive uses and political/social senses. Keep grammatical construction and country attached to each sense; don't infer that all senses are political |
+| `conferencista` | ASALE records a common-gender noun across Mexico, Central America, the Caribbean and South America for a person who gives a conference or participates in one | Broadly documented occupational/role noun. Preserve common gender (`el/la conferencista`) and the distinction between speaker and participant; category fit is strongest for professions or roles |
+
+### Quality findings
+
+- Four further terms from the 233-root queue have individual ASALE corroboration. The positively reviewed queue count advances from 54 to 58 of 233.
+- `coimear` illustrates why a single lemma can have ethically and semantically distinct regional senses; a Honduran “earn money” sense must not be merged with bribery senses.
+- `complotar(se)` requires preserving reflexive/pronominal constructions and distinguishing conspiracy from the Chilean “combine to produce a result” sense.
+- `conferencista` is a useful common-gender example: grammatical gender should not be inferred from the final letter alone.
+- ASALE describes its work as a descriptive, dialectal and differential repertory, with geographic, social and cultural information attached to individual senses. This is corroboration, not permission to copy definitions or database content.
+
+### References
+
+- ASALE DA, `coimear`: https://www.asale.org/damer/coimear
+- ASALE DA, `coloniaje`: https://www.asale.org/damer/coloniaje
+- ASALE DA, `complotar`: https://www.asale.org/damer/complotar
+- ASALE DA, `conferencista`: https://www.asale.org/damer/conferencista
+- ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
