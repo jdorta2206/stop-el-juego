@@ -68,3 +68,19 @@ Build a controlled morphology/lemma cross-check using a pinned, independently li
 - never use unrestricted suffix stripping;
 - keep category and proper-name decisions separate;
 - leave all approvals false until reviewed evidence and compatible rights are established.
+
+
+## Argentine morphology pilot
+
+A second successful run, [workflow 46018917346](https://github.com/jdorta2206/stop-el-juego/actions/runs/46018917346), added the pinned FreeLing Argentine verb dictionary.
+
+- 134 candidate surface forms had an exact form entry in the Argentine verb lexicon.
+- 68 of those forms occur in only one Hunspell locale file.
+- One form, `parás`, has two analyses (`parar` and `parir`) and must remain ambiguous.
+- Six forms map to lemmas absent from both the checked MCR lemma set and RLA wordlist: `descolorí`, `desfacé`, `deshacé`, `embaí`, `embaís`, and `rehacé`. Their FreeLing morphology match alone is insufficient to approve them.
+- At least one lemma was found in MCR for 87 of the 134 forms; at least one lemma was found in RLA for 128 forms. These sets overlap. RLA remains lineage-unverified and MCR remains CC BY 3.0.
+- The comparator retained the exact lemma and morphology tag, and every record remained unapproved.
+
+This is evidence that an auditable morphology source can recover inflected/voseo forms and link them to lemmas. It does **not** show that all forms are regionally exclusive, nor that the lemma evidence or answer category is sufficient for STOP acceptance.
+
+A follow-up comparator change now attaches the lemma's own MCR synset IDs and RLA line references to each morphology analysis, counts morphology as a source match, and keeps forms with conflicting analyses marked for review. That strengthened version is being rerun in CI before its results are treated as final.
