@@ -888,3 +888,34 @@ Audit date: 2026-11-27. The next four forms in the reconstructed shared regional
 - ASALE historical Tesoro, `diarismo`: https://temporalweb.asale.org/tdhle/diarismo
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+## Nineteenth independent lexicographic batch: four further ASALE-confirmed candidates
+
+Audit date: 2026-11-27. The next four not-yet-reviewed forms in the reconstructed 233-root shared regional queue were checked against individual ASALE *Diccionario de americanismos* entries. All four have an individual entry, but their senses, grammatical constructions, regional labels and register must remain distinct.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `difuntear` | ASALE records a transitive popular/rural verb in Mexico, Guatemala, Honduras and Argentina meaning to kill someone violently | Verb with explicit violent meaning and popular/rural labels. Lexical attestation does not make it appropriate as ordinary player-facing vocabulary; keep it out of neutral examples/categories unless the game's content policy explicitly permits this semantic domain |
+| `dragonear(se)` | ASALE records several unrelated senses: in Guatemala, Chile and Argentina, and less frequently in Peru, to perform a higher post or function than one's actual authorization; in Argentina and Peru (obsolete), to show off; in Argentina and Uruguay (obsolete), to court someone; in Spain, military training for promotion and a separate pronominal sense of leaving barracks without permission; and in Uruguay, to watch something with the intention of obtaining it | Highly polysemous verb with transitive, intransitive and pronominal constructions. Keep American senses and their countries separate from Spain-only senses; preserve obsolete and less-frequent labels |
+| `draque` | ASALE records a masculine noun in southern Ecuador for a canelazo prepared with sour lemon juice | Regional food/drink noun, specifically Ecuadorian south. Do not generalize it to every canelazo or infer broader Ecuadorian/national distribution |
+| `embochinchar(se)` | ASALE records a transitive sense in Mexico, Guatemala, Dominican Republic, Venezuela, Bolivia and Argentina for causing a commotion; a pronominal intransitive sense in Mexico and Venezuela for creating confusion, disorder or a fight; a further transitive sense in Dominican Republic and Venezuela for inciting someone to fight; and a popular Ecuadorian sense for making something chaotic | Colloquial, polysemous verb. Preserve transitive versus pronominal constructions and the distinct senses/country sets; do not flatten it into a generic synonym for disorder |
+
+### Quality findings
+
+- Four further entries in the 233-root queue have individual ASALE corroboration. The positively reviewed individual-entry count advances from 77 to **81 of 233**.
+- `difuntear` is a clear example that dictionary inclusion is not the same as neutral game suitability: its attested sense is violent.
+- `dragonear` demonstrates the risk of mixing American regional senses with Spain-only senses, obsolete meanings and distinct verb constructions.
+- `draque` has a narrowly marked regional food/drink meaning; its geographic qualifier is part of the evidence.
+- `embochinchar(se)` requires sense-level country coverage and grammatical construction to avoid false positives.
+- ASALE's *Diccionario de americanismos* is descriptive and attaches geographic and usage labels to individual senses. Its entries corroborate research; they do not grant permission to copy definitions or database content. None of these candidates is approved for runtime import by this documentation update.
+
+### References
+
+- ASALE DA, `difuntear`: https://www.asale.org/damer/difuntear
+- ASALE DA, `dragonear(se)`: https://www.asale.org/damer/dragonear
+- ASALE DA, `draque`: https://www.asale.org/damer/draque
+- ASALE DA, `embochinchar(se)`: https://www.asale.org/damer/embochinchar
+- ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
