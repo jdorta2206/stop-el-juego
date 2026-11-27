@@ -568,3 +568,23 @@ Audit date: 2026-11-27. Ten additional roots from the 233-item shared Hunspell c
 - ASALE DA, `carnear`: https://www.asale.org/damer/carnear
 
 This batch is documentation only. No ASALE definitions or database data were copied into STOP, no candidate was approved for runtime validation, no dictionary was imported, and no game behavior was changed.
+
+
+## Eighth supplementary lexicographic check: agricultural tool term
+
+Audit date: 2026-11-27. This focused check examined `carpidor` in ASALE's *Diccionario de americanismos*. Its membership in the original 233-root intersection queue was not re-established in this pass, so it is recorded as a supplementary lexical control and does not change the queue's reviewed-candidate count.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `carpidor` / `carpidora` | ASALE records `carpidor` as a masculine noun/adjective in Bolivia, Paraguay, Argentina and Uruguay for a machine or tool used to weed/clear soil. It separately records `carpidor, -ra` in Bolivia and Paraguay for a person who clears or weeds soil using such a tool | Preserve the instrument and occupational/person senses separately, along with grammatical gender and country coverage. It is an agricultural-tool term, not a generic synonym for every hoe or plough |
+
+### Quality finding
+
+This entry illustrates why the engine should store the semantic role (instrument versus person), part of speech, gender and region at sense level. The evidence supports those attested senses, but does not establish frequency, current everyday use in every listed country, or suitability for all STOP categories. Queue membership remains unverified and the term is not approved for runtime validation.
+
+### References
+
+- ASALE DA, `carpidor`: https://www.asale.org/damer/carpidor
+- ASALE historical dictionary, `carpidora`: https://temporalweb.asale.org/tdhle/carpidora
+
+This supplementary check is documentation only. No ASALE definitions or database data were copied into STOP, no dictionary was imported, and no runtime or game behavior was changed.
