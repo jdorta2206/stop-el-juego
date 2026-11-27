@@ -7,6 +7,7 @@ on:
       - "scripts/package.json"
       - "scripts/src/validate-lexical-manifest.ts"
       - "scripts/src/validate-lexical-manifest.test.ts"
+      - "lib/linguistic-engine/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/linguistic-engine-preflight.yml"
@@ -40,5 +41,9 @@ jobs:
         run: pnpm install --frozen-lockfile --filter @workspace/scripts
       - name: Run lexical manifest tests
         run: pnpm --filter @workspace/scripts linguistics:test
+      - name: Run linguistic engine tests
+        run: pnpm --filter @workspace/linguistic-engine test
       - name: Type-check scripts package
         run: pnpm --filter @workspace/scripts typecheck
+      - name: Type-check linguistic engine package
+        run: pnpm --filter @workspace/linguistic-engine typecheck
