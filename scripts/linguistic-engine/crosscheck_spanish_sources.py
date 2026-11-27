@@ -207,8 +207,22 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
     args = parser.parse_args()
-    verify_pinned_sources(args.rla, args.mcr, args.mcr_license)
-    rows, summary = build_crosscheck(args.candidates, read_rla(args.rla), read_mcr(args.mcr))
+    verify_pinned_sources(
+        args.rla,
+        args.mcr,
+        args.mcr_license,
+        args.freeling_ar,
+        args.freeling_copying,
+        args.freeling_apache_license,
+    )
+    mcr_matches, mcr_definitions = read_mcr(args.mcr)
+    rows, summary = build_crosscheck(
+        args.candidates,
+        read_rla(args.rla),
+        mcr_matches,
+        mcr_definitions,
+        read_freeling_argentina(args.freeling_ar),
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8", newline="\n") as handle:
         for row in rows:
