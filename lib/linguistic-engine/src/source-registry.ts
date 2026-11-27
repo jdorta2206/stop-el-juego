@@ -38,6 +38,8 @@ export interface LexicalAttestationRecord {
   citationLocator: string;
   definitionSummary?: string;
   partOfSpeech?: string;
+  /** Curated, cross-source sense key; source-specific sense IDs belong in citationLocator. */
+  senseKey?: string;
   reviewStatus: "pending" | "approved" | "rejected";
   reviewedBy?: string;
   reviewedAt?: string;
@@ -219,6 +221,7 @@ export interface LexicalDiscrepancyGroup {
   language: string;
   locale: string;
   partOfSpeech: string | null;
+  senseKey: string | null;
   recordIds: string[];
   status: "conflict" | "pending_review" | "approved" | "rejected" | "unresolved";
 }
@@ -231,9 +234,9 @@ export interface LexicalDiscrepancyAudit {
 
 /**
  * Compare independent attestations only within the same spelling, language,
- * locale and part of speech. Different locales/languages and grammatical
- * senses are intentionally kept separate. Divergent definitions alone are
- * not treated as contradictions: a human reviewer must establish that.
+ * locale, part of speech and curated sense key. Source-specific sense IDs
+ * must not be used as cross-source keys. Divergent definitions alone are not
+ * treated as contradictions: a human reviewer must establish that.
  */
 export function auditLexicalDiscrepancies(
   records: readonly LexicalAttestationRecord[],
@@ -245,6 +248,7 @@ export function auditLexicalDiscrepancies(
       record.language,
       record.locale,
       record.partOfSpeech?.trim().toLocaleLowerCase("und") ?? "",
+      record.senseKey?.trim().toLocaleLowerCase("und") ?? "",
     ].join("\u0000");
     const group = groups.get(key) ?? [];
     group.push(record);
@@ -270,6 +274,7 @@ export function auditLexicalDiscrepancies(
       language: group[0].language,
       locale: group[0].locale,
       partOfSpeech: group[0].partOfSpeech ?? null,
+      senseKey: group[0].senseKey ?? null,
       recordIds: group.map((item) => item.recordId),
       status,
     });
