@@ -101,6 +101,15 @@ const sourceRecord: LexicalSourceRecord = {
   locale: "es-MX",
   edition: "2026",
   retrievedAt: "2026-11-27T10:00:00Z",
+  reviewStatus: "approved",
+  commercialUse: true,
+  modification: true,
+  redistribution: true,
+  shareAlike: false,
+  thirdPartyContent: "none-known",
+  reviewedBy: "legal-reviewer",
+  reviewedAt: "2026-11-27T09:55:00Z",
+  approvalReference: "LEGAL-STOP-001",
 };
 
 const lexicalRecord: LexicalAttestationRecord = {
@@ -125,7 +134,7 @@ test("source registry rejects missing provenance and license metadata", () => {
   }
 });
 
-test("approved lexical attestation requires registered source and review audit", () => {
+test("approved lexical attestation requires registered and approved source rights", () => {
   assert.equal(validateLexicalAttestation(lexicalRecord, [sourceRecord]).valid, true);
   const unreviewed = { ...lexicalRecord, reviewedBy: "", reviewedAt: "" };
   const result = validateLexicalAttestation(unreviewed, [sourceRecord]);
@@ -173,4 +182,33 @@ test("source retrieval timestamp must be a UTC ISO timestamp", () => {
   const result = validateLexicalSource({ ...sourceRecord, retrievedAt: "yesterday" });
   assert.equal(result.valid, false);
   if (!result.valid) assert.ok(result.errors.includes("retrievedAt_must_be_utc_iso_timestamp"));
+});
+
+test("candidate source cannot authorize an approved lexical word", () => {
+  const candidateSource = { ...sourceRecord, reviewStatus: "candidate" as const };
+  const result = validateLexicalAttestation(lexicalRecord, [candidateSource]);
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("source_not_registered_or_approved"));
+});
+
+test("source approval rejects incompatible licenses and missing commercial rights", () => {
+  const incompatible = validateLexicalSource({ ...sourceRecord, licenseId: "GPL-3.0-or-later" });
+  assert.equal(incompatible.valid, false);
+  if (!incompatible.valid) assert.ok(incompatible.errors.includes("license_not_approved_for_stop_bundle"));
+  const noModification = validateLexicalSource({ ...sourceRecord, modification: false });
+  assert.equal(noModification.valid, false);
+  if (!noModification.valid) assert.ok(noModification.errors.includes("approved_source_requires_commercial_modification_and_redistribution_rights"));
+});
+
+test("source approval requires a human audit record and audited third-party content", () => {
+  const noReviewer = validateLexicalSource({ ...sourceRecord, reviewedBy: "", approvalReference: "" });
+  assert.equal(noReviewer.valid, false);
+  const unknownThirdParty = validateLexicalSource({ ...sourceRecord, thirdPartyContent: "unknown" });
+  assert.equal(unknownThirdParty.valid, false);
+});
+
+test("lexical evidence cannot be approved from a malformed citation locator", () => {
+  const result = validateLexicalAttestation({ ...lexicalRecord, citationLocator: " " }, [sourceRecord]);
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("citationLocator_required"));
 });
