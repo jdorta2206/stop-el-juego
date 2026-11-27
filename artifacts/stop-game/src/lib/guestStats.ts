@@ -4,10 +4,19 @@ const API_BASE = getApiUrl();
 
 // Fire-and-forget, anonymous guest counters. These never block the game and
 // never send any per-user data — they just bump a daily aggregate on the server.
+function createEventId(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  } catch { /* use a non-cryptographic fallback for anonymous analytics only */ }
+  return `guest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
+}
+
 function ping(path: string) {
   try {
     void fetch(`${API_BASE}/api/guest-stats/${path}`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: createEventId() }),
       keepalive: true,
     }).catch(() => {});
   } catch {

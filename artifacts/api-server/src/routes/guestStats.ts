@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { guestStatsTable } from "@workspace/db";
+import { guestStatsTable, guestStatsEventsTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { writeLimiter } from "../middlewares/rateLimit";
+import { isGuestStatsEventId } from "../lib/guestStatsEvent";
 
 const router: IRouter = Router();
 
@@ -26,41 +27,89 @@ function todayForPlayer(req: { headers: Record<string, unknown> }): string {
   }).format(new Date());
 }
 
-// Atomic daily upsert: increment `games` or `conversions` for today by 1.
-async function bump(req: { headers: Record<string, unknown> }, column: "games" | "conversions") {
+function readEventId(body: unknown): string | undefined | null {
+  if (!body || typeof body !== "object" || !("eventId" in body)) return undefined;
+  const value = (body as { eventId?: unknown }).eventId;
+  return isGuestStatsEventId(value) ? value : null;
+}
+
+// Older app versions omit eventId and retain the legacy aggregate behavior.
+// Current clients provide it, allowing PostgreSQL to count each logical event once.
+async function bump(
+  req: { headers: Record<string, unknown> },
+  column: "games" | "conversions",
+  eventId?: string,
+) {
   const day = todayForPlayer(req);
-  await db
-    .insert(guestStatsTable)
-    .values({
-      day,
-      games: column === "games" ? 1 : 0,
-      conversions: column === "conversions" ? 1 : 0,
-    })
-    .onConflictDoUpdate({
-      target: guestStatsTable.day,
-      set:
-        column === "games"
+  if (!eventId) {
+    await db
+      .insert(guestStatsTable)
+      .values({
+        day,
+        games: column === "games" ? 1 : 0,
+        conversions: column === "conversions" ? 1 : 0,
+      })
+      .onConflictDoUpdate({
+        target: guestStatsTable.day,
+        set: column === "games"
           ? { games: sql`${guestStatsTable.games} + 1` }
           : { conversions: sql`${guestStatsTable.conversions} + 1` },
-    });
+      });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    const [claimed] = await tx
+      .insert(guestStatsEventsTable)
+      .values({ eventId, day, kind: column })
+      .onConflictDoNothing()
+      .returning({ eventId: guestStatsEventsTable.eventId });
+    if (!claimed) return;
+
+    await tx
+      .insert(guestStatsTable)
+      .values({
+        day,
+        games: column === "games" ? 1 : 0,
+        conversions: column === "conversions" ? 1 : 0,
+      })
+      .onConflictDoUpdate({
+        target: guestStatsTable.day,
+        set: column === "games"
+          ? { games: sql`${guestStatsTable.games} + 1` }
+          : { conversions: sql`${guestStatsTable.conversions} + 1` },
+      });
+
+    // Keep the deduplication ledger bounded; seven days exceeds normal retry windows.
+    await tx.delete(guestStatsEventsTable)
+      .where(sql`${guestStatsEventsTable.createdAt} < NOW() - INTERVAL '7 days'`);
+  });
 }
 
 // POST /guest-stats/game — a guest finished a game.
-router.post("/game", writeLimiter, async (_req, res) => {
+router.post("/game", writeLimiter, async (req, res) => {
+  const eventId = readEventId(req.body);
+  if (eventId === null) {
+    res.status(400).json({ error: "INVALID_EVENT_ID" });
+    return;
+  }
   try {
-    await bump(_req, "games");
+    await bump(req, "games", eventId);
   } catch (err) {
-    // Never let analytics break the game — log and still return 204 so the
-    // client fire-and-forget call never surfaces an error to the player.
     console.error("[guest-stats] failed to record game:", err);
   }
   res.status(204).end();
 });
 
 // POST /guest-stats/conversion — a guest tapped the "sign in" CTA.
-router.post("/conversion", writeLimiter, async (_req, res) => {
+router.post("/conversion", writeLimiter, async (req, res) => {
+  const eventId = readEventId(req.body);
+  if (eventId === null) {
+    res.status(400).json({ error: "INVALID_EVENT_ID" });
+    return;
+  }
   try {
-    await bump(_req, "conversions");
+    await bump(req, "conversions", eventId);
   } catch (err) {
     console.error("[guest-stats] failed to record conversion:", err);
   }
