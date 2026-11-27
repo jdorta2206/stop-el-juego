@@ -61,15 +61,18 @@ export function decideLexicalStatus(
 
   const normalizedForm = normalizeLexicalForm(value);
   const matchingForm = evidence.find((item) =>
-    item.reviewed && item.normalizedForm === normalizedForm
+    item.reviewed && item.normalizedForm === normalizedForm && item.language === language
   );
 
   if (!matchingForm) {
-    return { status: "unknown", evidence: null, reason: "no_attestation" };
-  }
-
-  if (matchingForm.language !== language) {
-    return { status: "unknown", evidence: null, reason: "language_mismatch" };
+    const otherLanguageMatch = evidence.some((item) =>
+      item.reviewed && item.normalizedForm === normalizedForm
+    );
+    return {
+      status: "unknown",
+      evidence: null,
+      reason: otherLanguageMatch ? "language_mismatch" : "no_attestation",
+    };
   }
 
   return {
