@@ -11,6 +11,12 @@ SPEC.loader.exec_module(MODULE)
 
 
 class HunspellExtractorTests(unittest.TestCase):
+    def test_comparison_key_preserves_capitalization(self):
+        self.assertNotEqual(
+            MODULE.comparison_form("México"),
+            MODULE.comparison_form("méxico"),
+        )
+
     def test_parses_flags_and_morphology(self):
         self.assertEqual(
             MODULE.split_dic_entry("gato/AB po:noun"),
