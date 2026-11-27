@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./dictionary-import": "./src/dictionary-import.ts"
+    "./dictionary-import": "./src/dictionary-import.ts",
+    "./morphology": "./src/morphology.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
