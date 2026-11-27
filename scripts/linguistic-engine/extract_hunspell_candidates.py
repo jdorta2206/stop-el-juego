@@ -143,6 +143,11 @@ def hunspell_rejections(
 def build_inventory(
     dic_path: Path, aff_path: Path, locale: str, revision: str, hunspell: str
 ) -> list[dict[str, object]]:
+    expected_affix = dic_path.with_suffix(".aff")
+    if aff_path.resolve() != expected_affix.resolve():
+        raise ValueError(
+            f"affix file must be the paired file beside the dictionary: {expected_affix}"
+        )
     verify_affix_file(aff_path)
     declared, records = read_dictionary(dic_path)
     simple_words = [r["word"] for r in records if SIMPLE_WORD.fullmatch(r["word"])]
