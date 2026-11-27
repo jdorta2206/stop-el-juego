@@ -5,17 +5,28 @@
   "description": "Provenance and file-level licensing gate for external lexical datasets. Schema definition only; it does not approve or include any dataset.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "bundleVersion", "sources"],
+  "required": [
+    "schemaVersion",
+    "bundleVersion",
+    "sources"
+  ],
   "properties": {
-    "$schema": { "type": "string", "minLength": 1 },
-    "schemaVersion": { "const": 2 },
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaVersion": {
+      "const": 2
+    },
     "bundleVersion": {
       "type": "string",
       "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}([+-][A-Za-z0-9.-]+)?$"
     },
     "sources": {
       "type": "array",
-      "items": { "$ref": "#/$defs/source" },
+      "items": {
+        "$ref": "#/$defs/source"
+      },
       "uniqueItems": true
     }
   },
@@ -23,15 +34,36 @@
     "license": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["spdxId", "licenseTextPath", "appliesTo"],
+      "required": [
+        "spdxId",
+        "licenseTextPath",
+        "appliesTo"
+      ],
       "properties": {
-        "spdxId": { "enum": ["0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MIT", "Unlicense"] },
-        "licenseTextPath": { "type": "string", "minLength": 1 },
+        "spdxId": {
+          "enum": [
+            "0BSD",
+            "Apache-2.0",
+            "BSD-2-Clause",
+            "BSD-3-Clause",
+            "CC0-1.0",
+            "ISC",
+            "MIT",
+            "Unlicense"
+          ]
+        },
+        "licenseTextPath": {
+          "type": "string",
+          "minLength": 1
+        },
         "appliesTo": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -39,60 +71,191 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "id", "language", "locales", "upstreamUrl", "version",
-        "revision", "sha256", "files", "licenses", "notices",
-        "commercialUse", "modification", "redistribution",
-        "shareAlike", "thirdPartyContent", "reviewStatus"
+        "id",
+        "language",
+        "locales",
+        "upstreamUrl",
+        "version",
+        "revision",
+        "sha256",
+        "files",
+        "licenses",
+        "notices",
+        "commercialUse",
+        "modification",
+        "redistribution",
+        "shareAlike",
+        "thirdPartyContent",
+        "reviewStatus",
+        "title",
+        "provider",
+        "attribution",
+        "edition",
+        "retrievedAt",
+        "referenceUrl"
       ],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,79}$" },
-        "language": { "enum": ["es", "en", "pt", "fr"] },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{2,79}$"
+        },
+        "language": {
+          "enum": [
+            "es",
+            "en",
+            "pt",
+            "fr"
+          ]
+        },
         "locales": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[a-z]{2}-[A-Z]{2}$" }
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2}-[A-Z]{2}$"
+          }
         },
-        "upstreamUrl": { "type": "string", "format": "uri" },
-        "version": { "type": "string", "minLength": 1 },
-        "revision": { "type": "string", "minLength": 7 },
-        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "upstreamUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 7
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
         "files": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "licenses": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/license" }
+          "items": {
+            "$ref": "#/$defs/license"
+          }
         },
         "notices": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
-        "commercialUse": { "type": "boolean" },
-        "modification": { "type": "boolean" },
-        "redistribution": { "type": "boolean" },
-        "shareAlike": { "type": "boolean" },
-        "thirdPartyContent": { "enum": ["none-known", "present-audited", "present-unaudited", "unknown"] },
-        "reviewStatus": { "enum": ["candidate", "blocked", "approved"] },
-        "reviewedBy": { "type": "string", "minLength": 1 },
-        "reviewedAt": { "type": "string", "format": "date" },
-        "approvalReference": { "type": "string", "minLength": 1 }
+        "commercialUse": {
+          "type": "boolean"
+        },
+        "modification": {
+          "type": "boolean"
+        },
+        "redistribution": {
+          "type": "boolean"
+        },
+        "shareAlike": {
+          "type": "boolean"
+        },
+        "thirdPartyContent": {
+          "enum": [
+            "none-known",
+            "present-audited",
+            "present-unaudited",
+            "unknown"
+          ]
+        },
+        "reviewStatus": {
+          "enum": [
+            "candidate",
+            "blocked",
+            "approved"
+          ]
+        },
+        "reviewedBy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewedAt": {
+          "type": "string",
+          "format": "date"
+        },
+        "approvalReference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attribution": {
+          "type": "string",
+          "minLength": 1
+        },
+        "edition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retrievedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "referenceUrl": {
+          "type": "string",
+          "format": "uri"
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "reviewStatus": { "const": "approved" } }, "required": ["reviewStatus"] },
-          "then": {
-            "required": ["reviewedBy", "reviewedAt", "approvalReference"],
+          "if": {
             "properties": {
-              "commercialUse": { "const": true },
-              "modification": { "const": true },
-              "redistribution": { "const": true },
-              "shareAlike": { "const": false },
-              "thirdPartyContent": { "enum": ["none-known", "present-audited"] }
+              "reviewStatus": {
+                "const": "approved"
+              }
+            },
+            "required": [
+              "reviewStatus"
+            ]
+          },
+          "then": {
+            "required": [
+              "reviewedBy",
+              "reviewedAt",
+              "approvalReference"
+            ],
+            "properties": {
+              "commercialUse": {
+                "const": true
+              },
+              "modification": {
+                "const": true
+              },
+              "redistribution": {
+                "const": true
+              },
+              "shareAlike": {
+                "const": false
+              },
+              "thirdPartyContent": {
+                "enum": [
+                  "none-known",
+                  "present-audited"
+                ]
+              }
             }
           }
         }
