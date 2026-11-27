@@ -1007,3 +1007,34 @@ Audit date: 2026-11-27. The next four candidates in the reconstructed 233-root s
 - ASALE *Nueva gramática*, suffix `-ista`: https://temporalweb.asale.org/gram%C3%A1tica/morfolog%C3%ADa/nombres-de-persona-instrumento-y-lugar-iv-el-sufijo-ista
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+## Twenty-third independent lexicographic batch: four further ASALE headword confirmations
+
+Audit date: 2026-11-27. The next four candidates in the reconstructed 233-root shared regional queue were checked against individual ASALE *Diccionario de americanismos* entries. All four spellings are represented as headwords or explicit cross-reference entries; their grammatical forms, senses and geographic labels remain distinct.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `espelucar` | ASALE records transitive and pronominal senses in Costa Rica, Dominican Republic, Puerto Rico, Colombia and Venezuela for disarranging someone's hair; further Honduran, Nicaraguan, Puerto Rican and Venezuelan senses for hair or body hair standing on end; Venezuela also has textile-fraying senses, and Dominican Republic/Puerto Rico a plucking/defeathering sense | Exact entry with several unrelated senses. Preserve transitive/pronominal constructions and separate hair, textile and poultry meanings. The entry also points to `despelucar`; do not collapse the two lemmas |
+| `estiptiquez` | ASALE has an entry for the exact spelling with a cross-reference to `estitiquez`; the latter is recorded as a feminine noun for constipation in Nicaragua, Costa Rica, Colombia and Chile | Exact cross-reference headword, but the definition and country labels belong to the referenced form. Preserve the spelling variant relation; do not treat it as an independently defined sense |
+| `estrictez` | ASALE records a feminine noun in Panama, Cuba, Colombia, Ecuador, Peru, Bolivia and Argentina, and as a prestigious cultured form in Chile, for strict adherence to an established rule; a second sense in Ecuador, Bolivia, Chile and Argentina means severity or harshness in treatment | Exact entry with two senses. Keep the general rule-adherence meaning separate from the narrower interpersonal severity meaning |
+| `exfoliador` | ASALE records an adjective/noun in Mexico, Colombia, Ecuador, Peru and Bolivia for a notebook, notepad or agenda whose pages are lightly attached so they can be detached easily | Exact entry; a specialized stationery meaning, not the cosmetic sense some players may associate with `exfoliar`. Keep its part of speech and object-domain metadata |
+
+### Quality findings
+
+- Four further exact-spelling headword/cross-reference entries in the 233-root queue have individual ASALE *Diccionario de americanismos* corroboration. The positively reviewed exact-form count advances from 87 to **91 of 233**.
+- `estiptiquez` is a cross-reference spelling: its semantic content and geographic distribution are inherited from `estitiquez`, not independently expanded.
+- `espelucar` is highly polysemous and must not be reduced to a single generic “mess up hair” meaning.
+- `estrictez` has two distinct senses with different country sets.
+- `exfoliador` illustrates why a morphological family must not be used to guess a word's meaning: the documented regional sense concerns detachable pages in stationery.
+- ASALE's *Diccionario de americanismos* is descriptive and attaches geographic and usage labels to individual senses. Its entries corroborate research; they do not grant permission to copy definitions or database content. None of these candidates is approved for runtime import by this documentation update.
+
+### References
+
+- ASALE DA, `espelucar(se)`: https://www.asale.org/damer/espelucar
+- ASALE DA, `estiptiquez`: https://temporalweb.asale.org/damer/estiptiquez
+- ASALE DA, `estitiquez`: https://www.asale.org/damer/estitiquez
+- ASALE DA, `estrictez`: https://www.asale.org/damer/estrictez
+- ASALE DA, `exfoliador`: https://temporalweb.asale.org/damer/exfoliador
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
