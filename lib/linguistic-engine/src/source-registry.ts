@@ -73,7 +73,8 @@ const validTimestamp = (value: string): boolean => {
 
 const validHttpsUrl = (value: string): boolean => {
   try {
-    const url = new URL(value);\n    return url.protocol === "https:" && Boolean(url.hostname);
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname);
   } catch {
     return false;
   }
