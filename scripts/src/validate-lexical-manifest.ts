@@ -131,7 +131,8 @@ function validateSourceShape(value: unknown, index: number): Source {
     fail(`${value.id}: reviewedAt must be a valid calendar date`);
   }
   if (value.reviewStatus === "approved") {
-    if (value.commercialUse !== true || value.redistribution !== true || value.modification !== true) fail(`${value.id}: approved source must permit commercial use, modification and redistribution`);\n    if (value.shareAlike !== false) fail(`${value.id}: share-alike source is not approved for the proprietary STOP bundle`);
+    if (value.commercialUse !== true || value.redistribution !== true || value.modification !== true) fail(`${value.id}: approved source must permit commercial use, modification and redistribution`);
+    if (value.shareAlike !== false) fail(`${value.id}: share-alike source is not approved for the proprietary STOP bundle`);
     if (!["none-known", "present-audited"].includes(String(value.thirdPartyContent))) fail(`${value.id}: third-party content is not audited`);
     if (value.notices.length === 0) fail(`${value.id}: approved source must preserve attribution/notices`);
     if (!nonEmpty(value.reviewedBy) || !nonEmpty(value.approvalReference) ||
