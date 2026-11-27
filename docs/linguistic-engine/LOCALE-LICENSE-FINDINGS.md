@@ -522,3 +522,49 @@ Audit date: 2026-11-27. Six further roots from the 233-item shared Hunspell comp
 - ASALE DA negative lookup, `ajizal`: https://www.asale.org/damer/ajizal
 
 This batch is documentation only. No ASALE definitions or database data were copied into STOP, no candidate was approved for runtime validation, no dictionary was imported, and no game behavior was changed.
+
+
+
+## Seventh independent lexicographic batch: ten further regional candidates
+
+Audit date: 2026-11-27. Ten additional roots from the 233-item shared Hunspell comparison queue were checked against individual entries in ASALE's *Diccionario de americanismos*. The aim is to preserve sense, region, register and domain, not to turn a dictionary lookup into automatic game approval.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `bolsiquear(se)` | ASALE records furtively searching another person's pockets or bag to steal valuables in Colombia, Ecuador, Peru, Bolivia, northern Argentina and Uruguay; Bolivia and northern Argentina have a more specific sense involving a sleeping or drunk person. Ecuador also has a pronominal sense of searching one's own pockets | Valid verb with transitive and pronominal uses. Preserve the theft-related sense and regional distribution; don't reduce it to generic “searching pockets” |
+| `buscapleitos` | ASALE records a person who provokes quarrels or disturbances in Nicaragua, Costa Rica, Panama, Puerto Rico, Chile, Argentina and Uruguay, and as a noun/adjective in Colombia, Venezuela and Peru. Dominican Republic and Bolivia have a separate, derogatory sense for a lawyer who delays proceedings for financial gain | Valid person noun/adjective with a separate legal/social sense in two countries. Category and register need sense-level selection |
+| `cachimbo` | ASALE records numerous unrelated senses: a smoking pipe in Venezuela, Argentina, Dominican Republic, Puerto Rico and obsolete Uruguay; a ceremonial pipe in parts of Paraguay and northeastern Argentina; a first-year university student and a village military-band musician in Peru; several plant names in Colombia, Puerto Rico and Costa Rica; a large quantity in Guatemala, Honduras, El Salvador and Nicaragua; plus other country-specific senses | Strongly polysemous noun, including objects, people, plants and quantity. Never treat it as one universal meaning; category acceptance must select a documented country/sense pair |
+| `cachumbo` | ASALE records a masculine noun in Colombia meaning a curl of hair in a spiral shape | Valid, narrow regional noun; category fit depends on whether STOP accepts hairstyle/appearance terms |
+| `calandraco` | ASALE records a derogatory political designation for a member or supporter of the Conservative Party in Nicaragua. The related form `calandraco, -a` has other senses for an erratic, indolent or careless person in northern/northeastern/central Colombia, eastern Bolivia and Uruguay; an obsolete sense in Argentina and Uruguay; and thin-person senses in Cuba, Nicaragua and Honduras | Preserve the exact headword and separate adjectival/person senses. Political and derogatory labels need special treatment and should not be surfaced as neutral vocabulary |
+| `calilla` | ASALE records a person who continually annoys others in Mexico, Guatemala, Honduras and Ecuador; “annoyance” in Nicaragua; a suppository in several Central American countries, Venezuela and obsolete Peru; a long thin type of tobacco in northern/southwestern Colombia and Venezuela; a cigarette butt in Panama; and a debt in Chile | Valid but highly polysemous noun. Some senses concern medicine, tobacco or debt; category filtering must use the intended sense and avoid inappropriate content |
+| `camarotero, -a` | ASALE records a person working as a waiter on a passenger ship in Ecuador and Peru (masculine in the Dominican Republic entry) | Valid occupational noun; distinguish shipboard waiter from a generic waiter and preserve grammatical gender |
+| `cantuta` | ASALE records the plant and its flower in Peru and Bolivia; the entry cross-refers to `kantuta`, which is explicitly traced to Aymara and Quechua | Valid botanical noun. Preserve spelling variants as linked forms, not duplicate concepts; botanical category mapping should identify the plant/flower |
+| `carángano` | ASALE records a musical instrument in Colombia and Venezuela, a reference to `caranga` in Nicaragua and Panama, and a man with a bad temper in Panama | Valid noun with instrument, animal-related cross-reference and person senses. The musical instrument sense is distinct and can fit musical-instrument categories |
+| `carato` | ASALE records a thick, cold refreshing drink made from ground rice or maize, or fruit pulp mixed with water and sweetened, in Puerto Rico (rural) and obsolete Venezuela; it also records a separate Puerto Rican cross-reference to `caruto`, while the adjective `carato, -a` has a Panamanian color sense | Valid but sense-specific food/drink noun, with obsolete and rural labels. Do not merge the beverage, plant cross-reference and adjective |
+| `carnear` | ASALE records slaughtering and butchering a large animal for its meat in Mexico, Nicaragua, Ecuador, Peru, Bolivia, Chile, Paraguay, Argentina and Uruguay; metaphorical knife-attack senses in Mexico, Bolivia and criminal slang in Chile; and a vulgar/popular Mexican sense meaning to deceive | Valid verb with neutral agricultural and marked figurative/criminal senses. The game should retain the animal-processing sense separately from violent or vulgar meanings |
+
+### Quality findings
+
+- Ten additional candidates now have direct ASALE entry evidence, but evidence is not a blanket approval for all categories or all countries.
+- `cachimbo`, `calilla` and `carnear` are particularly clear examples where one spelling spans different semantic domains and registers.
+- `cantuta` / `kantuta` demonstrates how spelling variants can be linked without double-counting the underlying botanical concept.
+- `calandraco` includes derogatory and political senses; any future player-facing definition or hint must retain the register and context and avoid presenting the label as neutral.
+- Rural, obsolete, vulgar, criminal-slang and geographically narrow senses should be explicit metadata, not silently discarded or generalized.
+- These checks do not prove frequency, current everyday use, or category suitability beyond the individual senses described.
+
+### References
+
+- ASALE DA, `bolsiquear`: https://www.asale.org/damer/bolsiquear
+- ASALE DA, `buscapleitos`: https://temporalweb.asale.org/damer/buscapleitos
+- ASALE DA, `cachimbo`: https://www.asale.org/damer/cachimbo
+- ASALE DA, `cachumbo`: https://temporalweb.asale.org/damer/cachumbo
+- ASALE DA, `calandraco`: https://www.asale.org/damer/calandraco
+- ASALE DA, `calilla`: https://www.asale.org/damer/calilla
+- ASALE DA, `camarotero`: https://www.asale.org/damer/camarotero
+- ASALE DA, `cantuta`: https://www.asale.org/damer/cantuta
+- ASALE DA, `kantuta`: https://www.asale.org/damer/kantuta
+- ASALE DA, `carángano`: https://www.asale.org/damer/car%C3%A1ngano
+- ASALE DA, `carato`: https://www.asale.org/damer/carato
+- ASALE DA, `carnear`: https://www.asale.org/damer/carnear
+
+This batch is documentation only. No ASALE definitions or database data were copied into STOP, no candidate was approved for runtime validation, no dictionary was imported, and no game behavior was changed.
