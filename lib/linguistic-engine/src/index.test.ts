@@ -265,6 +265,55 @@ test("morphology requires a source with approved redistribution rights", () => {
   if (!result.valid) assert.ok(result.errors.includes("morphology_source_not_approved_for_locale"));
 });
 
+test("irregular plurals are accepted only as individually attested forms", () => {
+  const cases = [
+    { surface: "luces", lemma: "luz" },
+    { surface: "regímenes", lemma: "régimen" },
+    { surface: "peces", lemma: "pez" },
+  ];
+  for (const [index, item] of cases.entries()) {
+    const surface = { ...lexicalRecord, recordId: `lex-irregular-surface-${index}`, form: item.surface, normalizedForm: item.surface };
+    const lemma = { ...lexicalRecord, recordId: `lex-irregular-lemma-${index}`, form: item.lemma, normalizedForm: item.lemma };
+    const morphology = {
+      recordId: `morph-irregular-${index}`,
+      formRecordId: surface.recordId,
+      lemmaRecordId: lemma.recordId,
+      sourceId: "source-001",
+      language: "es",
+      locale: "es-MX",
+      grammaticalFeatures: ["number:plural"],
+      citationLocator: `entry:${item.lemma}#form:${item.surface}`,
+      reviewStatus: "approved" as const,
+      reviewedBy: "morphology-reviewer",
+      reviewedAt: "2026-11-27T10:20:00Z",
+    };
+    assert.equal(validateMorphologicalAttestation(morphology, [surface, lemma], [sourceRecord]).valid, true);
+  }
+});
+
+test("morphology cannot rely on lexical records from a source without redistribution rights", () => {
+  const restricted = { ...sourceRecord, sourceId: "restricted-source", redistribution: false };
+  const surface = { ...lexicalRecord, recordId: "lex-restricted-surface", sourceId: "restricted-source", form: "luces", normalizedForm: "luces" };
+  const lemma = { ...lexicalRecord, recordId: "lex-restricted-lemma", sourceId: "restricted-source", form: "luz", normalizedForm: "luz" };
+  const morphology = {
+    recordId: "morph-restricted-lexical-source",
+    formRecordId: surface.recordId,
+    lemmaRecordId: lemma.recordId,
+    sourceId: "source-001",
+    language: "es",
+    locale: "es-MX",
+    grammaticalFeatures: ["number:plural"],
+    citationLocator: "entry:luz#form:luces",
+    reviewStatus: "approved" as const,
+    reviewedBy: "morphology-reviewer",
+    reviewedAt: "2026-11-27T10:20:00Z",
+  };
+  const result = validateMorphologicalAttestation(morphology, [surface, lemma], [sourceRecord, restricted]);
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("surface_form_lexical_evidence_invalid"));
+  if (!result.valid) assert.ok(result.errors.includes("lemma_lexical_evidence_invalid"));
+});
+
 test("morphology rejects links that cross regional locales", () => {
   const surface = { ...lexicalRecord, recordId: "lex-cantamos", form: "cantamos", normalizedForm: "cantamos" };
   const lemma = { ...lexicalRecord, recordId: "lex-cantar", form: "cantar", normalizedForm: "cantar", locale: "es-ES" };
