@@ -25,7 +25,7 @@ def spanish_lexeme(category="Q1084", lexeme_id="L123"):
 
 class WikidataLexemeExtractorTests(unittest.TestCase):
     def test_identity_preserves_accents(self):
-        self.assertEqual(identity("CAFE\\u0301"), "café")
+        self.assertEqual(identity("CAFE\u0301"), "café")
         self.assertNotEqual(identity("café"), identity("cafe"))
 
     def test_extracts_lemma_and_explicit_form_with_provenance(self):
@@ -69,8 +69,8 @@ class WikidataLexemeExtractorTests(unittest.TestCase):
             source = root / "lexemes.jsonl"
             output = root / "records.jsonl"
             source.write_text(
-                json.dumps(spanish_lexeme("Q147276", "L123")) + "\\n"
-                + json.dumps(spanish_lexeme("Q1084", "L124")) + "\\n",
+                json.dumps(spanish_lexeme("Q147276", "L123")) + "\n"
+                + json.dumps(spanish_lexeme("Q1084", "L124")) + "\n",
                 encoding="utf-8",
             )
             summary = extract_jsonl(source, output, "Q1321")
