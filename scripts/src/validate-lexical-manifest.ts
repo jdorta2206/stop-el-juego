@@ -4,6 +4,13 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 type License = { spdxId: string; licenseTextPath: string; appliesTo: string[] };
+
+// Conservative allowlist for redistribution inside STOP's proprietary game bundle.
+// This is a project policy gate, not a substitute for reviewing the upstream grant.
+const BUNDLE_LICENSES = new Set([
+  "0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause",
+  "CC0-1.0", "ISC", "MIT", "Unlicense",
+]);
 type Source = {
   id: string;
   language: "es" | "en" | "pt" | "fr";
@@ -90,7 +97,7 @@ function validateSourceShape(value: unknown, index: number): Source {
   if (!nonEmpty(value.upstreamUrl)) fail(`${value.id}: invalid upstreamUrl`);
   try {
     const url = new URL(value.upstreamUrl);
-    if (url.protocol !== "https:" && url.protocol !== "http:") fail(`${value.id}: invalid upstreamUrl`);
+    if (url.protocol !== "https:") fail(`${value.id}: upstreamUrl must use HTTPS`);
   } catch { fail(`${value.id}: invalid upstreamUrl`); }
   if (!nonEmpty(value.version)) fail(`${value.id}: missing version`);
   if (!nonEmpty(value.revision) || value.revision.length < 7) fail(`${value.id}: revision must contain at least 7 characters`);
@@ -124,7 +131,7 @@ function validateSourceShape(value: unknown, index: number): Source {
     fail(`${value.id}: reviewedAt must be a valid calendar date`);
   }
   if (value.reviewStatus === "approved") {
-    if (value.commercialUse !== true || value.redistribution !== true) fail(`${value.id}: approved source must permit commercial use and redistribution`);
+    if (value.commercialUse !== true || value.redistribution !== true || value.modification !== true) fail(`${value.id}: approved source must permit commercial use, modification and redistribution`);\n    if (value.shareAlike !== false) fail(`${value.id}: share-alike source is not approved for the proprietary STOP bundle`);
     if (!["none-known", "present-audited"].includes(String(value.thirdPartyContent))) fail(`${value.id}: third-party content is not audited`);
     if (value.notices.length === 0) fail(`${value.id}: approved source must preserve attribution/notices`);
     if (!nonEmpty(value.reviewedBy) || !nonEmpty(value.approvalReference) ||
