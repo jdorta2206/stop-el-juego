@@ -99,6 +99,19 @@ export function validateMorphologicalAttestation(
       const values = record.grammaticalFeatures.filter((item) => item.startsWith(dimension + ":"));
       if (values.length > 1) errors.push("conflicting_" + dimension + "_features");
     }
+    const clitics = record.grammaticalFeatures.filter((item) => item.startsWith("clitic:"));
+    const hasClitic = record.grammaticalFeatures.includes("form:clitic");
+    const mood = record.grammaticalFeatures.find((item) => item.startsWith("mood:"));
+    if (clitics.length > 0 && !hasClitic) errors.push("clitic_feature_requires_clitic_form");
+    if (hasClitic && clitics.length === 0) errors.push("clitic_form_requires_clitic_identity");
+    if (clitics.length > 2) errors.push("too_many_clitics");
+    if (clitics.length > 0 && !record.grammaticalFeatures.includes("pos:verb")) errors.push("clitic_requires_verb");
+    if (clitics.length > 0 && !["mood:infinitive", "mood:gerund", "mood:imperative"].includes(mood ?? "")) {
+      errors.push("clitic_not_allowed_with_this_mood");
+    }
+    if (clitics.length === 2 && !record.grammaticalFeatures.includes("clitic-order:indirect-direct")) {
+      errors.push("two_clitics_require_indirect_direct_order");
+    }
   }
   if (!nonBlank(record.citationLocator) || record.citationLocator.trim().length < 3) {
     errors.push("morphology_citation_required");
