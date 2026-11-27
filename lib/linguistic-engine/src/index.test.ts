@@ -17,9 +17,29 @@ const reviewedEvidence: LexicalEvidence[] = [{
   reviewed: true,
 }];
 
-test("normalization preserves ñ as distinct from n", () => {
+test("normalization preserves ñ and meaningful accent distinctions", () => {
   assert.equal(normalizeLexicalForm("ÑU"), "ñu");
   assert.notEqual(normalizeLexicalForm("año"), normalizeLexicalForm("ano"));
+  assert.notEqual(normalizeLexicalForm("sí"), normalizeLexicalForm("si"));
+  assert.notEqual(normalizeLexicalForm("él"), normalizeLexicalForm("el"));
+});
+
+test("normalization equates canonically equivalent composed and decomposed accents", () => {
+  assert.equal(normalizeLexicalForm("café"), normalizeLexicalForm("cafe\\u0301"));
+  assert.equal(normalizeLexicalForm("pingüino"), normalizeLexicalForm("pingu\\u0308ino"));
+});
+
+test("accent distinctions are enforced by exact lexical lookup", () => {
+  const evidence: LexicalEvidence[] = [{
+    sourceId: "fixture-es-001",
+    normalizedForm: "sí",
+    language: "es",
+    locale: "es-ES",
+    sourceVersion: "fixture-1",
+    reviewed: true,
+  }];
+  assert.equal(decideLexicalStatus("sí", "es", evidence).status, "valid");
+  assert.equal(decideLexicalStatus("si", "es", evidence).status, "unknown");
 });
 
 test("exact reviewed regional evidence is valid independent of player locale", () => {
