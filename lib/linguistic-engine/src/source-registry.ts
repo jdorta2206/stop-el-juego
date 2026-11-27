@@ -1,3 +1,5 @@
+import { normalizeLexicalForm } from "./index";
+
 /**
  * Auditable provenance records. These schemas store references and review
  * decisions; they do not import, scrape, or redistribute dictionary content.
@@ -51,7 +53,7 @@ const nonBlank = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
 const validTimestamp = (value: string): boolean =>
-  /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$/.test(value) &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\\.\d+)?Z$/.test(value) &&
   Number.isFinite(Date.parse(value));
 
 const validHttpsUrl = (value: string): boolean => {
@@ -84,6 +86,10 @@ export function validateLexicalAttestation(
   if (!source || !validateLexicalSource(source).valid) errors.push("source_not_registered_or_invalid");
   if (!nonBlank(record.recordId)) errors.push("recordId_required");
   if (!nonBlank(record.form) || !nonBlank(record.normalizedForm)) errors.push("form_required");
+  if (nonBlank(record.form) && nonBlank(record.normalizedForm) &&
+      normalizeLexicalForm(record.form) !== record.normalizedForm) {
+    errors.push("normalized_form_does_not_match_form");
+  }
   if (!nonBlank(record.language) || !nonBlank(record.locale)) errors.push("language_and_locale_required");
   if (source && (record.language !== source.language || record.locale !== source.locale)) errors.push("source_language_locale_mismatch");
   if (!nonBlank(record.citationLocator)) errors.push("citationLocator_required");
