@@ -17,6 +17,15 @@ export interface LexicalSourceRecord {
   locale: string;
   edition: string;
   retrievedAt: string;
+  reviewStatus: "candidate" | "blocked" | "approved";
+  commercialUse: boolean;
+  modification: boolean;
+  redistribution: boolean;
+  shareAlike: boolean;
+  thirdPartyContent: "none-known" | "present-audited" | "present-unaudited" | "unknown";
+  reviewedBy?: string;
+  reviewedAt?: string;
+  approvalReference?: string;
 }
 
 export interface LexicalAttestationRecord {
@@ -73,6 +82,21 @@ export function validateLexicalSource(source: LexicalSourceRecord): RegistryVali
   if (!nonBlank(source.referenceUrl) || !validHttpsUrl(source.referenceUrl)) errors.push("referenceUrl_must_be_https");
   if (source.licenseUrl !== undefined && !validHttpsUrl(source.licenseUrl)) errors.push("licenseUrl_must_be_https");
   if (!nonBlank(source.retrievedAt) || !validTimestamp(source.retrievedAt)) errors.push("retrievedAt_must_be_utc_iso_timestamp");
+  if (!["candidate", "blocked", "approved"].includes(source.reviewStatus)) errors.push("reviewStatus_invalid");
+  if (source.reviewStatus === "approved") {
+    if (!["0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MIT", "Unlicense"].includes(source.licenseId)) {
+      errors.push("license_not_approved_for_stop_bundle");
+    }
+    if (source.commercialUse !== true || source.modification !== true || source.redistribution !== true) {
+      errors.push("approved_source_requires_commercial_modification_and_redistribution_rights");
+    }
+    if (source.shareAlike !== false) errors.push("share_alike_not_approved_for_proprietary_bundle");
+    if (!["none-known", "present-audited"].includes(source.thirdPartyContent)) errors.push("third_party_content_not_audited");
+    if (!nonBlank(source.reviewedBy) || !nonBlank(source.approvalReference) ||
+        !nonBlank(source.reviewedAt) || !validTimestamp(source.reviewedAt)) {
+      errors.push("source_approval_audit_required");
+    }
+  }
   return errors.length ? { valid: false, errors } : { valid: true };
 }
 
@@ -83,7 +107,7 @@ export function validateLexicalAttestation(
 ): RegistryValidation {
   const errors: string[] = [];
   const source = sources.find((item) => item.sourceId === record.sourceId);
-  if (!source || !validateLexicalSource(source).valid) errors.push("source_not_registered_or_invalid");
+  if (!source || !validateLexicalSource(source).valid || source.reviewStatus !== "approved") errors.push("source_not_registered_or_approved");
   if (!nonBlank(record.recordId)) errors.push("recordId_required");
   if (!nonBlank(record.form) || !nonBlank(record.normalizedForm)) errors.push("form_required");
   if (nonBlank(record.form) && nonBlank(record.normalizedForm) &&
@@ -92,7 +116,7 @@ export function validateLexicalAttestation(
   }
   if (!nonBlank(record.language) || !nonBlank(record.locale)) errors.push("language_and_locale_required");
   if (source && (record.language !== source.language || record.locale !== source.locale)) errors.push("source_language_locale_mismatch");
-  if (!nonBlank(record.citationLocator)) errors.push("citationLocator_required");
+  if (!nonBlank(record.citationLocator) || record.citationLocator.trim().length < 3) errors.push("citationLocator_required");
   if (!["pending", "approved", "rejected"].includes(record.reviewStatus)) errors.push("reviewStatus_invalid");
   if (record.reviewStatus === "approved") {
     if (!nonBlank(record.reviewedBy)) errors.push("reviewedBy_required_for_approval");
@@ -109,9 +133,10 @@ export function validateCategoryAttestation(
   const errors: string[] = [];
   const lexical = lexicalRecords.find((item) => item.recordId === record.lexicalRecordId);
   if (!lexical || lexical.reviewStatus !== "approved") errors.push("approved_lexical_record_required");
+  else if (!nonBlank(lexical.reviewedBy) || !nonBlank(lexical.reviewedAt) || !validTimestamp(lexical.reviewedAt)) errors.push("lexical_record_review_audit_required");
   if (!nonBlank(record.recordId) || !nonBlank(record.normalizedForm) || !nonBlank(record.categoryId)) errors.push("category_record_fields_required");
   if (lexical && record.normalizedForm !== lexical.normalizedForm) errors.push("category_form_mismatch");
-  if (!nonBlank(record.citationLocator)) errors.push("citationLocator_required");
+  if (!nonBlank(record.citationLocator) || record.citationLocator.trim().length < 3) errors.push("citationLocator_required");
   if (!["pending", "approved", "rejected"].includes(record.reviewStatus)) errors.push("reviewStatus_invalid");
   if (record.reviewStatus === "approved") {
     if (!nonBlank(record.reviewedBy)) errors.push("reviewedBy_required_for_approval");
