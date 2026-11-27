@@ -129,7 +129,7 @@ def extract_jsonl(input_path: Path, output_path: Path, spanish_language_id: str)
     """Stream JSONL or line-oriented Wikidata JSON array; never retain full corpus in memory."""
     counts = Counter()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8", newline="\\n") as handle:
+    with output_path.open("w", encoding="utf-8", newline="\n") as handle:
         for line_number, entity in iter_dump_entities(input_path):
             try:
                 extracted = extract_lexeme(entity, spanish_language_id)
