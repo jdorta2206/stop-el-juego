@@ -1,0 +1,16 @@
+{
+  "name": "@workspace/linguistic-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test ./src/index.test.ts"
+  },
+  "devDependencies": {
+    "tsx": "catalog:"
+  }
+}
