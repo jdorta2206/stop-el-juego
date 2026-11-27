@@ -80,6 +80,16 @@ class HunspellExtractorTests(unittest.TestCase):
             self.assertEqual(len(records[0]["dictionarySha256"]), 64)
             self.assertEqual(len(records[0]["affixSha256"]), 64)
 
+    def test_requires_matching_affix_pair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dic = root / "sample.dic"
+            aff = root / "other.aff"
+            dic.write_text("1\\nword\\n", encoding="utf-8")
+            aff.write_text("SET UTF-8\\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "paired file"):
+                MODULE.build_inventory(dic, aff, "en-US", "revision", "unused")
+
     def test_refuses_non_utf8_affix_files(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sample.aff"
