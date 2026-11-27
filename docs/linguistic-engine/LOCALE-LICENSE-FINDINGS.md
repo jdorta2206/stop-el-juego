@@ -1038,3 +1038,34 @@ Audit date: 2026-11-27. The next four candidates in the reconstructed 233-root s
 - ASALE DA, `exfoliador`: https://temporalweb.asale.org/damer/exfoliador
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+
+## Twenty-fourth independent lexicographic batch: four further ASALE headword confirmations
+
+Audit date: 2026-11-27. The next four candidates in the reconstructed 233-root shared regional queue were checked against individual ASALE *Diccionario de americanismos* entries. All four spellings have exact-form entries. Their multiple senses, grammatical behavior, country labels and register labels must remain separate.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `farrear` | ASALE records `farrear(se)`: an intransitive sense in Colombia, Ecuador, Chile, Paraguay, Argentina and Uruguay, and obsolete use in Peru, for going out to enjoy a party or celebration; transitive/pronominal senses in Argentina and Uruguay, and popular/colloquial Chilean use, for wasting something; a Paraguayan and less frequent Argentine sense for making fun of someone; and Bolivian intransitive/pronominal senses for drinking alcohol excessively or getting drunk | Exact entry with several unrelated senses and transitivity changes. Preserve the country and register labels and distinguish partying, wasting, mocking and drinking. Lexical evidence alone does not determine whether a particular game category should admit an alcohol-related sense |
+| `ferrocarrilero` | ASALE records a masculine/feminine noun for a person working in a railway company across Mexico, Guatemala, Honduras, Nicaragua, Costa Rica, Panama, Cuba, Colombia, Venezuela, Ecuador, Peru, Bolivia, Chile, Argentina and Uruguay, and less frequently in Paraguay; it also records an adjective meaning related to the railway in Mexico, Guatemala, Honduras, Nicaragua, Costa Rica, Ecuador, Bolivia, Chile, Paraguay and Argentina | Exact entry with noun and adjective uses. Keep the occupational person sense distinct from the relational adjective and do not assume the adjective has the same geographic distribution as the noun |
+| `filudo` | ASALE records an adjective for a cutting instrument or weapon with a very sharp edge across Mexico, Guatemala, Honduras, El Salvador, Nicaragua, Panama, Puerto Rico, Venezuela, Ecuador, Peru, Chile and Uruguay, and popular use in Bolivia and Argentina; further senses include a very thin person or body part in Bolivia and Chile, a harsh/hostile expression or matter in Chile, a hungry person in Guatemala, Honduras and El Salvador, a knowledgeable student in Honduras and Nicaragua, and a skilled/ingenious person in Guatemala | Exact entry with several distinct meanings, some explicitly popular, colloquial or regional. Preserve the separate senses and their country sets; do not reduce the word to “sharp” or infer that the figurative/person senses apply everywhere |
+| `fintear` | ASALE records an intransitive sports sense in Venezuela, Ecuador, Peru, Chile, Argentina and Uruguay, and popular use in Bolivia, for performing feints; a second sense in Bolivia and Chile means quickly avoiding obstacles along a route while running or driving | Exact entry. Keep the sports sense separate from the movement/obstacle sense and preserve the narrower country coverage of the latter |
+
+### Quality findings
+
+- Four further exact-form entries in the 233-root queue have individual ASALE *Diccionario de americanismos* corroboration. The positively reviewed exact-form count advances from 91 to **95 of 233**.
+- `farrear` is a useful warning against flattening polysemy: partying, wasting, mocking and alcohol-related senses have different countries and constructions.
+- `ferrocarrilero` shows that one lemma can be both an occupational noun and a relational adjective, with different geographic distributions.
+- `filudo` has several unrelated senses and register labels; spelling evidence must not be mistaken for universal meaning or category suitability.
+- `fintear` has a sports meaning and a separate route/obstacle meaning; the latter is not documented across the full country set of the former.
+- ASALE's *Diccionario de americanismos* is descriptive and attaches geographic and usage labels to individual senses. Its entries corroborate research; they do not grant permission to copy definitions or database content. None of these candidates is approved for runtime import by this documentation update.
+
+### References
+
+- ASALE DA, `farrear(se)`: https://www.asale.org/damer/farrear
+- ASALE DA, `ferrocarrilero, -a`: https://www.asale.org/damer/ferrocarrilero
+- ASALE DA, `filudo, -a`: https://www.asale.org/damer/filudo
+- ASALE DA, `fintear`: https://temporalweb.asale.org/damer/fintear
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
