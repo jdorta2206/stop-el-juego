@@ -7,6 +7,7 @@ on:
       - "scripts/package.json"
       - "scripts/src/validate-lexical-manifest.ts"
       - "scripts/src/validate-lexical-manifest.test.ts"
+      - "scripts/linguistic-engine/**"
       - "lib/linguistic-engine/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -41,6 +42,8 @@ jobs:
         run: pnpm install --frozen-lockfile --filter @workspace/scripts
       - name: Run lexical manifest tests
         run: pnpm --filter @workspace/scripts linguistics:test
+      - name: Run Hunspell extractor tests
+        run: python3 -m unittest discover -s scripts/linguistic-engine -p 'test_*.py' -v
       - name: Run linguistic engine tests
         run: pnpm --filter @workspace/linguistic-engine test
       - name: Type-check scripts package
