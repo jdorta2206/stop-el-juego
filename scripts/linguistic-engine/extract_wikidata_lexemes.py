@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 LEXEME_ID = re.compile(r"^L[1-9][0-9]*$")
+FORM_ID = re.compile(r"^(L[1-9][0-9]*)-F[1-9][0-9]*$")
 ITEM_ID = re.compile(r"^Q[1-9][0-9]*$")
 SPANISH_LANGUAGE_ID = "Q1321"
 PROPER_NOUN_CATEGORY_ID = "Q147276"
@@ -93,7 +94,7 @@ def extract_lexeme(entity: Any, spanish_language_id: str = SPANISH_LANGUAGE_ID) 
         if not isinstance(form, dict):
             raise ValueError(f"{lexeme_id}.forms[{index}]: expected an object")
         form_id = form.get("id")
-        if not isinstance(form_id, str) or not form_id.startswith(lexeme_id + "-F"):
+        if not isinstance(form_id, str) or not FORM_ID.fullmatch(form_id) or not form_id.startswith(lexeme_id + "-F"):
             raise ValueError(f"{lexeme_id}.forms[{index}]: invalid form ID")
         features = form.get("grammaticalFeatures", [])
         if not isinstance(features, list):
