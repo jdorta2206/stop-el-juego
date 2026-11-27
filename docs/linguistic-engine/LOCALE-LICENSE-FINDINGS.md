@@ -761,3 +761,35 @@ Audit date: 2026-11-27. The next positively corroborated entries in the reconstr
 - ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+
+## Fifteenth independent lexicographic batch: two ASALE-confirmed candidates and two source-status controls
+
+Audit date: 2026-11-27. The next four forms in the alphabetical review area were checked against ASALE and supplementary lexicographic sources. Only the two forms with individual ASALE entries are added to the positively corroborated ASALE queue count. The other two are recorded as controls, not silently treated as ASALE-confirmed.
+
+| Candidate | Independent evidence | Classification and STOP caution |
+|---|---|---|
+| `cuerazo` | ASALE records multiple unrelated senses: an attractive/b well-formed body or attractive person in several countries; a whip-lash in parts of Central America and northern South America; a fall or blow, a drink, and a vulgar sexual sense in Cuba; a lightning thunderclap in Costa Rica; and a separate feminine noun sense for a prostitute in the Dominican Republic | Extremely polysemous and register-sensitive. Preserve each sense, gender, country and usage label. Avoid surfacing sexualized or vulgar senses as neutral game vocabulary; a bare spelling match is not enough for category eligibility |
+| `cueriza` | ASALE records a feminine noun for a beating/corporal punishment in Mexico, Panama, Cuba, Colombia, Venezuela, Ecuador, Peru and Bolivia; a further sense in Cuba, Puerto Rico and Bolivia is a beating/flogging | Feminine noun with overlapping but separately marked regional senses. Its meaning concerns physical punishment; do not treat it as a generic “hit” or neutral object |
+| `cúlmine` | Not found as an ASALE headword in this pass. A language-advice source reports use in Chile and Argentina with the sense “culminating/high point”, while noting it is absent from general dictionaries and corpora consulted by that source | Do not count as ASALE-confirmed or treat the secondary source as equivalent to a dictionary entry. Keep it pending stronger corpus/lexicographic evidence and check spelling/inflection carefully |
+| `cunchu` | Not found as an ASALE headword in this pass. The DLE-derived Iedra entry records a rural Ecuadorian masculine noun meaning the residue/bran of chicha; a historical lexicographic discussion also reports this sense and questions the precise geographic label | Evidence exists outside ASALE, but the country attribution and current usage require confirmation. Keep it pending independent contemporary Ecuadorian evidence; do not merge it automatically with `concho` |
+
+### Quality findings
+
+- Two further entries in the 233-root queue have individual ASALE corroboration. The positively reviewed ASALE queue count advances from 66 to 68 of 233.
+- `cuerazo` is a strong test of sense-level safeguards: one spelling spans appearance, punishment, injury, drink, vulgar sexual usage and weather-related sound.
+- `cueriza` is a regional feminine noun for corporal punishment; semantic category and register need to be retained.
+- `cúlmine` and `cunchu` are deliberately not counted in the ASALE total. Their supplementary evidence is a lead for further verification, not approval for runtime acceptance.
+- ASALE's *Diccionario de americanismos* is descriptive and attaches geographic, social and cultural labels to individual senses. Its entries corroborate lexical review; they do not grant permission to copy definitions or database content.
+
+### References
+
+- ASALE DA, `cuerazo`: https://www.asale.org/damer/cuerazo
+- ASALE DA, `cueriza`: https://www.asale.org/damer/cueriza
+- Language-advice discussion of `cúlmine`: https://www.elcastellano.org/node/48158
+- DLE-derived entry for `cunchu`: https://iedra.es/palabras/cunchu
+- Historical lexicographic discussion of `cunchu`: https://sisbib.unmsm.edu.pe/BibVirtual/Publicaciones/Alma_Mater/2000_n18-19/diccionario.htm
+- ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
