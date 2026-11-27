@@ -31,16 +31,16 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "mcr.tab"
             path.write_text(
-                "# header\n00000001\tspa:lemma\tcasa\n"
-                "00000001\tspa:def\t0\tconstrucción\n"
+                "# header\n00000001-n\tspa:lemma\tcasa\n"
+                "00000001-n\tspa:def\t0\tconstrucción\n"
                 "00000002\teng:lemma\thouse\n"
-                "00000003\tspa:lemma\tcasa\n",
+                "00000003-n\tspa:lemma\tcasa\n",
                 encoding="utf-8",
             )
             matches, definitions = read_mcr(path)
-            self.assertEqual(matches["casa"], ["00000001", "00000003"])
+            self.assertEqual(matches["casa"], ["00000001-n", "00000003-n"])
             self.assertNotIn("construcción", matches)
-            self.assertEqual(definitions["00000001"], "construcción")
+            self.assertEqual(definitions["00000001-n"], "construcción")
 
     def test_crosscheck_never_approves_lexical_or_category(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -53,8 +53,8 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
             rows, summary = build_crosscheck(
                 path,
                 {"casa": [42]},
-                {"casa": ["00000001"]},
-                {"00000001": "construcción para habitar"},
+                {"casa": ["00000001-n"]},
+                {"00000001-n": "construcción para habitar"},
             )
             self.assertEqual(rows[0]["evidence"], "mcr_synset_match")
             self.assertEqual(rows[0]["mcrSenses"][0]["partOfSpeech"], "noun")
