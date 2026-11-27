@@ -793,3 +793,35 @@ Audit date: 2026-11-27. The next four forms in the alphabetical review area were
 - ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+
+## Sixteenth independent lexicographic batch: four further candidates from the shared regional queue
+
+Audit date: 2026-11-27. The next four not-yet-reviewed entries after `cunchu` in the reconstructed 233-root intersection queue were checked against individual ASALE *Diccionario de americanismos* entries. The intervening `cuy` was already reviewed in the first batch and is not counted again.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `demeritar(se)` | ASALE records a transitive use across Mexico, Guatemala, Honduras, Nicaragua, Panama, Cuba, Puerto Rico, Colombia, Venezuela, Ecuador, Bolivia, Argentina and Uruguay, with cultured-use labels in Costa Rica and Chile, meaning to remove merit or diminish the value of a person or thing. It separately records a pronominal intransitive use in Colombia and Venezuela meaning to lose one's credit or reputation | Verb with transitive and pronominal constructions. Preserve the argument structure and country labels; do not merge it with the related variant `desmeritar` as though spellings and regional coverage were identical |
+| `denguear` | ASALE records an intransitive popular use in Colombia and western Venezuela meaning to sway or move the body with affected/marked movement. The historical dictionary also documents older senses and additional uses in other countries, including a youth-jargon sense in Peru | Polysemous verb with regional, historical and youth-jargon evidence. Keep the ASALE current regional sense distinct from historical senses and the separate Peruvian slang sense; do not infer universal current use |
+| `desaterrar` | ASALE records a transitive use in Honduras, Nicaragua and Costa Rica, and rural Mexico, meaning to remove earth from a place such as a road, ditch or conduit to clear it; a less-used Ecuadorian sense concerns removing rubble or earth to level a place | Technical/practical verb with regional and rural labels. Preserve the construction and earth-removal sense; do not confuse it with generic excavation or unrelated meanings of `aterrar` |
+| `descachazar` | ASALE records a transitive agricultural/industrial use in Guatemala, Honduras, Cuba and Colombia, and rural Costa Rica and Ecuador, meaning to remove the cachaza (impurities/foam) from sugar-cane juice | Specialized sugar-processing verb. Preserve its agricultural domain and transitivity; it should not be treated as a general synonym for cleaning or filtering |
+
+### Quality findings
+
+- Four further entries in the 233-root queue have individual ASALE corroboration. The positively reviewed ASALE queue count advances from 68 to 72 of 233.
+- `demeritar` demonstrates the need to retain transitivity and pronominal behavior as distinct lexical constructions.
+- `denguear` shows why a historical attestation or a separate youth-jargon sense must not be conflated with a current regional sense.
+- `desaterrar` and `descachazar` are domain-specific verbs; lexical existence alone does not make them suitable for arbitrary categories.
+- ASALE's *Diccionario de americanismos* is descriptive and records geographic and usage labels at sense level. Its entries corroborate review; they do not grant permission to copy definitions or database content.
+
+### References
+
+- ASALE DA, `demeritar`: https://www.asale.org/damer/demeritar
+- ASALE DA, `denguear`: https://www.asale.org/damer/denguear
+- ASALE historical dictionary, `denguear`: https://temporalweb.asale.org/tdhle/denguear
+- ASALE DA, `desaterrar`: https://www.asale.org/damer/desaterrar
+- ASALE DA, `descachazar`: https://www.asale.org/damer/descachazar
+- ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
