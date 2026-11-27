@@ -188,6 +188,83 @@ test("morphology cannot link a surface form to an unapproved lemma", () => {
   if (!result.valid) assert.ok(result.errors.includes("lemma_not_approved"));
 });
 
+test("documented plural and feminine forms require explicit reviewed links", () => {
+  const cases = [
+    { surface: "coches", lemma: "coche", features: ["number:plural"] },
+    { surface: "niñas", lemma: "niño", features: ["number:plural", "gender:feminine"] },
+  ];
+  for (const [index, item] of cases.entries()) {
+    const surface = { ...lexicalRecord, recordId: `lex-surface-${index}`, form: item.surface, normalizedForm: item.surface };
+    const lemma = { ...lexicalRecord, recordId: `lex-lemma-${index}`, form: item.lemma, normalizedForm: item.lemma };
+    const morphology = {
+      recordId: `morph-reviewed-${index}`,
+      formRecordId: surface.recordId,
+      lemmaRecordId: lemma.recordId,
+      sourceId: "source-001",
+      language: "es",
+      locale: "es-MX",
+      grammaticalFeatures: item.features,
+      citationLocator: `entry:${item.lemma}#${item.surface}`,
+      reviewStatus: "approved" as const,
+      reviewedBy: "morphology-reviewer",
+      reviewedAt: "2026-11-27T10:20:00Z",
+    };
+    assert.equal(validateMorphologicalAttestation(morphology, [surface, lemma], [sourceRecord]).valid, true);
+  }
+});
+
+test("morphology rejects invented feature labels and contradictory number tags", () => {
+  const surface = { ...lexicalRecord, recordId: "lex-plural", form: "coches", normalizedForm: "coches" };
+  const lemma = { ...lexicalRecord, recordId: "lex-singular", form: "coche", normalizedForm: "coche" };
+  const base = {
+    recordId: "morph-invalid-features",
+    formRecordId: surface.recordId,
+    lemmaRecordId: lemma.recordId,
+    sourceId: "source-001",
+    language: "es",
+    locale: "es-MX",
+    grammaticalFeatures: ["number:plural"],
+    citationLocator: "entry:coche#coches",
+    reviewStatus: "approved" as const,
+    reviewedBy: "morphology-reviewer",
+    reviewedAt: "2026-11-27T10:20:00Z",
+  };
+  const unknown = validateMorphologicalAttestation(
+    { ...base, grammaticalFeatures: ["number:plural", "made-up:whatever"] },
+    [surface, lemma], [sourceRecord],
+  );
+  assert.equal(unknown.valid, false);
+  if (!unknown.valid) assert.ok(unknown.errors.includes("unsupported_grammatical_feature"));
+  const conflict = validateMorphologicalAttestation(
+    { ...base, grammaticalFeatures: ["number:plural", "number:singular"] },
+    [surface, lemma], [sourceRecord],
+  );
+  assert.equal(conflict.valid, false);
+  if (!conflict.valid) assert.ok(conflict.errors.includes("conflicting_number_features"));
+});
+
+test("morphology requires a source with approved redistribution rights", () => {
+  const surface = { ...lexicalRecord, recordId: "lex-surface", form: "coches", normalizedForm: "coches" };
+  const lemma = { ...lexicalRecord, recordId: "lex-lemma", form: "coche", normalizedForm: "coche" };
+  const morphology = {
+    recordId: "morph-source-rights",
+    formRecordId: surface.recordId,
+    lemmaRecordId: lemma.recordId,
+    sourceId: "source-001",
+    language: "es",
+    locale: "es-MX",
+    grammaticalFeatures: ["number:plural"],
+    citationLocator: "entry:coche#coches",
+    reviewStatus: "approved" as const,
+    reviewedBy: "morphology-reviewer",
+    reviewedAt: "2026-11-27T10:20:00Z",
+  };
+  const restrictedSource = { ...sourceRecord, redistribution: false };
+  const result = validateMorphologicalAttestation(morphology, [surface, lemma], [restrictedSource]);
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("morphology_source_not_approved_for_locale"));
+});
+
 test("morphology rejects links that cross regional locales", () => {
   const surface = { ...lexicalRecord, recordId: "lex-cantamos", form: "cantamos", normalizedForm: "cantamos" };
   const lemma = { ...lexicalRecord, recordId: "lex-cantar", form: "cantar", normalizedForm: "cantar", locale: "es-ES" };
