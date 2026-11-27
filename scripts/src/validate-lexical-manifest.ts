@@ -113,10 +113,12 @@ function validateSourceShape(value: unknown, index: number): Source {
     fail(`${value.id}: locale language must match ${value.language}`);
   }
   if (!nonEmpty(value.upstreamUrl)) fail(`${value.id}: invalid upstreamUrl`);
-  try {
-    const url = new URL(value.upstreamUrl);
-    if (url.protocol !== "https:") fail(`${value.id}: upstreamUrl must use HTTPS`);
-  } catch { fail(`${value.id}: invalid upstreamUrl`); }
+  let upstream: URL;
+  try { upstream = new URL(value.upstreamUrl); }
+  catch { fail(`${value.id}: invalid upstreamUrl`); }
+  if (upstream.protocol !== "https:" || !upstream.hostname) {
+    fail(`${value.id}: upstreamUrl must use HTTPS`);
+  }
   if (!nonEmpty(value.version)) fail(`${value.id}: missing version`);
   if (!nonEmpty(value.revision) || value.revision.length < 7) fail(`${value.id}: revision must contain at least 7 characters`);
   if (!/^[a-fA-F0-9]{64}$/.test(String(value.sha256))) fail(`${value.id}: invalid sha256`);
