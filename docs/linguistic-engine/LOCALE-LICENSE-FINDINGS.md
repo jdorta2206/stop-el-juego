@@ -698,3 +698,34 @@ Audit date: 2026-11-27. The next four terms in the reconstructed 233-root inters
 - ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+## Thirteenth independent lexicographic batch: four further candidates from the shared regional queue
+
+Audit date: 2026-11-27. The next four terms in the reconstructed 233-root intersection queue were checked against individual entries in ASALE's *Diccionario de americanismos*. The recorded senses are geographically and grammatically specific; none is automatically approved for all game categories.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `conguito` | ASALE records a masculine noun in the Dominican Republic for a congo drum; as an adjective there for an arm or leg that is short and thick, and for a woman who is short and stout; Panama has a separate noun sense for a chili pepper plant and its fruit | Keep the instrument, physical-description adjective and plant/fruit senses separate. The person-description sense may be sensitive or insulting depending on context and should not be used as a neutral player-facing label |
+| `conscripto, -a` | ASALE records a masculine noun in Mexico, Nicaragua, Dominican Republic, Venezuela, Ecuador, Peru, Bolivia, Paraguay and Uruguay for a person performing compulsory military service; Honduras, Puerto Rico and Argentina are marked obsolete. Colombia and Chile record masculine/feminine forms | Military/person noun with regional and obsolete labels. Preserve common-gender behavior in Colombia and Chile and do not infer that the term means any professional soldier |
+| `contesta` | ASALE records a feminine noun, an apocope of `contestación`, for a response or answer in the United States and Venezuela; Panama, Cuba, Dominican Republic and Chile (rural), and Colombia (popular) | Regional feminine noun with marked rural/popular usage in several countries. Keep it distinct from the verb form `contesta` (third-person or imperative of `contestar`); part of speech is essential to avoid a false lexical/category match |
+| `contraloría` | ASALE records a feminine noun in Mexico, Guatemala, Honduras, El Salvador, Nicaragua, Costa Rica, Panama, Dominican Republic, Colombia, Venezuela, Ecuador, Peru, Bolivia, Chile and Paraguay for a public office responsible for auditing accounts and the legality of state expenditure; a second sense names the Comptroller General's office in Mexico, several Central American countries, Bolivia, Chile and Uruguay | Public-administration institution noun. Preserve the institutional sense and the narrower proper-office sense; do not treat it as a generic synonym for any control or audit |
+
+### Quality findings
+
+- Four further terms from the 233-root queue have individual ASALE corroboration. The positively reviewed queue count advances from 58 to 62 of 233.
+- `conguito` contains unrelated instrument, descriptive and botanical senses; country must attach to each sense.
+- `conscripto` is a person noun with obsolete country labels and a gender pattern that differs by region.
+- `contesta` highlights a critical homograph trap: the ASALE noun is not the ordinary verbal form. The engine must store part of speech and sense, not merely spelling.
+- `contraloría` is a specific public institution; category eligibility should use the institutional concept, not a loose string match.
+- ASALE's *Diccionario de americanismos* is descriptive and attaches geographic, social and cultural information to senses. It is evidence for linguistic review, not permission to copy definitions or database content.
+
+### References
+
+- ASALE DA, `conguito`: https://www.asale.org/damer/conguito
+- ASALE DA, `conscripto`: https://temporalweb.asale.org/damer/conscripto
+- ASALE DA, `contesta`: https://temporalweb.asale.org/damer/contesta
+- ASALE DA, `contraloría`: https://www.asale.org/damer/contralor%C3%ADa
+- ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
