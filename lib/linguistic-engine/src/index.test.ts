@@ -85,6 +85,7 @@ import {
   validateCategoryAttestation,
   validateLexicalAttestation,
   validateLexicalSource,
+  validateLexicalCorpus,
   type LexicalSourceRecord,
   type LexicalAttestationRecord,
 } from "./source-registry";
@@ -258,4 +259,36 @@ test("category evidence rejects duplicate record IDs and duplicate category clai
   const duplicateClaim = validateCategoryAttestation({ ...category, recordId: "cat-004" }, [lexicalRecord], [category]);
   assert.equal(duplicateClaim.valid, false);
   if (!duplicateClaim.valid) assert.ok(duplicateClaim.errors.includes("duplicate_category_attestation"));
+});
+
+
+test("whole-corpus audit keeps identical spelling separate across regional locales", () => {
+  const mexican = { ...lexicalRecord, recordId: "lex-mx", locale: "es-MX" };
+  const spanishSource = { ...sourceRecord, sourceId: "source-es-es", locale: "es-ES", referenceUrl: "https://example.org/es-es" };
+  const spanish = { ...lexicalRecord, recordId: "lex-es", sourceId: "source-es-es", locale: "es-ES" };
+  const result = validateLexicalCorpus([mexican, spanish], [sourceRecord, spanishSource]);
+  assert.equal(result.valid, true);
+});
+
+test("whole-corpus audit rejects records whose locale conflicts with their source", () => {
+  const mismatched = { ...lexicalRecord, locale: "es-ES" };
+  const result = validateLexicalCorpus([mismatched], [sourceRecord]);
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("source_language_locale_mismatch"));
+});
+
+test("whole-corpus audit rejects duplicate evidence IDs and missing sources", () => {
+  const duplicate = { ...lexicalRecord };
+  const duplicateResult = validateLexicalCorpus([lexicalRecord, duplicate], [sourceRecord]);
+  assert.equal(duplicateResult.valid, false);
+  if (!duplicateResult.valid) assert.ok(duplicateResult.errors.includes("duplicate_lexical_record_id"));
+  const missingSource = validateLexicalCorpus([{ ...lexicalRecord, sourceId: "missing-source" }], [sourceRecord]);
+  assert.equal(missingSource.valid, false);
+  if (!missingSource.valid) assert.ok(missingSource.errors.includes("source_not_registered"));
+});
+
+test("same spelling in separate languages remains separate and does not cross-validate", () => {
+  const portugueseSource = { ...sourceRecord, sourceId: "source-pt-br", language: "pt", locale: "pt-BR", referenceUrl: "https://example.org/pt-br" };
+  const portugueseRecord = { ...lexicalRecord, recordId: "lex-pt", sourceId: "source-pt-br", language: "pt", locale: "pt-BR" };
+  assert.equal(validateLexicalCorpus([lexicalRecord, portugueseRecord], [sourceRecord, portugueseSource]).valid, true);
 });
