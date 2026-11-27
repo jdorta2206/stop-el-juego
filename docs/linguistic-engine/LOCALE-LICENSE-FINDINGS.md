@@ -638,3 +638,33 @@ Audit date: 2026-11-27. The next three entries in the reproducibly reconstructed
 - ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
 
 This batch is documentation only. No ASALE definitions or database data were copied into STOP, no dictionary was imported, no runtime candidate was approved, and no game behavior or production system was changed.
+
+
+## Eleventh independent lexicographic batch: four further candidates from the shared regional queue
+
+Audit date: 2026-11-27. The next four terms in the reconstructed 233-root intersection queue were checked against individual entries in ASALE's *Diccionario de americanismos*. Each entry contains multiple regional senses; this review records evidence without granting automatic category or runtime approval.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `cholo, -a` | ASALE records a wide range of country-specific noun/adjective senses: in some countries a person of Indigenous or mixed ancestry, in others a rural/campesino identity, a person from Peru or Bolivia, an affectionate term for a person, a cowardly person, a person of lower social class, and several other uses. Some senses are explicitly derogatory, popular, rural, obsolete or youth slang. The masculine form also has unrelated object/fruit/billiards senses in particular countries | Extremely sensitive and polysemous. Ethnic and class-related senses must never be treated as neutral labels or surfaced without context. Store only sense-specific, contextual evidence; category eligibility should normally exclude demographic labels |
+| `chueco, -a` | ASALE records the adjective for something crooked/not straight across Mexico, Central America, the Caribbean and much of South America; further senses include dishonest or disloyal people, defective objects, illegal or suspicious dealings, forged documents, bow-legged or lame people, damaged things, and country-specific meanings | Broad adjective with several unrelated domains. Preserve adjective/person/object/business senses and country/register. A generic lemma match must not be used to infer a noun category or a single universal definition |
+| `cigarrería` | ASALE records a feminine noun for an establishment selling cigarettes, tobacco and smokers' articles in the Dominican Republic, Ecuador (western region), Peru, Argentina and Uruguay, with obsolete use in Peru and Chile; Colombia has a broader shop sense that also sells liquor, wine, preserves and food | Regional commercial-place noun. Lexical evidence does not make it appropriate for every category; preserve the country-specific shop profile and the obsolete labels |
+| `cochayuyo` | ASALE records a masculine noun in Peru, Bolivia and Chile for an edible marine alga, identifying the taxon *Durvillaea antarctica*; it also gives the Quechua-derived etymology and the Chilean related name `collofe` | Specific food/botanical noun. Keep the taxon and regional distribution attached to the sense; link `collofe` as a regional related form rather than assuming it is a separate species |
+
+### Quality findings
+
+- Four further terms from the 233-root queue now have individual ASALE corroboration. The running count for positively reviewed queue candidates advances from 50 to 54 of 233.
+- `cholo` is a high-risk example: some senses concern ethnicity, ancestry or social class and are explicitly marked derogatory. A dictionary's attestation is not permission to present such labels as neutral game vocabulary.
+- `chueco` demonstrates that an adjective may describe physical shape, conduct, documents, businesses or health; the game must not flatten those into one meaning.
+- `cigarrería` and `cochayuyo` provide more straightforward shop and food/botanical senses, but still require country and category matching.
+- ASALE's entries are descriptive evidence, not a wordlist license. No definitions or database content are copied into STOP.
+
+### References
+
+- ASALE DA, `cholo`: https://www.asale.org/damer/cholo
+- ASALE DA, `chueco`: https://temporalweb.asale.org/damer/chueco
+- ASALE DA, `cigarrería`: https://www.asale.org/damer/cigarrer%C3%ADa
+- ASALE DA, `cochayuyo`: https://www.asale.org/damer/cochayuyo
+- ASALE DA, related form `collofe`: https://www.asale.org/damer/collofe
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
