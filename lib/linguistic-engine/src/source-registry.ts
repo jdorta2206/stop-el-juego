@@ -117,6 +117,7 @@ export function validateLexicalSource(source: LexicalSourceRecord): RegistryVali
 export function validateLexicalAttestation(
   record: LexicalAttestationRecord,
   sources: readonly LexicalSourceRecord[],
+  existingRecords: readonly LexicalAttestationRecord[] = [],
 ): RegistryValidation {
   const errors: string[] = [];
   const matchingSources = sources.filter((item) => item.sourceId === record.sourceId);
@@ -125,7 +126,8 @@ export function validateLexicalAttestation(
   if (sources.some((item) => item.sourceId !== record.sourceId && item.referenceUrl === source?.referenceUrl && item.edition === source?.edition && item.locale === source?.locale)) errors.push("ambiguous_source_reference");
   if (!source || !validateLexicalSource(source).valid || source.reviewStatus !== "approved") errors.push("source_not_registered_or_approved");
   if (!nonBlank(record.recordId)) errors.push("recordId_required");
-  if (sources.length && false) errors.push("unreachable");
+  if (existingRecords.some((item) => item.recordId === record.recordId)) errors.push("duplicate_lexical_record_id");
+  if (existingRecords.some((item) => item.sourceId === record.sourceId && item.normalizedForm === record.normalizedForm && item.language === record.language && item.locale === record.locale && item.citationLocator === record.citationLocator)) errors.push("duplicate_lexical_attestation");
   if (!nonBlank(record.form) || !nonBlank(record.normalizedForm)) errors.push("form_required");
   if (nonBlank(record.form) && nonBlank(record.normalizedForm) &&
       normalizeLexicalForm(record.form) !== record.normalizedForm) {
@@ -146,6 +148,7 @@ export function validateLexicalAttestation(
 export function validateCategoryAttestation(
   record: CategoryAttestationRecord,
   lexicalRecords: readonly LexicalAttestationRecord[],
+  existingRecords: readonly CategoryAttestationRecord[] = [],
 ): RegistryValidation {
   const errors: string[] = [];
   const matchingLexical = lexicalRecords.filter((item) => item.recordId === record.lexicalRecordId);
@@ -154,7 +157,8 @@ export function validateCategoryAttestation(
   if (!lexical || lexical.reviewStatus !== "approved") errors.push("approved_lexical_record_required");
   else if (!nonBlank(lexical.reviewedBy) || !nonBlank(lexical.reviewedAt) || !validTimestamp(lexical.reviewedAt)) errors.push("lexical_record_review_audit_required");
   if (!nonBlank(record.recordId) || !nonBlank(record.normalizedForm) || !nonBlank(record.categoryId)) errors.push("category_record_fields_required");
-  if (lexicalRecords.some((item) => item.recordId !== record.lexicalRecordId && item.recordId === record.recordId)) errors.push("record_id_collision");
+  if (existingRecords.some((item) => item.recordId === record.recordId)) errors.push("duplicate_category_record_id");
+  if (existingRecords.some((item) => item.lexicalRecordId === record.lexicalRecordId && item.categoryId === record.categoryId)) errors.push("duplicate_category_attestation");
   if (lexical && record.normalizedForm !== lexical.normalizedForm) errors.push("category_form_mismatch");
   if (!nonBlank(record.citationLocator) || record.citationLocator.trim().length < 3) errors.push("citationLocator_required");
   if (!["pending", "approved", "rejected"].includes(record.reviewStatus)) errors.push("reviewStatus_invalid");
