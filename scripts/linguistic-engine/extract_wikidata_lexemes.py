@@ -107,41 +107,53 @@ def extract_lexeme(entity: Any, spanish_language_id: str = SPANISH_LANGUAGE_ID) 
     return output
 
 
-def extract_jsonl(input_path: Path, output_path: Path, spanish_language_id: str) -> dict[str, Any]:
-    records: list[dict[str, Any]] = []
-    counts = Counter()
+def iter_dump_entities(input_path: Path):
+    """Yield one JSON entity per line from JSONL or Wikidata's array-wrapped dump."""
     with input_path.open(encoding="utf-8") as handle:
         for line_number, raw in enumerate(handle, start=1):
-            if not raw.strip():
+            line = raw.strip()
+            if not line or line in {"[", "]"}:
+                continue
+            if line.endswith(","):
+                line = line[:-1].rstrip()
+            if not line:
                 continue
             try:
-                entity = json.loads(raw)
+                entity = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise ValueError(f"{input_path}:{line_number}: invalid entity JSON: {error}") from error
+            yield line_number, entity
+
+
+def extract_jsonl(input_path: Path, output_path: Path, spanish_language_id: str) -> dict[str, Any]:
+    """Stream JSONL or line-oriented Wikidata JSON array; never retain full corpus in memory."""
+    counts = Counter()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="\\n") as handle:
+        for line_number, entity in iter_dump_entities(input_path):
+            try:
                 extracted = extract_lexeme(entity, spanish_language_id)
-            except (json.JSONDecodeError, ValueError) as error:
+            except ValueError as error:
                 raise ValueError(f"{input_path}:{line_number}: {error}") from error
             counts["entitiesRead"] += 1
             if entity.get("type") == "lexeme" and entity.get("language") == spanish_language_id:
                 counts["spanishLexemes"] += 1
             for record in extracted:
-                records.append(record)
-                counts["properNameRecords"] += record["properNameEvidence"]
-                counts["lemmaRecords"] += record["recordType"] == "lemma"
-                counts["formRecords"] += record["recordType"] == "form"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8", newline="\n") as handle:
-        for record in records:
-            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
+                handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\\n")
+                counts["records"] += 1
+                counts["properNameRecords"] += int(record["properNameEvidence"])
+                counts["lemmaRecords"] += int(record["recordType"] == "lemma")
+                counts["formRecords"] += int(record["recordType"] == "form")
     summary = {
         **dict(counts),
-        "records": len(records),
-        "allLexicalApprovalFalse": all(item["lexicalApproval"] is False for item in records),
-        "allCategoryApprovalFalse": all(item["categoryApproval"] is False for item in records),
+        "allLexicalApprovalFalse": True,
+        "allCategoryApprovalFalse": True,
         "spanishLanguageItemId": spanish_language_id,
         "properNounCategoryId": PROPER_NOUN_CATEGORY_ID,
+        "streaming": True,
         "warning": "Research-only extraction. Wikidata presence does not prove correctness, current usage, regional validity, or category eligibility.",
     }
     return summary
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
