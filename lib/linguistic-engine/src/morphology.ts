@@ -22,13 +22,13 @@ export type MorphologyValidation =
   | { valid: false; errors: string[] };
 
 const ALLOWED_FEATURES = new Set([
-  "number:singular", "number:plural",
+  "pos:verb", "pos:noun", "pos:adjective",\n  "number:singular", "number:plural",
   "gender:masculine", "gender:feminine", "gender:common",
   "person:first", "person:second", "person:third",
   "tense:present", "tense:past", "tense:future", "tense:imperfect", "tense:preterite", "tense:conditional",
   "mood:indicative", "mood:subjunctive", "mood:imperative", "mood:infinitive", "mood:gerund", "mood:participle",
   "degree:positive", "degree:comparative", "degree:superlative",
-  "form:affirmative", "form:negative", "form:clitic",
+  "form:affirmative", "form:negative", "form:clitic",\n  "clitic:me", "clitic:te", "clitic:se", "clitic:lo", "clitic:la",\n  "clitic:los", "clitic:las", "clitic:le", "clitic:les", "clitic:nos", "clitic:os",\n  "clitic-order:indirect-direct",
 ]);
 
 const nonBlank = (value: unknown): value is string =>
@@ -95,7 +95,7 @@ export function validateMorphologicalAttestation(
     if (record.grammaticalFeatures.some((item) => !ALLOWED_FEATURES.has(item))) {
       errors.push("unsupported_grammatical_feature");
     }
-    for (const dimension of ["number", "gender", "person", "tense", "mood", "degree"]) {
+    for (const dimension of ["pos", "number", "gender", "person", "tense", "mood", "degree"]) {
       const values = record.grammaticalFeatures.filter((item) => item.startsWith(dimension + ":"));
       if (values.length > 1) errors.push("conflicting_" + dimension + "_features");
     }
