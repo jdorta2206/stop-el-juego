@@ -21,7 +21,17 @@ export type MorphologyValidation =
   | { valid: true }
   | { valid: false; errors: string[] };
 
-const ALLOWED_FEATURES = new Set([\n  "number:singular", "number:plural",\n  "gender:masculine", "gender:feminine", "gender:common",\n  "person:first", "person:second", "person:third",\n  "tense:present", "tense:past", "tense:future", "tense:imperfect", "tense:preterite", "tense:conditional",\n  "mood:indicative", "mood:subjunctive", "mood:imperative", "mood:infinitive", "mood:gerund", "mood:participle",\n  "degree:positive", "degree:comparative", "degree:superlative",\n  "form:affirmative", "form:negative", "form:clitic",\n]);\n\nconst nonBlank = (value: unknown): value is string =>
+const ALLOWED_FEATURES = new Set([
+  "number:singular", "number:plural",
+  "gender:masculine", "gender:feminine", "gender:common",
+  "person:first", "person:second", "person:third",
+  "tense:present", "tense:past", "tense:future", "tense:imperfect", "tense:preterite", "tense:conditional",
+  "mood:indicative", "mood:subjunctive", "mood:imperative", "mood:infinitive", "mood:gerund", "mood:participle",
+  "degree:positive", "degree:comparative", "degree:superlative",
+  "form:affirmative", "form:negative", "form:clitic",
+]);
+
+const nonBlank = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
 const validUtcTimestamp = (value: string): boolean => {
