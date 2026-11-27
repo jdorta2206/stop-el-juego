@@ -61,13 +61,19 @@ export type RegistryValidation =
 const nonBlank = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
-const validTimestamp = (value: string): boolean =>
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value) &&
-  Number.isFinite(Date.parse(value));
+const validTimestamp = (value: string): boolean => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(?:\.\d+)?Z$/.exec(value);
+  if (!match) return false;
+  const calendarDate = `${match[1]}-${match[2]}-${match[3]}`;
+  const parsedDate = new Date(`${calendarDate}T00:00:00Z`);
+  return Number.isFinite(Date.parse(value)) &&
+    !Number.isNaN(parsedDate.valueOf()) &&
+    parsedDate.toISOString().slice(0, 10) === calendarDate;
+};
 
 const validHttpsUrl = (value: string): boolean => {
   try {
-    return new URL(value).protocol === "https:";
+    const url = new URL(value);\n    return url.protocol === "https:" && Boolean(url.hostname);
   } catch {
     return false;
   }
