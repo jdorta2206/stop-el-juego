@@ -86,10 +86,8 @@ def read_dictionary(path: Path) -> tuple[int, list[dict[str, str]]]:
             "morphology": morphology,
             "line": str(line_number),
         })
-    if declared != len(records):
-        raise ValueError(
-            f"{path}: declared {declared} entries but parsed {len(records)} non-empty entries"
-        )
+    # Hunspell documents this header as an approximate sizing count, not a
+    # guaranteed exact count. Preserve it for audit; never reject on mismatch.
     return declared, records
 
 
@@ -160,6 +158,7 @@ def build_inventory(
         "affixSha256": sha256_file(aff_path),
         "declaredEntryCount": declared,
         "parsedEntryCount": len(records),
+        "declaredCountMatchesParsedCount": declared == len(records),
         "hunspellBinary": hunspell,
         "classificationNote": (
             "accepted_by_hunspell means only that the paired .dic/.aff accepts "
