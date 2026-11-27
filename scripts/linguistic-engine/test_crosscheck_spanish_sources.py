@@ -37,8 +37,10 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
                 "00000003\tspa:lemma\tcasa\n",
                 encoding="utf-8",
             )
-            self.assertEqual(read_mcr(path)["casa"], ["00000001", "00000003"])
-            self.assertNotIn("construcción", read_mcr(path))
+            matches, definitions = read_mcr(path)
+            self.assertEqual(matches["casa"], ["00000001", "00000003"])
+            self.assertNotIn("construcción", matches)
+            self.assertEqual(definitions["00000001"], "construcción")
 
     def test_crosscheck_never_approves_lexical_or_category(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -48,8 +50,16 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
                 + json.dumps({"identity": "inventada", "spellings": ["inventada"], "locales": ["es-MX"]}) + "\n",
                 encoding="utf-8",
             )
-            rows, summary = build_crosscheck(path, {"casa": [42]}, {"casa": ["00000001"]})
+            rows, summary = build_crosscheck(
+                path,
+                {"casa": [42]},
+                {"casa": ["00000001"]},
+                {"00000001": "construcción para habitar"},
+            )
             self.assertEqual(rows[0]["evidence"], "mcr_synset_match")
+            self.assertEqual(rows[0]["mcrSenses"][0]["partOfSpeech"], "noun")
+            self.assertEqual(rows[0]["mcrSenses"][0]["definition"], "construcción para habitar")
+            self.assertIn("proper_names", rows[0]["properNameReview"])
             self.assertEqual(rows[0]["rlaWordlistLines"], [42])
             self.assertEqual(rows[1]["evidence"], "no_match_in_checked_sources")
             self.assertTrue(all(row["lexicalApproval"] is False for row in rows))
