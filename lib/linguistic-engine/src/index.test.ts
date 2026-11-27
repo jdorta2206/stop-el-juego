@@ -94,7 +94,7 @@ const sourceRecord: LexicalSourceRecord = {
   title: "Reference dictionary",
   provider: "Publisher",
   referenceUrl: "https://example.org/dictionary",
-  licenseId: "license-reviewed-separately",
+  licenseId: "MIT",
   licenseUrl: "https://example.org/license",
   attribution: "Attribution text required by the source license",
   language: "es",
@@ -217,4 +217,45 @@ test("source approval rejects impossible UTC calendar timestamps", () => {
   const result = validateLexicalSource({ ...sourceRecord, reviewedAt: "2026-02-30T10:00:00Z" });
   assert.equal(result.valid, false);
   if (!result.valid) assert.ok(result.errors.includes("source_approval_audit_required"));
+});
+
+
+test("source registry rejects duplicate source identifiers", () => {
+  const result = validateLexicalAttestation(lexicalRecord, [sourceRecord, sourceRecord]);
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("duplicate_source_id"));
+});
+
+test("source registry rejects licenses outside the bundle allowlist", () => {
+  const result = validateLexicalSource({ ...sourceRecord, licenseId: "GPL-3.0-or-later" });
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("license_not_approved_for_stop_bundle"));
+});
+
+test("lexical evidence rejects duplicate record IDs and repeated citations", () => {
+  const duplicateId = validateLexicalAttestation(lexicalRecord, [sourceRecord], [lexicalRecord]);
+  assert.equal(duplicateId.valid, false);
+  if (!duplicateId.valid) assert.ok(duplicateId.errors.includes("duplicate_lexical_record_id"));
+  const duplicateCitation = validateLexicalAttestation({ ...lexicalRecord, recordId: "lex-002" }, [sourceRecord], [lexicalRecord]);
+  assert.equal(duplicateCitation.valid, false);
+  if (!duplicateCitation.valid) assert.ok(duplicateCitation.errors.includes("duplicate_lexical_attestation"));
+});
+
+test("category evidence rejects duplicate record IDs and duplicate category claims", () => {
+  const category = {
+    recordId: "cat-003",
+    lexicalRecordId: "lex-001",
+    normalizedForm: "carro",
+    categoryId: "vehicle",
+    citationLocator: "entry:carro#vehicle",
+    reviewStatus: "approved" as const,
+    reviewedBy: "reviewer-id",
+    reviewedAt: "2026-11-27T10:10:00Z",
+  };
+  const duplicateId = validateCategoryAttestation(category, [lexicalRecord], [category]);
+  assert.equal(duplicateId.valid, false);
+  if (!duplicateId.valid) assert.ok(duplicateId.errors.includes("duplicate_category_record_id"));
+  const duplicateClaim = validateCategoryAttestation({ ...category, recordId: "cat-004" }, [lexicalRecord], [category]);
+  assert.equal(duplicateClaim.valid, false);
+  if (!duplicateClaim.valid) assert.ok(duplicateClaim.errors.includes("duplicate_category_attestation"));
 });
