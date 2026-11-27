@@ -159,3 +159,18 @@ test("category attestation must match the exact lexical form", () => {
   const result = validateCategoryAttestation(category, [lexicalRecord]);
   assert.equal(result.valid, false);
 });
+
+test("approved lexical record cannot claim a different normalized spelling", () => {
+  const result = validateLexicalAttestation(
+    { ...lexicalRecord, normalizedForm: "carroinventado" },
+    [sourceRecord],
+  );
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("normalized_form_does_not_match_form"));
+});
+
+test("source retrieval timestamp must be a UTC ISO timestamp", () => {
+  const result = validateLexicalSource({ ...sourceRecord, retrievedAt: "yesterday" });
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.ok(result.errors.includes("retrievedAt_must_be_utc_iso_timestamp"));
+});
