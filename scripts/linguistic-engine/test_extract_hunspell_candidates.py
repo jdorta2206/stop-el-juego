@@ -54,7 +54,7 @@ class HunspellExtractorTests(unittest.TestCase):
     def test_preserves_approximate_declared_count(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sample.dic"
-            path.write_text("2\\nuno\\ndos\\ntres\\n", encoding="utf-8")
+            path.write_text("2\nuno\ndos\ntres\n", encoding="utf-8")
             declared, records = MODULE.read_dictionary(path)
             self.assertEqual(declared, 2)
             self.assertEqual(len(records), 3)
