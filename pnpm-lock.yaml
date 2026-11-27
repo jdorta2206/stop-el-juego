@@ -639,6 +639,12 @@ importers:
         specifier: ^0.31.9
         version: 0.31.10
 
+  lib/linguistic-engine:
+    devDependencies:
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.13
+
   scripts:
     devDependencies:
       '@types/node':
