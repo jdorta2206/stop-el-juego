@@ -25,8 +25,8 @@ test("normalization preserves ñ and meaningful accent distinctions", () => {
 });
 
 test("normalization equates canonically equivalent composed and decomposed accents", () => {
-  assert.equal(normalizeLexicalForm("café"), normalizeLexicalForm("cafe\\u0301"));
-  assert.equal(normalizeLexicalForm("pingüino"), normalizeLexicalForm("pingu\\u0308ino"));
+  assert.equal(normalizeLexicalForm("café"), normalizeLexicalForm("cafe\u0301"));
+  assert.equal(normalizeLexicalForm("pingüino"), normalizeLexicalForm("pingu\u0308ino"));
 });
 
 test("accent distinctions are enforced by exact lexical lookup", () => {
