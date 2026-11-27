@@ -160,7 +160,7 @@ test("rejects approved sources without commercial redistribution permission", as
   const { root, manifestPath, manifest } = await fixture();
   manifest.sources[0].commercialUse = false;
   await writeFile(manifestPath, JSON.stringify(manifest));
-  await assert.rejects(validateManifest(manifestPath, root), /must permit commercial use and redistribution/);
+  await assert.rejects(validateManifest(manifestPath, root), /must permit commercial use, modification and redistribution/);
 });
 
 test("rejects unknown manifest fields", async () => {
