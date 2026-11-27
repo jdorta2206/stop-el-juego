@@ -85,7 +85,7 @@ export function validateMorphologicalAttestation(
       !nonBlank(record.lemmaRecordId) || !nonBlank(record.sourceId)) {
     errors.push("morphology_identifiers_required");
   }
-  if (!nonBlank(record.language) || !/^[a-z]{2}-[A-Z]{2}$/.test(record.locale) ||
+  if (!nonBlank(record.language) || !/^[a-z]{2}-(?:[A-Z]{2}|[0-9]{3})$/.test(record.locale) ||
       !record.locale.startsWith(record.language + "-")) {
     errors.push("morphology_language_locale_invalid");
   }
