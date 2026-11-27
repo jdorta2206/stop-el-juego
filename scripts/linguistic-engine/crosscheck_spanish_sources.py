@@ -13,6 +13,10 @@ from typing import Any
 RLA_GIT_BLOB_SHA = "d087616b163c15af3561796be11cb65cf1c6e8d5"
 MCR_GIT_BLOB_SHA = "86c9e367d64a794300b414e55c78b54dbb07eb27"
 MCR_LICENSE_GIT_BLOB_SHA = "bee06f5b0102f3648b374210fbb9dad8315e230f"
+FREELING_COMMIT = "0bae6b7f6d1b405e67658895de54b59bfb3b6338"
+FREELING_AR_GIT_BLOB_SHA = "adbebb9aea96ce4fc24dd594b12b144a8e5f5148"
+FREELING_COPYING_GIT_BLOB_SHA = "df5e2741df0283e4e350d0891f7c33208b097034"
+FREELING_APACHE_GIT_BLOB_SHA = "d645695673349e3947e8e5ae42332d0ac3164cd7"
 
 
 def identity(value: str) -> str:
@@ -25,11 +29,21 @@ def git_blob_sha(path: Path) -> str:
     return hashlib.sha1(header + data).hexdigest()
 
 
-def verify_pinned_sources(rla: Path, mcr: Path, license_file: Path) -> None:
+def verify_pinned_sources(
+    rla: Path,
+    mcr: Path,
+    license_file: Path,
+    freeling_ar: Path,
+    freeling_copying: Path,
+    freeling_apache_license: Path,
+) -> None:
     expected = (
         (rla, RLA_GIT_BLOB_SHA),
         (mcr, MCR_GIT_BLOB_SHA),
         (license_file, MCR_LICENSE_GIT_BLOB_SHA),
+        (freeling_ar, FREELING_AR_GIT_BLOB_SHA),
+        (freeling_copying, FREELING_COPYING_GIT_BLOB_SHA),
+        (freeling_apache_license, FREELING_APACHE_GIT_BLOB_SHA),
     )
     for path, digest in expected:
         actual = git_blob_sha(path)
@@ -78,11 +92,29 @@ def mcr_pos(synset: str) -> str:
     return {"n": "noun", "v": "verb", "a": "adjective", "r": "adverb"}.get(suffix, "unknown")
 
 
+def read_freeling_argentina(path: Path) -> dict[str, list[dict[str, str]]]:
+    """Read FreeLing's Argentine verb form, lemma and morph-tag triples."""
+    matches: dict[str, list[dict[str, str]]] = {}
+    for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        columns = raw.split()
+        if len(columns) != 3:
+            raise ValueError(f"{path}:{line_number}: expected exactly form, lemma and tag")
+        form, lemma, tag = columns
+        analysis = {"lemma": lemma, "tag": tag, "partOfSpeech": "verb"}
+        values = matches.setdefault(identity(form), [])
+        if analysis not in values:
+            values.append(analysis)
+    return {key: sorted(value, key=lambda item: (item["lemma"], item["tag"])) for key, value in matches.items()}
+
+
 def build_crosscheck(
     candidates_path: Path,
     rla_matches: dict[str, list[int]],
     mcr_matches: dict[str, list[str]],
     mcr_definitions: dict[str, str] | None = None,
+    freeling_argentina: dict[str, list[dict[str, str]]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     output: list[dict[str, Any]] = []
     counts = Counter()
@@ -102,7 +134,9 @@ def build_crosscheck(
             }
             for synset in synsets
         ]
+        freeling_analyses = (freeling_argentina or {}).get(key, [])
         counts["candidates"] += 1
+        counts["freeling_argentine_morph_match"] += bool(freeling_analyses)
         counts["mcr_synsets_with_definition"] += sum(bool(item["definition"]) for item in sense_details)
         counts["rla_wordlist_match"] += bool(rla_lines)
         counts["mcr_synset_match"] += bool(synsets)
@@ -115,6 +149,7 @@ def build_crosscheck(
             "rlaWordlistLines": rla_lines,
             "mcrSynsetIds": synsets,
             "mcrSenses": sense_details,
+            "freelingArgentineAnalyses": freeling_analyses,
             "properNameReview": "required_when_category_or_answer_rules_distinguish_proper_names",
             "evidence": (
                 "mcr_synset_match" if synsets else
@@ -145,6 +180,15 @@ def build_crosscheck(
                 "license": "CC BY 3.0; attribution and license notice required; not approved for STOP runtime.",
                 "attribution": "Aitor Gonzalez-Agirre, Egoitz Laparra and German Rigau (2012), Multilingual Central Repository version 3.0, Proceedings of the 6th Global WordNet Conference.",
             },
+            "freelingArgentine": {
+                "repositoryCommit": FREELING_COMMIT,
+                "file": "data/es/es-ar/dictionary/entries/AR.verb",
+                "gitBlobSha1": FREELING_AR_GIT_BLOB_SHA,
+                "copyingGitBlobSha1": FREELING_COPYING_GIT_BLOB_SHA,
+                "apacheLicenseGitBlobSha1": FREELING_APACHE_GIT_BLOB_SHA,
+                "license": "Apache-2.0, as identified for the Argentine Spanish dictionary in FreeLing COPYING; research-only pending full source attribution and rights review.",
+                "scope": "Argentine Spanish verb forms mapped to lemmas and morphological tags; not a general Spanish dictionary.",
+            },
         },
         "warning": "Research-only output. Neither source match grants lexical or category approval. No runtime dictionary is modified.",
     }
@@ -157,6 +201,9 @@ def main() -> None:
     parser.add_argument("--rla", type=Path, required=True)
     parser.add_argument("--mcr", type=Path, required=True)
     parser.add_argument("--mcr-license", type=Path, required=True)
+    parser.add_argument("--freeling-ar", type=Path, required=True)
+    parser.add_argument("--freeling-copying", type=Path, required=True)
+    parser.add_argument("--freeling-apache-license", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
     args = parser.parse_args()
