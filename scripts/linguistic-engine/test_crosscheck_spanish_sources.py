@@ -5,7 +5,7 @@ from pathlib import Path
 
 from crosscheck_spanish_sources import (
     MCR_GIT_BLOB_SHA, RLA_GIT_BLOB_SHA, build_crosscheck,
-    git_blob_sha, identity, read_mcr, read_rla,
+    git_blob_sha, identity, read_freeling_argentina, read_mcr, read_rla,
 )
 
 
@@ -42,6 +42,21 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
             self.assertNotIn("construcción", matches)
             self.assertEqual(definitions["00000001-n"], "construcción")
 
+    def test_freeling_argentine_reader_preserves_form_lemma_and_tag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "AR.verb"
+            path.write_text(
+                "abalancés abalanzar VMSP2S0\\n"
+                "abalanzá abalanzar VMM02S0\\n"
+                "ABALANZÁ abalanzar VMM02S0\\n",
+                encoding="utf-8",
+            )
+            matches = read_freeling_argentina(path)
+            self.assertEqual(matches["abalancés"][0]["lemma"], "abalanzar")
+            self.assertEqual(matches["abalancés"][0]["tag"], "VMSP2S0")
+            self.assertEqual(matches["abalanzá"][0]["partOfSpeech"], "verb")
+            self.assertNotIn("abalanzar", matches)
+
     def test_crosscheck_never_approves_lexical_or_category(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "candidates.jsonl"
@@ -55,12 +70,14 @@ class SpanishSourceCrosscheckTests(unittest.TestCase):
                 {"casa": [42]},
                 {"casa": ["00000001-n"]},
                 {"00000001-n": "construcción para habitar"},
+                {"hablaste": [{"lemma": "hablar", "tag": "VMSP2S0", "partOfSpeech": "verb"}]},
             )
             self.assertEqual(rows[0]["evidence"], "mcr_synset_match")
             self.assertEqual(rows[0]["mcrSenses"][0]["partOfSpeech"], "noun")
             self.assertEqual(rows[0]["mcrSenses"][0]["definition"], "construcción para habitar")
             self.assertIn("proper_names", rows[0]["properNameReview"])
             self.assertEqual(rows[0]["rlaWordlistLines"], [42])
+            self.assertEqual(rows[0]["freelingArgentineAnalyses"], [])
             self.assertEqual(rows[1]["evidence"], "no_match_in_checked_sources")
             self.assertTrue(all(row["lexicalApproval"] is False for row in rows))
             self.assertTrue(all(row["categoryApproval"] is False for row in rows))
