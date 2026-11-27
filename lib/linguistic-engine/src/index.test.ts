@@ -351,7 +351,40 @@ test("homographs in different languages and distinct parts of speech remain sepa
 test("different definition summaries alone do not create an automatic conflict", () => {
   const otherMeaning = { ...lexicalRecord, recordId: "lex-meaning-2", sourceId: "source-002", definitionSummary: "Another documented meaning" };
   const audit = auditLexicalDiscrepancies([lexicalRecord, otherMeaning]);
+  assert.equal(audit.groups.length, 1);
   assert.equal(audit.groups[0].status, "approved");
+});
+
+test("homographs with the same spelling and part of speech stay separate by curated sense", () => {
+  const commonNoun = {
+    ...lexicalRecord,
+    recordId: "lex-banco-finance",
+    partOfSpeech: "noun",
+    senseKey: "financial-institution",
+    definitionSummary: "Financial institution",
+  };
+  const seatNoun = {
+    ...lexicalRecord,
+    recordId: "lex-banco-seat",
+    partOfSpeech: "noun",
+    senseKey: "long-seat",
+    definitionSummary: "Long seat for several people",
+  };
+  const audit = auditLexicalDiscrepancies([commonNoun, seatNoun]);
+  assert.equal(audit.groups.length, 2);
+  assert.deepEqual(
+    audit.groups.map((group) => group.senseKey).sort(),
+    ["financial-institution", "long-seat"],
+  );
+  assert.deepEqual(audit.publishableRecordIds.sort(), ["lex-banco-finance", "lex-banco-seat"]);
+});
+
+test("independent attestations for the same curated sense remain grouped", () => {
+  const source2 = { ...lexicalRecord, recordId: "lex-banco-2", sourceId: "source-002", partOfSpeech: "noun", senseKey: "financial-institution" };
+  const source1 = { ...lexicalRecord, partOfSpeech: "noun", senseKey: "financial-institution" };
+  const audit = auditLexicalDiscrepancies([source1, source2]);
+  assert.equal(audit.groups.length, 1);
+  assert.deepEqual(audit.groups[0].recordIds.sort(), ["lex-001", "lex-banco-2"]);
 });
 
 
