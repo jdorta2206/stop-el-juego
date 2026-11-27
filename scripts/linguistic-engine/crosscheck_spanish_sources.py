@@ -21,7 +21,7 @@ def identity(value: str) -> str:
 
 def git_blob_sha(path: Path) -> str:
     data = path.read_bytes()
-    header = f"blob {len(data)}\\0".encode("ascii")
+    header = f"blob {len(data)}\0".encode("ascii")
     return hashlib.sha1(header + data).hexdigest()
 
 
@@ -52,7 +52,7 @@ def read_mcr(path: Path) -> dict[str, list[str]]:
     for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not raw or raw.startswith("#"):
             continue
-        columns = raw.split("\\t")
+        columns = raw.split("\t")
         if len(columns) < 3 or columns[1] != "spa:lemma":
             continue
         synset, _, lemma = columns[0], columns[1], columns[2]
@@ -137,10 +137,10 @@ def main() -> None:
     verify_pinned_sources(args.rla, args.mcr, args.mcr_license)
     rows, summary = build_crosscheck(args.candidates, read_rla(args.rla), read_mcr(args.mcr))
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("w", encoding="utf-8", newline="\\n") as handle:
+    with args.output.open("w", encoding="utf-8", newline="\n") as handle:
         for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\\n")
-    args.summary.write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
+    args.summary.write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({key: value for key, value in summary.items() if key != "sources"}, ensure_ascii=False, sort_keys=True))
 
 
