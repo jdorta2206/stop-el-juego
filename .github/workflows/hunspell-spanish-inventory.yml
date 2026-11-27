@@ -1,6 +1,13 @@
 name: Hunspell Spanish candidate inventory
 
 on:
+  push:
+    branches:
+      - feat/linguistic-engine-regional-foundation
+    paths:
+      - "scripts/linguistic-engine/**"
+      - "docs/linguistic-engine/HUNSPELL-EXTRACTOR.md"
+      - ".github/workflows/hunspell-spanish-inventory.yml"
   pull_request:
     paths:
       - "scripts/linguistic-engine/**"
@@ -19,6 +26,9 @@ jobs:
   extract-spanish-candidates:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
     steps:
       - name: Checkout STOP branch
         uses: actions/checkout@v4
@@ -27,6 +37,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes hunspell
           hunspell --version
+      - name: Run extractor unit tests
+        run: python3 -m unittest discover -s scripts/linguistic-engine -p 'test_*.py' -v
       - name: Download pinned LibreOffice Spanish dictionaries
         env:
           UPSTREAM_REVISION: 79195b017e6d70151337856c59e7d13d311d6630
