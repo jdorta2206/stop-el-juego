@@ -45,12 +45,13 @@ class HunspellExtractorTests(unittest.TestCase):
             ("/foo", "", ""),
         )
 
-    def test_rejects_declared_count_mismatch(self):
+    def test_preserves_approximate_declared_count(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sample.dic"
-            path.write_text("2\nuno\ndos\ntres\n", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "declared 2 entries"):
-                MODULE.read_dictionary(path)
+            path.write_text("2\\nuno\\ndos\\ntres\\n", encoding="utf-8")
+            declared, records = MODULE.read_dictionary(path)
+            self.assertEqual(declared, 2)
+            self.assertEqual(len(records), 3)
 
     def test_checks_hunspell_and_marks_complex_entries_for_review(self):
         with tempfile.TemporaryDirectory() as directory:
