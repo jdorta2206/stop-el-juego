@@ -333,3 +333,90 @@ test("different definition summaries alone do not create an automatic conflict",
   const audit = auditLexicalDiscrepancies([lexicalRecord, otherMeaning]);
   assert.equal(audit.groups[0].status, "approved");
 });
+
+
+import { buildDictionaryImportPlan } from "./dictionary-import";
+
+const approvedCategoryRecord = {
+  recordId: "cat-import-001",
+  lexicalRecordId: "lex-001",
+  normalizedForm: "carro",
+  categoryId: "vehicle",
+  citationLocator: "entry:carro#vehicle",
+  reviewStatus: "approved" as const,
+  reviewedBy: "category-reviewer",
+  reviewedAt: "2026-11-27T10:15:00Z",
+};
+
+test("dictionary import plan includes only fully approved lexical and category evidence", () => {
+  const plan = buildDictionaryImportPlan(
+    [{ lexicalRecordId: "lex-001", categoryRecordId: "cat-import-001" }],
+    [sourceRecord],
+    [lexicalRecord],
+    [approvedCategoryRecord],
+  );
+  assert.equal(plan.entries.length, 1);
+  assert.equal(plan.entries[0].form, "carro");
+  assert.equal(plan.entries[0].locale, "es-MX");
+  assert.deepEqual(plan.rejected, []);
+});
+
+test("dictionary import plan blocks pending category evidence", () => {
+  const plan = buildDictionaryImportPlan(
+    [{ lexicalRecordId: "lex-001", categoryRecordId: "cat-pending" }],
+    [sourceRecord],
+    [lexicalRecord],
+    [{ ...approvedCategoryRecord, recordId: "cat-pending", reviewStatus: "pending" }],
+  );
+  assert.equal(plan.entries.length, 0);
+  assert.ok(plan.rejected[0].reasons.includes("category_evidence_not_approved"));
+});
+
+test("dictionary import plan blocks lexical evidence with unresolved discrepancies", () => {
+  const rejectedLexical = {
+    ...lexicalRecord,
+    recordId: "lex-rejected-import",
+    reviewStatus: "rejected" as const,
+    reviewedBy: undefined,
+    reviewedAt: undefined,
+  };
+  const secondSource = {
+    ...sourceRecord,
+    sourceId: "source-002",
+    referenceUrl: "https://example.org/dictionary-2",
+  };
+  const plan = buildDictionaryImportPlan(
+    [{ lexicalRecordId: "lex-001", categoryRecordId: "cat-import-001" }],
+    [sourceRecord, secondSource],
+    [lexicalRecord, rejectedLexical],
+    [approvedCategoryRecord],
+  );
+  assert.equal(plan.entries.length, 0);
+  assert.ok(plan.rejected[0].reasons.includes("lexical_discrepancy_not_cleared"));
+});
+
+test("dictionary import plan rejects duplicate candidate entries", () => {
+  const plan = buildDictionaryImportPlan(
+    [
+      { lexicalRecordId: "lex-001", categoryRecordId: "cat-import-001" },
+      { lexicalRecordId: "lex-001", categoryRecordId: "cat-import-001" },
+    ],
+    [sourceRecord],
+    [lexicalRecord],
+    [approvedCategoryRecord],
+  );
+  assert.equal(plan.entries.length, 1);
+  assert.ok(plan.rejected[0].reasons.includes("duplicate_dictionary_entry"));
+});
+
+test("dictionary import plan rejects missing or ambiguous evidence references", () => {
+  const plan = buildDictionaryImportPlan(
+    [{ lexicalRecordId: "missing", categoryRecordId: "missing-category" }],
+    [sourceRecord],
+    [lexicalRecord],
+    [approvedCategoryRecord],
+  );
+  assert.equal(plan.entries.length, 0);
+  assert.ok(plan.rejected[0].reasons.includes("lexical_record_missing_or_ambiguous"));
+  assert.ok(plan.rejected[0].reasons.includes("category_record_missing_or_ambiguous"));
+});
