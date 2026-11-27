@@ -140,3 +140,43 @@ Audit date: 2026-11-27. Scope: read-only inspection of the current `master` impl
 ### Release guard
 
 This audit is a finding, not a production fix. No scoring behavior, database rows, cache entries, Android artifacts, or production services were changed. Do not merge this PR or claim the issue fixed until the server, offline mirror, AI cache policy, and Impossible route have all been corrected and tested together.
+
+
+## Runtime integration audit — shared validation boundary
+
+Audit date: 2026-11-27. The current `master` implementation was inspected before any runtime change. This section records the actual integration boundary and the constraints for the first implementation slice.
+
+### Confirmed current structure
+
+- `artifacts/api-server/src/lib/wordRules.ts` already contains dependency-free `normalizeWord` and `isSafeInput` helpers with unit tests in `wordRules.test.ts`. It is imported by `routes/game.ts`, but it does not yet implement lexical existence, category membership, morphology, locale evidence or tri-state outcomes.
+- `artifacts/api-server/src/routes/game.ts` owns the current dictionary, open-category shortcut, category lookup and prefix-based word match. `isWordValidAsync` adds the AI fallback for closed categories.
+- `artifacts/stop-game/src/lib/offlineGame.ts` independently duplicates normalization, input safety, category lookup and acceptance logic using the downloaded bundle. It currently returns only boolean validity and cannot distinguish invalid from unknown.
+- `artifacts/api-server/src/lib/aiWordValidator.ts` reads and writes `word_validation_cache` as a boolean verdict. The current prompt explicitly favors permissive acceptance, and the cache lookup treats old AI verdicts as reusable decisions.
+- `artifacts/api-server/src/routes/impossible.ts` calls the same AI boolean validator directly, bypassing the normal game validator.
+- The API server has a Vitest test script and existing focused tests for `wordRules`; the game package has no matching validator test suite visible in its source tree.
+
+### Architectural decision for the next implementation slice
+
+Do not create a second independent rules engine in the client. Extend the existing pure-rule boundary into a small dependency-free validation core with explicit result states:
+
+- `valid`: an admissible source-backed lexical record exists and the requested category/sense rules match.
+- `invalid`: there is positive evidence of a spelling/rule violation, or the word demonstrably does not fit the category under an explicit rule.
+- `unknown`: the current approved data cannot establish either result. Unknown must never award points automatically, but the interface must not claim the word is invented or nonexistent.
+
+The core must accept explicit data as input (language/locale, category rules, lexical records and morphology evidence) and must not import Express, PostgreSQL, OpenAI, browser storage or React. The API route and offline bundle consumer must call the same pure decision functions, while each environment supplies its own data adapter.
+
+### Compatibility and migration safeguards
+
+1. Preserve the existing HTTP response shape initially; introduce the tri-state result additively and only change score awarding after API/offline parity tests exist.
+2. Version the offline bundle whenever its schema or validation semantics change. Old cached bundles must fail closed to an explicit outdated/unknown state rather than silently using the old permissive shortcut.
+3. Treat `word_validation_cache.source = 'ai'` as historical suggestion data, never as lexical proof. Do not let old cached `true` values authorize a score.
+4. Keep AI as a candidate-generation/research assistant only. It may create a review item with evidence references; it must not write an authoritative valid/invalid verdict.
+5. The Impossible Challenge must call the same validation core and must not retain a separate AI-only acceptance path.
+6. Replace generic prefix matching only after explicit inflection/morphology rules and regression cases are defined; exact matching alone would wrongly reject legitimate inflected forms.
+7. Do not silently convert every unknown regional word to invalid. Provide a pending/review path and preserve country/register/sense metadata.
+
+### First safe coding boundary
+
+The first runtime change should be limited to extracting the existing deterministic primitives and defining typed tri-state contracts with unit tests. It must not yet remove AI, change scoring, rewrite the offline bundle or migrate database rows. Those changes require separate reviewed steps after the shared core and compatibility contract are proven.
+
+This audit is documentation only. No runtime source, database schema/data, score calculation, offline cache, master branch or production service was changed.
