@@ -6,16 +6,16 @@ from pathlib import Path
 from extract_wikidata_lexemes import extract_jsonl, extract_lexeme, identity
 
 
-def spanish_lexeme(category="Q1084"):
+def spanish_lexeme(category="Q1084", lexeme_id="L123"):
     return {
         "type": "lexeme",
-        "id": "L123",
+        "id": lexeme_id,
         "language": "Q1321",
         "lexicalCategory": category,
         "lemmas": {"es": {"language": "es", "value": "casa"}},
         "forms": [
             {
-                "id": "L123-F1",
+                "id": f"{lexeme_id}-F1",
                 "representations": {"es": {"language": "es", "value": "casas"}},
                 "grammaticalFeatures": ["Q146786"],
             }
@@ -25,7 +25,7 @@ def spanish_lexeme(category="Q1084"):
 
 class WikidataLexemeExtractorTests(unittest.TestCase):
     def test_identity_preserves_accents(self):
-        self.assertEqual(identity("CAFE\u0301"), "café")
+        self.assertEqual(identity("CAFE\\u0301"), "café")
         self.assertNotEqual(identity("café"), identity("cafe"))
 
     def test_extracts_lemma_and_explicit_form_with_provenance(self):
@@ -45,8 +45,8 @@ class WikidataLexemeExtractorTests(unittest.TestCase):
         self.assertTrue(all(row["categoryApproval"] is False for row in rows))
 
     def test_does_not_reject_same_spelling_under_common_noun_category(self):
-        proper = extract_lexeme(spanish_lexeme("Q147276"))[0]
-        common = extract_lexeme(spanish_lexeme("Q1084"))[0]
+        proper = extract_lexeme(spanish_lexeme("Q147276", "L123"))[0]
+        common = extract_lexeme(spanish_lexeme("Q1084", "L124"))[0]
         self.assertEqual(proper["identity"], common["identity"])
         self.assertNotEqual(proper["lexemeId"], common["lexemeId"])
         self.assertTrue(proper["properNameEvidence"])
@@ -68,10 +68,9 @@ class WikidataLexemeExtractorTests(unittest.TestCase):
             root = Path(directory)
             source = root / "lexemes.jsonl"
             output = root / "records.jsonl"
-            summary_path = root / "summary.json"
             source.write_text(
-                json.dumps(spanish_lexeme("Q147276")) + "\n"
-                + json.dumps({**spanish_lexeme(), "id": "L124"}) + "\n",
+                json.dumps(spanish_lexeme("Q147276", "L123")) + "\\n"
+                + json.dumps(spanish_lexeme("Q1084", "L124")) + "\\n",
                 encoding="utf-8",
             )
             summary = extract_jsonl(source, output, "Q1321")
