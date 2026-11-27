@@ -919,3 +919,32 @@ Audit date: 2026-11-27. The next four not-yet-reviewed forms in the reconstructe
 - ASALE, scope and descriptive character of the *Diccionario de americanismos*: https://www.asale.org/obras-academicas/diccionarios/diccionario-de-americanismos
 
 This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
+
+
+## Twentieth independent lexicographic batch: three further ASALE-confirmed candidates and one related-form lead
+
+Audit date: 2026-11-27. The next four forms in the reconstructed 233-root shared regional queue were checked against ASALE. Three have individual *Diccionario de americanismos* entries under the exact candidate form. The fourth, `empampar`, is represented in the consulted entry as the pronominal form `empamparse`; it is recorded as a related-form lead and is not counted as an exact-headword confirmation.
+
+| Candidate | Independent ASALE evidence | Classification and STOP caution |
+|---|---|---|
+| `empacamiento` | ASALE records a masculine noun in Panama and Colombia, and in cultured Cuban use, for arranging luggage neatly inside a suitcase; in eastern Bolivia, it records the obstinate stopping of an animal and, separately, stubbornness or infatuation, both popular | Noun with distinct senses, regional labels and register. Preserve the luggage sense separately from the animal/person senses; do not infer that every sense is current or equally common across the listed countries |
+| `empampar` | The ASALE entry consulted is headed `empamparse`, not the exact candidate spelling. It records a pronominal intransitive use in southern Bolivia and northern Chile, and obsolete use in Argentina, meaning to get lost in the pampa; it points to `empampanarse` | Related pronominal form only for this audit. Preserve the reflexive construction and obsolete label; do not silently normalize it to a non-pronominal `empampar` or count it as an exact-headword entry |
+| `empotrerar` | ASALE records a rural transitive verb in Honduras, Nicaragua, Costa Rica, Panama, Cuba, Venezuela, Ecuador, Argentina and Uruguay meaning to put livestock into a fenced, grassy pasture; in Uruguay, a second rural sense means to divide a field into such pastures | Rural agricultural/stockraising verb. Keep the two senses and their separate geographic coverage; do not broaden the first sense to putting animals in any enclosure |
+| `enancar` | ASALE records pronominal/intransitive senses in Mexico, Dominican Republic, Argentina and Uruguay, and rural Cuba, for riding behind a horse or other mount; a transitive Argentine sense means putting someone on the rump. Ecuador has a rural intransitive sense for riding behind. Further pronominal senses in northern Argentina and Uruguay mean joining another person's undertaking for convenience or gain; Ecuador has a popular sense of taking advantage of another person's favorable opportunity | Highly polysemous verb with transitive, intransitive and pronominal constructions. Keep equestrian senses distinct from figurative opportunistic senses, with country and register attached to each |
+
+### Quality findings
+
+- Three further exact-headword entries in the 233-root queue have individual ASALE *Diccionario de americanismos* corroboration. The positively reviewed exact-headword count advances from 81 to **84 of 233**.
+- `empampar` remains outside that count because the entry found is the related pronominal form `empamparse`; grammatical form must not be silently changed.
+- `empacamiento` illustrates why noun senses need independent regional and register metadata.
+- `empotrerar` is domain-specific rural vocabulary; `enancar` has several unrelated senses whose grammatical construction and geography must remain separate.
+- ASALE's *Diccionario de americanismos* is descriptive and attaches geographic and usage labels to individual senses. Its entries corroborate research; they do not grant permission to copy definitions or database content. None of these candidates is approved for runtime import by this documentation update.
+
+### References
+
+- ASALE DA, `empacamiento`: https://www.asale.org/damer/empacamiento
+- ASALE DA, related form `empamparse`: https://www.asale.org/damer/empamparse
+- ASALE DA, `empotrerar`: https://www.asale.org/damer/empotrerar
+- ASALE DA, `enancar(se)`: https://www.asale.org/damer/enancar
+
+This batch is documentation only. No dictionary was imported, no runtime candidate was approved, and no game behavior, master branch or production system was changed.
