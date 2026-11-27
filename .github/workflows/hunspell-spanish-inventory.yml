@@ -73,16 +73,19 @@ jobs:
       - name: Build deduplicated review-only catalogue
         run: |
           python3 scripts/linguistic-engine/build_hunspell_catalogue.py --input-dir research/output/hunspell-es --output research/output/hunspell-es/DEDUPLICATED-CANDIDATES.jsonl --summary research/output/hunspell-es/CATALOGUE-SUMMARY.json
-      - name: Download pinned independent lexical source snapshots
+      - name: Download pinned independent lexical and morphology snapshots
         run: |
           set -euo pipefail
           mkdir -p research/sources/spanish
           curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/olea/lemarios/e4f3043c6d7c15e454d43e6e62dfba0c68378ecf/lemario-general-del-espanol.txt --output research/sources/spanish/lemario-general-del-espanol.txt
           curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/omwn/omw-data/f75be19ec590da12a7a5665e361690b5badb7a25/wns/mcr/wn-data-spa.tab --output research/sources/spanish/wn-data-spa.tab
           curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/omwn/omw-data/f75be19ec590da12a7a5665e361690b5badb7a25/wns/mcr/LICENSE --output research/sources/spanish/MCR-LICENSE
-      - name: Cross-check candidates against pinned lexical sources (research only)
+          curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/TALP-UPC/FreeLing/0bae6b7f6d1b405e67658895de54b59bfb3b6338/data/es/es-ar/dictionary/entries/AR.verb --output research/sources/spanish/FreeLing-AR.verb
+          curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/TALP-UPC/FreeLing/0bae6b7f6d1b405e67658895de54b59bfb3b6338/COPYING --output research/sources/spanish/FreeLing-COPYING
+          curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/TALP-UPC/FreeLing/0bae6b7f6d1b405e67658895de54b59bfb3b6338/LICENSES/Apache.license --output research/sources/spanish/FreeLing-Apache-LICENSE
+      - name: Cross-check candidates against pinned lexical and morphology sources (research only)
         run: |
-          python3 scripts/linguistic-engine/crosscheck_spanish_sources.py --candidates research/output/hunspell-es/DEDUPLICATED-CANDIDATES.jsonl --rla research/sources/spanish/lemario-general-del-espanol.txt --mcr research/sources/spanish/wn-data-spa.tab --mcr-license research/sources/spanish/MCR-LICENSE --output research/output/hunspell-es/LEXICAL-CROSSCHECK.jsonl --summary research/output/hunspell-es/LEXICAL-CROSSCHECK-SUMMARY.json
+          python3 scripts/linguistic-engine/crosscheck_spanish_sources.py --candidates research/output/hunspell-es/DEDUPLICATED-CANDIDATES.jsonl --rla research/sources/spanish/lemario-general-del-espanol.txt --mcr research/sources/spanish/wn-data-spa.tab --mcr-license research/sources/spanish/MCR-LICENSE --freeling-ar research/sources/spanish/FreeLing-AR.verb --freeling-copying research/sources/spanish/FreeLing-COPYING --freeling-apache-license research/sources/spanish/FreeLing-Apache-LICENSE --output research/output/hunspell-es/LEXICAL-CROSSCHECK.jsonl --summary research/output/hunspell-es/LEXICAL-CROSSCHECK-SUMMARY.json
       - name: Build inventory summary
         run: |
           python3 - <<'PY'
