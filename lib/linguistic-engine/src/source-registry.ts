@@ -91,7 +91,7 @@ export function validateLexicalSource(source: LexicalSourceRecord): RegistryVali
     if (!nonBlank(source[field])) errors.push(field + "_required");
   }
   if (!nonBlank(source.referenceUrl) || !validHttpsUrl(source.referenceUrl)) errors.push("referenceUrl_must_be_https");
-  if (!/^[a-z]{2}-[A-Z]{2}$/.test(source.locale) || !source.locale.startsWith(`${source.language}-`)) errors.push("source_locale_language_mismatch");
+  if (!/^[a-z]{2}-(?:[A-Z]{2}|[0-9]{3})$/.test(source.locale) || !source.locale.startsWith(`${source.language}-`)) errors.push("source_locale_language_mismatch");
   if (source.licenseUrl !== undefined && !validHttpsUrl(source.licenseUrl)) errors.push("licenseUrl_must_be_https");
   for (const field of ["commercialUse", "modification", "redistribution", "shareAlike"] as const) {
     if (typeof source[field] !== "boolean") errors.push(field + "_must_be_boolean");
@@ -137,7 +137,7 @@ export function validateLexicalAttestation(
     errors.push("normalized_form_does_not_match_form");
   }
   if (!nonBlank(record.language) || !nonBlank(record.locale)) errors.push("language_and_locale_required");
-  if (nonBlank(record.language) && nonBlank(record.locale) && (!/^[a-z]{2}-[A-Z]{2}$/.test(record.locale) || !record.locale.startsWith(`${record.language}-`))) errors.push("record_locale_language_mismatch");
+  if (nonBlank(record.language) && nonBlank(record.locale) && (!/^[a-z]{2}-(?:[A-Z]{2}|[0-9]{3})$/.test(record.locale) || !record.locale.startsWith(`${record.language}-`))) errors.push("record_locale_language_mismatch");
   if (source && (record.language !== source.language || record.locale !== source.locale)) errors.push("source_language_locale_mismatch");
   if (!nonBlank(record.citationLocator) || record.citationLocator.trim().length < 3) errors.push("citationLocator_required");
   if (!["pending", "approved", "rejected"].includes(record.reviewStatus)) errors.push("reviewStatus_invalid");
