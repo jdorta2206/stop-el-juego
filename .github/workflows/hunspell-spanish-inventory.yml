@@ -70,6 +70,12 @@ jobs:
               --hunspell hunspell \
               --output "research/output/hunspell-es/${locale}.jsonl"
           done
+      - name: Build deduplicated review-only catalogue
+        run: |
+          python3 scripts/linguistic-engine/build_hunspell_catalogue.py \\
+            --input-dir research/output/hunspell-es \\
+            --output research/output/hunspell-es/DEDUPLICATED-CANDIDATES.jsonl \\
+            --summary research/output/hunspell-es/CATALOGUE-SUMMARY.json
       - name: Build inventory summary
         run: |
           python3 - <<'PY'
