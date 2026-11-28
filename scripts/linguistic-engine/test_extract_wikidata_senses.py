@@ -46,6 +46,17 @@ class WikidataSenseExtractorTests(unittest.TestCase):
         self.assertEqual(rows[0]["claimCount"], 1)
         self.assertEqual(rows[0]["claims"]["P5185"][0]["rank"], "normal")
 
+    def test_accepts_special_entity_data_envelope(self):
+        wrapped = {"entities": {"L123": lexeme()}}
+        rows = extract_senses(wrapped)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["lexemeId"], "L123")
+
+    def test_rejects_mismatched_special_entity_data_key(self):
+        wrapped = {"entities": {"L999": lexeme()}}
+        with self.assertRaisesRegex(ValueError, "key must match"):
+            extract_senses(wrapped)
+
     def test_ignores_non_target_language(self):
         entity = lexeme()
         entity["language"] = "Q1860"
