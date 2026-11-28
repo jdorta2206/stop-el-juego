@@ -65,7 +65,7 @@ jobs:
           if entity.get("language") != "Q1321":
               raise SystemExit("L317 is no longer marked as Spanish")
           Path("/tmp/wikidata-L317.jsonl").write_text(
-              json.dumps(raw, ensure_ascii=False, separators=(",", ":")) + "\\n",
+              json.dumps(raw, ensure_ascii=False, separators=(",", ":")) + "\n",
               encoding="utf-8",
           )
           print(json.dumps({
