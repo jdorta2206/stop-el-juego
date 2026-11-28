@@ -126,3 +126,25 @@ Hallazgos:
 - No cambiar el comportamiento de producción hasta que haya fuentes licenciadas, corpus revisado y una migración probada.
 
 Esta auditoría es documental y no modifica el comportamiento del juego ni la producción.
+
+
+## Riesgo adicional: caché permanente de veredictos de IA (2026-11-28)
+
+La inspección de `artifacts/api-server/src/lib/aiWordValidator.ts` confirma que:
+
+1. Cuando no existe una entrada en caché, el fallback puede pedir a la IA un sí/no sobre la palabra y categoría.
+2. El resultado se escribe en `word_validation_cache` con `source='ai'` y el modelo utilizado.
+3. Las consultas posteriores devuelven directamente ese veredicto cacheado, sin volver a contrastarlo con una fuente lexicográfica.
+4. La caché no incluye versión de política lingüística ni versión de evidencia en su clave actual (`word, category, lang`).
+
+**Riesgo:** una aceptación errónea de IA puede persistir indefinidamente y sobrevivir a una futura mejora del diccionario. Cambiar el prompt o incorporar fuentes nuevas no invalida automáticamente esas decisiones antiguas.
+
+### Requisitos antes de integrar el motor basado en evidencia
+
+- No tratar los registros con `source='ai'` como evidencia léxica ni como aprobación de categoría.
+- Diseñar una migración/revisión de caché que distinga veredictos históricos de IA de decisiones basadas en evidencia revisada.
+- Versionar la política o la evidencia para que cambios de reglas no reutilicen decisiones obsoletas sin revisión.
+- No borrar ni modificar cachés de producción en esta fase documental.
+- Hasta que exista el motor revisado, no presentar el fallback de IA como garantía de validez lexicográfica.
+
+Este hallazgo es documental: no se han modificado rutas, cachés, puntuaciones ni datos de producción.
