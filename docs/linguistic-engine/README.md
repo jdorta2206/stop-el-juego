@@ -204,3 +204,20 @@ It deliberately does **not** infer that a string is a plural, feminine form, con
 - The same reviewed form/morphology bundle must eventually be consumed by online and offline validation.
 
 This is a code/design audit only. No morphology engine was connected to scoring, no candidate forms were approved, and no production behavior was changed.
+
+
+## Evidence-adapter trust boundary (2026-11-28)
+
+The pure decision helpers in `lib/linguistic-engine/src/index.ts` deliberately accept compact evidence objects. They do **not** load or independently verify the full source registry. In particular, `reviewed: true` is a caller-supplied assertion, not a cryptographic or legal proof that a source is approved.
+
+Before an API or offline adapter constructs `LexicalEvidence` or `CategoryEvidence`, it must:
+1. validate the referenced source against the approved source registry and exact dataset/license manifest;
+2. validate the lexical attestation against that source, locale, edition and citation locator;
+3. include only records whose lexical review status and reviewer audit fields are approved;
+4. construct category evidence only from an approved category attestation linked to that exact lexical record, with its own citation and reviewer audit;
+5. reject duplicate or ambiguous record/source identifiers rather than selecting the first match;
+6. bind the adapter output to a versioned bundle/hash and fail closed if the bundle is missing, stale or invalid.
+
+The pure category helper checks the form/category/source identifier fields supplied to it, but it cannot prove that a category source identifier resolves to the same approved lexical record. That relationship must be enforced by the registry/adapter before calling it. The same applies to morphology: validate the full source and lexical records before passing a relation to the morphology validator.
+
+**Do not treat a successful unit test of a helper with fabricated fixture evidence as approval of real vocabulary.** Fixtures test deterministic behavior only. No production word data, source licenses or category claims are approved by these helper tests.
