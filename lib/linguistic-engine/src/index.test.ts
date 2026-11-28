@@ -745,3 +745,33 @@ test("numeric BCP 47 region es-419 is accepted for reviewed Spanish evidence", (
   };
   assert.equal(validateMorphologicalAttestation(morphology, [surface, lemma], [latinAmericanSource]).valid, true);
 });
+
+
+test("Spanish words attested in any regional locale are valid regardless of player location", () => {
+  const regionalLocales = ["es-ES", "es-AR", "es-MX", "es-CO", "es-419"];
+  for (const locale of regionalLocales) {
+    const regionalEvidence: LexicalEvidence[] = [{
+      sourceId: `fixture-${locale}`,
+      normalizedForm: "che",
+      language: "es",
+      locale,
+      sourceVersion: "fixture-1",
+      reviewed: true,
+    }];
+    const result = decideLexicalStatus("CHE", "es", regionalEvidence);
+    assert.equal(result.status, "valid", `expected reviewed Spanish evidence from ${locale} to be valid`);
+    assert.equal(result.evidence?.locale, locale);
+  }
+});
+
+test("Spanish regional evidence never authorizes fabricated forms", () => {
+  const regionalEvidence: LexicalEvidence[] = [{
+    sourceId: "fixture-es-ar",
+    normalizedForm: "che",
+    language: "es",
+    locale: "es-AR",
+    sourceVersion: "fixture-1",
+    reviewed: true,
+  }];
+  assert.equal(decideLexicalStatus("cheinventado", "es", regionalEvidence).status, "unknown");
+});
