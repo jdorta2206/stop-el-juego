@@ -29,13 +29,13 @@ The official directory was inspected on 2026-11-28:
 - Published SHA-1: `e0c5cbf9c5c9f64dc23b22301a30748ae1023851`
 - Alternative gzip file: `wikidata-20261125-lexemes.json.gz`, 672,475,150 bytes; published SHA-1 `84e6eb368a918a33a601bd8ce723af421c419b7b`.
 
-The dated JSON Lexeme dump is the preferred first feasibility target because the current extractor already expects one JSON Lexeme entity per line. The official general dump documentation describes JSON entities as line-readable objects. The exact dated lexeme file has not yet been downloaded or independently checksummed with SHA-256; the published SHA-1 above is the official manifest value, not a locally verified checksum.
+**Format caveat discovered during follow-up verification:** the official database-download documentation says the recommended JSON dump is a single array of Wikidata entities whose objects are line-readable, but separately documents the Lexeme-namespace dumps as RDF/Turtle and N-Triples files with the `lexemes` suffix. It does not document a JSON Lexeme dump as a stable interface. Although the dated directory listing previously exposed a file named `wikidata-20261125-lexemes.json.bz2`, its presence and filename alone do not establish its schema, completeness, stability, or compatibility. Treat that JSON file as an unverified acquisition lead, not as the preferred supported format. The exact file has not been downloaded, structurally inspected, or independently checksummed with SHA-256; the published SHA-1 above is the value recorded from the official manifest, not a locally verified checksum. The next feasibility gate is to inspect a small sample of the documented Lexeme RDF dump and compare its structure and metadata coverage with the current JSON-oriented extractor. Only investigate the unusual JSON file if a small, reproducible structural check can establish what it contains.
 
 ## Acquisition approach
 
-1. Prefer the dated JSON Lexeme dump above over RDF for the first feasibility test. Do not use the moving `latest` alias as the reproducible source identity.
+1. First inspect a small, reproducible sample of the documented dated Lexeme RDF dump (Turtle or N-Triples). Do not use the moving `latest` alias as the reproducible source identity. Treat the dated `lexemes.json.bz2` filename as unverified until its actual structure is inspected.
 2. Download the dated compressed file in a research-only workflow or local feasibility test. Verify its SHA-1 against the official manifest and compute SHA-256 locally; record both.
-3. Confirm the decompressed structure is newline-delimited Lexeme entity JSON and compatible with `extract_wikidata_lexemes.py`. If it is a single JSON array or another structure, add a tested streaming adapter rather than loading the full dump into memory.
+3. For RDF, confirm the exact serialization and whether it preserves the lemma, lexical category, forms, grammatical features, senses, and usage labels needed by STOP; build a streaming parser only after a sample proves the mapping. Separately, if investigating the JSON-named file, verify its decompressed structure and entity schema before adapting the current JSONL extractor. Never load a full dump into memory.
 4. Pin the exact dated artifact, filename, size, URL, SHA-1, and SHA-256 for each inventory run.
 5. Filter by Spanish language entity Q1321 and explicitly retain language tags and regional variants. Do not silently collapse locale evidence.
 6. Extract lemma representations, lexical category, form representations, grammatical features, usage labels, and entity identifiers where present. Keep original spellings; use NFC plus casefold only for comparison keys.
@@ -61,7 +61,7 @@ The CC0 status applies to Wikidata structured data in the Lexeme namespace as do
 
 ## Current implementation boundary
 
-The existing `scripts/linguistic-engine/extract_wikidata_lexemes.py` accepts JSONL Lexeme entity objects and performs conservative candidate extraction. It may be directly reusable for the dated JSON dump if the decompressed file is confirmed to have the expected one-entity-per-line structure. No full-dump compatibility has been demonstrated yet. The RDF Lexeme dump remains an alternative if JSON structure or streaming behavior proves unsuitable.
+The existing `scripts/linguistic-engine/extract_wikidata_lexemes.py` accepts JSONL Lexeme entity objects and performs conservative candidate extraction. It has only been tested against synthetic line-oriented JSON fixtures; no compatibility with the dated JSON-named file or the official Lexeme RDF dump has been demonstrated. The official documentation points to RDF as the documented Lexeme dump format, so RDF sample inspection is the next required feasibility step.
 
 ## Conclusion
 
