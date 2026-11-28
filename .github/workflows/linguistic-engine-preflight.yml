@@ -44,43 +44,100 @@ jobs:
         run: pnpm --filter @workspace/scripts linguistics:test
       - name: Run Hunspell extractor tests
         run: python3 -m unittest discover -s scripts/linguistic-engine -p 'test_*.py' -v
-      - name: Fetch and extract a real Wikidata Spanish lexeme
+      - name: Fetch and extract several live Wikidata Spanish lexemes
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3 \
-            --user-agent "STOP-Lexical-Research/1.0 (https://github.com/jdorta2206/stop-el-juego)" \
-            "https://www.wikidata.org/wiki/Special:EntityData/L317.json" \
-            --output /tmp/wikidata-L317.json
+          mkdir -p /tmp/wikidata-live
+          for lexeme_id in L5 L317 L326 L354 L870 L893; do
+            curl --fail --location --retry 3 \
+              --user-agent "STOP-Lexical-Research/1.0 (https://github.com/jdorta2206/stop-el-juego)" \
+              "https://www.wikidata.org/wiki/Special:EntityData/${lexeme_id}.json" \
+              --output "/tmp/wikidata-live/${lexeme_id}.json"
+          done
           python3 - <<'PY'
           import json
           from pathlib import Path
 
-          raw = json.loads(Path("/tmp/wikidata-L317.json").read_text(encoding="utf-8"))
-          entities = raw.get("entities")
-          if not isinstance(entities, dict) or set(entities) != {"L317"}:
-              raise SystemExit("Expected exactly the live Wikidata L317 entity")
-          entity = entities["L317"]
-          if entity.get("id") != "L317" or entity.get("type") != "lexeme":
-              raise SystemExit("Live response is not the expected L317 Lexeme")
-          if entity.get("language") != "Q1321":
-              raise SystemExit("L317 is no longer marked as Spanish")
-          Path("/tmp/wikidata-L317.jsonl").write_text(
-              json.dumps(raw, ensure_ascii=False, separators=(",", ":")) + "\n",
+          root = Path("/tmp/wikidata-live")
+          ids = ["L5", "L317", "L326", "L354", "L870", "L893"]
+          direct_entities = []
+          wrapped_entities = []
+          report = []
+          for lexeme_id in ids:
+              raw = json.loads((root / f"{lexeme_id}.json").read_text(encoding="utf-8"))
+              entities = raw.get("entities")
+              if not isinstance(entities, dict) or set(entities) != {lexeme_id}:
+                  raise SystemExit(f"{lexeme_id}: expected exactly one live entity in response")
+              entity = entities[lexeme_id]
+              if entity.get("id") != lexeme_id or entity.get("type") != "lexeme":
+                  raise SystemExit(f"{lexeme_id}: response is not the requested Lexeme")
+              if entity.get("language") != "Q1321":
+                  raise SystemExit(f"{lexeme_id}: expected Spanish language item Q1321")
+              if not entity.get("lemmas"):
+                  raise SystemExit(f"{lexeme_id}: no lemma representation")
+              direct_entities.append(entity)
+              wrapped_entities.append(raw)
+              report.append({
+                  "id": lexeme_id,
+                  "lemmas": [v["value"] for v in entity["lemmas"].values()],
+                  "lexicalCategory": entity.get("lexicalCategory"),
+                  "senses": len(entity.get("senses", [])),
+                  "forms": len(entity.get("forms", [])),
+              })
+          if not any(item["senses"] >= 2 for item in report):
+              raise SystemExit("Sample did not exercise a multi-sense lexeme")
+          if not any(item["forms"] >= 2 for item in report):
+              raise SystemExit("Sample did not exercise a multi-form lexeme")
+          if len({item["lexicalCategory"] for item in report}) < 2:
+              raise SystemExit("Sample did not cover multiple lexical categories")
+          (root / "lexemes.jsonl").write_text(
+              "".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n" for item in direct_entities),
+              encoding="utf-8",
+          )
+          (root / "senses.jsonl").write_text(
+              "".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n" for item in wrapped_entities),
               encoding="utf-8",
           )
           print(json.dumps({
-              "entity": entity["id"],
-              "language": entity["language"],
-              "sensesInSource": len(entity.get("senses", [])),
-              "formsInSource": len(entity.get("forms", [])),
               "source": "live Wikidata Special:EntityData",
               "syntheticFixture": False,
+              "lexemes": report,
           }, ensure_ascii=False, sort_keys=True))
           PY
+          python3 scripts/linguistic-engine/extract_wikidata_lexemes.py \
+            --input-jsonl /tmp/wikidata-live/lexemes.jsonl \
+            --output-jsonl /tmp/wikidata-live/lexical-records.jsonl \
+            --summary /tmp/wikidata-live/lexical-summary.json
           python3 scripts/linguistic-engine/extract_wikidata_senses.py \
-            --input-jsonl /tmp/wikidata-L317.jsonl \
-            --output-jsonl /tmp/wikidata-L317-senses.jsonl
-          test -s /tmp/wikidata-L317-senses.jsonl
+            --input-jsonl /tmp/wikidata-live/senses.jsonl \
+            --output-jsonl /tmp/wikidata-live/sense-records.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("/tmp/wikidata-live")
+          lexical = [json.loads(line) for line in (root / "lexical-records.jsonl").read_text(encoding="utf-8").splitlines()]
+          senses = [json.loads(line) for line in (root / "sense-records.jsonl").read_text(encoding="utf-8").splitlines()]
+          summary = json.loads((root / "lexical-summary.json").read_text(encoding="utf-8"))
+          if not lexical or not senses:
+              raise SystemExit("Live extraction produced no lexical or sense records")
+          if any(row["lexicalApproval"] or row["categoryApproval"] for row in lexical):
+              raise SystemExit("Research-only extraction unexpectedly approved a record")
+          if not summary["allLexicalApprovalFalse"] or not summary["allCategoryApprovalFalse"]:
+              raise SystemExit("Extractor summary does not preserve research-only status")
+          if not any(row["recordType"] == "form" for row in lexical):
+              raise SystemExit("Live extraction did not exercise any inflected form")
+          if not any(len(row["glosses"]) >= 1 for row in senses):
+              raise SystemExit("Live extraction did not preserve any sense gloss")
+          print(json.dumps({
+              "lexicalRecords": len(lexical),
+              "lemmaRecords": sum(row["recordType"] == "lemma" for row in lexical),
+              "formRecords": sum(row["recordType"] == "form" for row in lexical),
+              "senseRecords": len(senses),
+              "researchOnly": True,
+              "allApprovalsFalse": True,
+          }, sort_keys=True))
+          PY
       - name: Run linguistic engine tests
         run: pnpm --filter @workspace/linguistic-engine test
       - name: Type-check scripts package
