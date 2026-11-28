@@ -1,6 +1,11 @@
 name: Wikidata live Spanish lexeme audit
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/wikidata-live-lexeme-audit.yml"
+      - "scripts/linguistic-engine/extract_wikidata_lexemes.py"
+      - "scripts/linguistic-engine/extract_wikidata_senses.py"
   workflow_dispatch:
   schedule:
     - cron: "23 6 * * 1"
