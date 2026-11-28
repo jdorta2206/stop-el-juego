@@ -66,9 +66,13 @@ export function buildReviewedEvidenceBundle(
 
   const categoryEvidence: CategoryEvidence[] = [];
   const categoryIds = new Set<string>();
+  const categoryClaims = new Set<string>();
   for (const record of categoryRecords) {
     if (categoryIds.has(record.recordId)) errors.push("duplicate_category_record_id");
     categoryIds.add(record.recordId);
+    const claimKey = `${record.lexicalRecordId}\\u0000${record.categoryId}`;
+    if (categoryClaims.has(claimKey)) errors.push("duplicate_category_attestation");
+    categoryClaims.add(claimKey);
     const validation = validateCategoryAttestation(record, lexicalRecords);
     if (!validation.valid) errors.push(...validation.errors);
     if (record.reviewStatus !== "approved") continue;
