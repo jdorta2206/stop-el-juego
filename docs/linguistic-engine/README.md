@@ -180,3 +180,27 @@ The core must accept explicit data as input (language/locale, category rules, le
 The first runtime change should be limited to extracting the existing deterministic primitives and defining typed tri-state contracts with unit tests. It must not yet remove AI, change scoring, rewrite the offline bundle or migrate database rows. Those changes require separate reviewed steps after the shared core and compatibility contract are proven.
 
 This audit is documentation only. No runtime source, database schema/data, score calculation, offline cache, master branch or production service was changed.
+
+
+## Morphology audit — what is and is not supported yet (2026-11-28)
+
+The current `lib/linguistic-engine/src/morphology.ts` is a **validator for reviewed morphology records**, not a conjugator or a productive Spanish grammar engine.
+
+It currently checks that:
+- a surface form and its lemma exist as separate, individually approved lexical records;
+- both records and the morphology relation point to an approved source, language and locale;
+- grammatical feature labels belong to a closed allowlist and do not contradict each other;
+- clitic forms carry explicit clitic identities, and two-clitic sequences declare indirect-direct order;
+- the relation has a citation locator and reviewer audit metadata.
+
+It deliberately does **not** infer that a string is a plural, feminine form, conjugation, diminutive, augmentative, or derivative merely from its ending. For example, a plural such as `luces` is only covered when the exact surface form and its relation to `luz` have their own reviewed records. The test fixtures demonstrate the record-validation contract; they are not a production vocabulary corpus and do not prove that these words have been imported or approved for gameplay.
+
+### Acceptance boundary
+
+- Exact lexical form evidence is still required for the submitted surface form.
+- Morphology metadata explains the reviewed relation; it does not manufacture lexical evidence.
+- A grammatical form may be accepted across player locations when its evidence belongs to the selected language; locale remains provenance, not a geographic player restriction.
+- Missing form evidence remains unknown/pending. Do not silently generate a form or award points.
+- The same reviewed form/morphology bundle must eventually be consumed by online and offline validation.
+
+This is a code/design audit only. No morphology engine was connected to scoring, no candidate forms were approved, and no production behavior was changed.
