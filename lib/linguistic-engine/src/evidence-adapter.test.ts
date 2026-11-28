@@ -98,7 +98,7 @@ test("category claim must reference the exact approved lexical record", () => {
   );
   assert.equal(result.valid, false);
   assert.deepEqual(result.categoryEvidence, []);
-  assert.ok(result.errors.includes("approved_lexical_record_required"));
+  assert.ok(result.errors.includes("lexical_record_required"));
 });
 
 test("adapter rejects duplicate lexical record identifiers", () => {
