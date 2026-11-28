@@ -185,3 +185,31 @@ El filtro «una sola región + definición MCR» devuelve 94 filas, pero no una 
 5. No importar el artefacto ni cambiar runtime, cachés, puntuaciones o datos de producción.
 
 **Resultado:** la extracción y el cruce han terminado correctamente; no se ha aprobado ninguna palabra ni se ha modificado el comportamiento del juego.
+
+
+
+## Revisión de encaje con categorías actuales de STOP (2026-11-28)
+
+Se contrastaron las acepciones ASALE de los ocho candidatos priorizados con las categorías que aparecen en el validador actual (`animal`, `fruta`, `alimento`, `objeto`, `lugar`, `nombre`, entre otras). Esta tabla es una evaluación de encaje semántico preliminar, no una aprobación de categoría.
+
+| Forma | Acepción documentada que se evalúa | Categoría candidata | Riesgo / decisión provisional |
+|---|---|---|---|
+| `guache` | Persona de modales bruscos; también coatí en Colombia | `animal` solo para el sentido coatí | No aceptar automáticamente como animal por el sentido de persona; conservar las acepciones separadas. |
+| `paisa` | Natural de Antioquia | `nombre` no equivale a nombre propio | Es gentilicio/sustantivo de persona; no encaja en `nombre` si esa categoría significa nombre propio. Requiere regla explícita sobre gentilicios. |
+| `zaraza` | Tela de algodón estampada | `objeto` solo si STOP admite materiales/telas como objetos | Sustantivo común, pero el límite de `objeto` debe definirse antes de puntuarla. |
+| `profesionista` | Persona que ejerce una profesión con competencia | Ninguna categoría actual evidente | No debe colarse en `nombre`; requiere categoría de profesión/persona o regla abierta documentada. |
+| `cochinera` | Lugar donde se crían cochinos | `lugar` | Encaje razonable como sustantivo común de lugar; comprobar que la categoría abierta no convierte cualquier cadena en válida. |
+| `natilla` | Preparación/dulce culinario con acepciones regionales distintas | `alimento` | Encaje semántico alto; conservar las definiciones regionales y no fusionar sentidos diferentes. |
+| `jagua` | Árbol y fruto | `fruta` solo para el sentido fruto | La fuente Hunspell solo ofrece mayúscula inicial; no usarla como evidencia de forma común minúscula. La acepción árbol no es fruta. |
+| `vaquería` | Ordeñadero (entre otros sentidos regionales) | `lugar` solo para ese sentido | Mantener separadas las acepciones de oficio y baile; el registro Hunspell con mayúscula sigue en cuarentena. |
+
+### Reglas que se desprenden de la revisión
+
+1. La validez léxica de una forma no implica que valga en todas las categorías.
+2. Una palabra polisémica puede ser elegible en una categoría por una acepción concreta, pero no por sus otros sentidos.
+3. No equiparar `nombre` (nombre propio) con sustantivo de persona o gentilicio.
+4. Definir explícitamente el alcance de `objeto` (¿incluye materiales y tejidos?) y de `lugar` (¿incluye instalaciones y establecimientos?).
+5. Las categorías abiertas actuales no son un estándar léxico: aceptan respuestas seguras de longitud mínima. No deben utilizarse como prueba de que una candidata está acreditada.
+6. Antes de habilitar categorías, cada evidencia debe enlazar la acepción revisada y su categoría exacta; una mera coincidencia de palabra no basta.
+
+**Resultado:** `natilla` y la acepción de lugar de `cochinera` presentan el encaje semántico más claro con categorías existentes. `guache`, `jagua` y `vaquería` son polisémicas y requieren selección explícita de acepción; `paisa`, `profesionista` y `zaraza` dependen de reglas de categoría aún no definidas. No se aprueba ninguna ni se cambia el runtime.
