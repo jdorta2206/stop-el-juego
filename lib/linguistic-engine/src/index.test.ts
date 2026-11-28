@@ -775,3 +775,79 @@ test("Spanish regional evidence never authorizes fabricated forms", () => {
   }];
   assert.equal(decideLexicalStatus("cheinventado", "es", regionalEvidence).status, "unknown");
 });
+
+
+// Regional category-policy fixtures: evidence is tied to the reviewed sense,
+// not inferred from the player's country or from the spelling alone.
+test("regional coatí sense of guache is eligible as animal, not as a person category", () => {
+  const evidence = [{
+    normalizedForm: "guache",
+    category: "animal",
+    sourceId: "fixture-asale-guache-coati",
+    reviewed: true,
+  }];
+  assert.deepEqual(
+    decideCategoryEligibility("guache", "animal", evidence),
+    { eligible: true, reason: "category_attested" },
+  );
+  assert.deepEqual(
+    decideCategoryEligibility("guache", "nombre", evidence),
+    { eligible: false, reason: "category_not_attested" },
+  );
+});
+
+test("regional cochinera sense can be a place without becoming an animal", () => {
+  const evidence = [{
+    normalizedForm: "cochinera",
+    category: "lugar",
+    sourceId: "fixture-asale-cochinera-corral",
+    reviewed: true,
+  }];
+  assert.equal(decideCategoryEligibility("cochinera", "lugar", evidence).eligible, true);
+  assert.equal(decideCategoryEligibility("cochinera", "animal", evidence).eligible, false);
+});
+
+test("a food sense such as natilla is not accepted as fruta without explicit fruit evidence", () => {
+  const evidence = [{
+    normalizedForm: "natilla",
+    category: "alimento",
+    sourceId: "fixture-asale-natilla-food",
+    reviewed: true,
+  }];
+  assert.equal(decideCategoryEligibility("natilla", "alimento", evidence).eligible, true);
+  assert.equal(decideCategoryEligibility("natilla", "fruta", evidence).eligible, false);
+});
+
+test("a regional demonym is not promoted to a personal proper name", () => {
+  const evidence = [{
+    normalizedForm: "paisa",
+    category: "gentilicio",
+    sourceId: "fixture-asale-paisa-demonym",
+    reviewed: true,
+  }];
+  assert.equal(decideCategoryEligibility("paisa", "gentilicio", evidence).eligible, true);
+  assert.equal(decideCategoryEligibility("paisa", "nombre", evidence).eligible, false);
+});
+
+test("a fabric or textile sense is not automatically an object", () => {
+  const evidence = [{
+    normalizedForm: "zaraza",
+    category: "tejido",
+    sourceId: "fixture-asale-zaraza-fabric",
+    reviewed: true,
+  }];
+  assert.equal(decideCategoryEligibility("zaraza", "tejido", evidence).eligible, true);
+  assert.equal(decideCategoryEligibility("zaraza", "objeto", evidence).eligible, false);
+});
+
+test("regional category evidence is independent of the player's locale", () => {
+  const evidence = [{
+    normalizedForm: "carro",
+    category: "objeto",
+    sourceId: "fixture-es-mx-carro",
+    reviewed: true,
+  }];
+  // The category API receives no location/locale argument: the same evidence
+  // is evaluated identically for players in Spain, Argentina, or elsewhere.
+  assert.equal(decideCategoryEligibility("carro", "objeto", evidence).eligible, true);
+});
