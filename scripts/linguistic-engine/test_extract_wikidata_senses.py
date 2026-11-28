@@ -16,7 +16,14 @@ def lexeme():
                 "es": {"language": "es", "value": "edificio para habitar"},
                 "en": {"language": "en", "value": "building for human habitation"},
             },
-            "claims": {},
+            "claims": {
+                "P5185": [{
+                    "id": "L123-S1$statement1",
+                    "type": "statement",
+                    "rank": "normal",
+                    "mainsnak": {"snaktype": "value", "property": "P5185", "datatype": "wikibase-item"},
+                }]
+            },
         }],
     }
 
@@ -35,6 +42,9 @@ class WikidataSenseExtractorTests(unittest.TestCase):
             ],
         )
         self.assertTrue(rows[0]["researchOnly"])
+        self.assertEqual(rows[0]["claimPropertyIds"], ["P5185"])
+        self.assertEqual(rows[0]["claimCount"], 1)
+        self.assertEqual(rows[0]["claims"]["P5185"][0]["rank"], "normal")
 
     def test_ignores_non_target_language(self):
         entity = lexeme()
@@ -51,6 +61,16 @@ class WikidataSenseExtractorTests(unittest.TestCase):
         entity = lexeme()
         entity["senses"][0]["glosses"]["es"]["value"] = ""
         with self.assertRaisesRegex(ValueError, "missing gloss"):
+            extract_senses(entity)
+
+    def test_rejects_malformed_sense_claims(self):
+        entity = lexeme()
+        entity["senses"][0]["claims"] = {"not-a-property": []}
+        with self.assertRaisesRegex(ValueError, "invalid property ID"):
+            extract_senses(entity)
+        entity = lexeme()
+        entity["senses"][0]["claims"] = {"P5185": "not-an-array"}
+        with self.assertRaisesRegex(ValueError, "array of statement objects"):
             extract_senses(entity)
 
     def test_reads_array_wrapped_line_oriented_dump(self):
