@@ -77,3 +77,28 @@ Se contrastaron las cinco formas propuestas contra los 21 archivos regionales de
 - Dos coincidencias solo con mayúscula inicial: `Jagua`, `Vaquería`; quedan en cuarentena de revisión de capitalización y posible nombre propio.
 - El cruce MCR/RLA es auxiliar, no una aprobación independiente ni una autorización de licencia para runtime.
 - Las cinco siguen con `lexicalApproval=false` y `categoryApproval=false`. Ninguna se incorpora al diccionario puntuable.
+
+
+## Requisito de producto: variantes lingüísticas independientes de la ubicación
+
+La variante de español que utiliza una persona **no debe inferirse ni limitarse por su ubicación física, país de residencia, IP, tienda o configuración regional del dispositivo**.
+
+Ejemplo de aceptación: una persona que juega desde España debe poder utilizar vocabulario argentino válido; igualmente, desde Argentina debe poder utilizar vocabulario mexicano, colombiano o de España.
+
+### Reglas para el motor léxico
+
+1. La ubicación física no es un filtro de validez léxica.
+2. Las etiquetas regionales (es-ES, es-AR, es-MX, es-CO, etc.) describen dónde está documentado un uso; no son una restricción de dónde puede jugarse.
+3. El motor debe consultar el conjunto de variantes españolas admitidas, conservando la procedencia y la acepción regional de cada voz.
+4. Si existe selector de variante o preferencia de idioma, será una preferencia de experiencia/ordenación, nunca una barrera que invalide palabras documentadas en otras regiones.
+5. Una voz solo se acepta si está acreditada como palabra real y su acepción encaja con la categoría de la ronda. No se acepta una invención por el mero hecho de etiquetarla como regional.
+6. La ubicación puede servir para sugerir una variante inicial, siempre que el jugador pueda cambiarla y que esa sugerencia no limite el vocabulario puntuable.
+
+### Pruebas de aceptación propuestas
+
+- Jugador ubicado en España + voz argentina documentada: evaluar por evidencia léxica y categoría, no rechazar por ubicación.
+- Jugador ubicado en Argentina + voz mexicana documentada: mismo criterio.
+- Jugador con variante preferida es-ES + voz colombiana documentada: no rechazar solo por la preferencia.
+- Voz inventada o con acepción que no corresponde a la categoría: rechazar o enviar a revisión, aunque la variante seleccionada coincida.
+
+Este requisito es una decisión de comportamiento para el diseño del motor; **no significa que las palabras candidatas actuales estén aprobadas ni que el comportamiento de producción haya cambiado**.
