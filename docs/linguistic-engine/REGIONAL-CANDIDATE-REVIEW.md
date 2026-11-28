@@ -57,3 +57,23 @@ Estas entradas se han localizado en el Diccionario de americanismos de ASALE. So
 - RAE/ASALE, [Nueva gramática: alternancias geográficas de -ista](https://www.rae.es/gram%C3%A1tica/morfolog%C3%ADa/nombres-de-persona-instrumento-y-lugar-iv-el-sufijo-ista), que documenta específicamente `profesionista` en México.
 
 No se concede aprobación léxica ni de categoría a estas cinco voces. La siguiente operación necesaria es el cruce exacto con los registros de los 21 locales y, después, la validación de categoría/acepción. La licencia y procedencia de cualquier fuente usada en runtime siguen siendo un control independiente.
+
+
+## Resultado del cruce exacto con el inventario Hunspell (2026-11-28)
+
+Se contrastaron las cinco formas propuestas contra los 21 archivos regionales del artefacto `hunspell-spanish-candidates-79195b0` y contra su fichero de cruce léxico.
+
+| Forma consultada | Registro exacto en Hunspell | Evidencia del cruce | Resultado |
+|---|---|---|---|
+| `profesionista` | Sí, es-MX, minúscula, línea 46252. | MCR: sustantivo «persona que ha aprendido una profesión y se dedica a ello»; RLA line 69149. | Candidata consistente para revisión de categoría. |
+| `cochinera` | Sí, es-VE, minúscula, línea 13347. | MCR: sustantivo «corral para cerdos»; RLA line 22108. | Candidata consistente para revisión de categoría. |
+| `natilla` | Sí, es-CR, minúscula, línea 38072. | MCR: sustantivo con sentido culinario; RLA line 60257. | Candidata consistente; validar las acepciones regionales ASALE por separado. |
+| `jagua` | **No en minúscula**: el registro del locale es-CO aparece como `Jagua` (mayúscula inicial), línea 2610. | MCR encuentra sentidos de sustantivo/fruto; RLA line 51350. | No tratar como coincidencia exacta de minúsculas hasta revisar por qué la fuente capitaliza la forma. |
+| `vaquería` | **No en minúscula**: el registro del locale es-CO aparece como `Vaquería` (mayúscula inicial), línea 5267. | MCR encuentra sentidos nominales; RLA line 85191. | No tratar como coincidencia exacta de minúsculas hasta revisar por qué la fuente capitaliza la forma. |
+
+### Decisión de esta pasada
+
+- Tres coincidencias exactas en minúscula: `profesionista`, `cochinera`, `natilla`.
+- Dos coincidencias solo con mayúscula inicial: `Jagua`, `Vaquería`; quedan en cuarentena de revisión de capitalización y posible nombre propio.
+- El cruce MCR/RLA es auxiliar, no una aprobación independiente ni una autorización de licencia para runtime.
+- Las cinco siguen con `lexicalApproval=false` y `categoryApproval=false`. Ninguna se incorpora al diccionario puntuable.
