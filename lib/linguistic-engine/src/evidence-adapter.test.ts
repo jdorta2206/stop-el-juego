@@ -126,3 +126,35 @@ test("adapter rejects an approved source with an unapproved license", () => {
   assert.deepEqual(result.categoryEvidence, []);
   assert.ok(result.errors.includes("license_not_approved_for_stop_bundle"));
 });
+
+
+import { decideLexicalStatus } from "./index";
+
+test("approved regional evidence enters the shared Spanish language pool regardless of player locale", () => {
+  const regionalSources: LexicalSourceRecord[] = ["es-AR", "es-MX"].map((locale) => ({
+    ...source,
+    sourceId: `source-${locale}`,
+    locale,
+    referenceUrl: `https://example.org/dictionary/${locale}`,
+  }));
+  const regionalLexical: LexicalAttestationRecord[] = regionalSources.map((regionalSource) => ({
+    ...lexical,
+    recordId: `lex-che-${regionalSource.locale}`,
+    sourceId: regionalSource.sourceId,
+    form: "che",
+    normalizedForm: "che",
+    locale: regionalSource.locale,
+    citationLocator: "entry:che",
+  }));
+
+  const bundle = buildReviewedEvidenceBundle(regionalSources, regionalLexical, []);
+  assert.equal(bundle.valid, true);
+  assert.equal(bundle.lexicalEvidence.length, 2);
+
+  // The lookup takes the game language, not the player's country or locale.
+  for (const playerLocale of ["es-ES", "es-AR", "es-MX"]) {
+    const result = decideLexicalStatus("che", "es", bundle.lexicalEvidence);
+    assert.equal(result.status, "valid", `player locale ${playerLocale} must not filter regional evidence`);
+  }
+  assert.equal(decideLexicalStatus("cheinventado", "es", bundle.lexicalEvidence).status, "unknown");
+});
