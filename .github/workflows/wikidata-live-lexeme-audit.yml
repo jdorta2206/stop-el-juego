@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/wikidata-live
-          for lexeme_id in L5 L317 L326 L354 L870 L893; do
+          for lexeme_id in L5 L317 L326 L354 L870 L893 L5140 L7385 L37028 L306424; do
             curl --fail --location --retry 3 \
               --user-agent "STOP-Lexical-Research/1.0 (https://github.com/jdorta2206/stop-el-juego)" \
               "https://www.wikidata.org/wiki/Special:EntityData/${lexeme_id}.json" \
@@ -34,7 +34,7 @@ jobs:
           from pathlib import Path
 
           root = Path("/tmp/wikidata-live")
-          ids = ["L5", "L317", "L326", "L354", "L870", "L893"]
+          ids = ["L5", "L317", "L326", "L354", "L870", "L893", "L5140", "L7385", "L37028", "L306424"]
           direct_entities = []
           wrapped_entities = []
           report = []
@@ -58,6 +58,15 @@ jobs:
                   "lexicalCategory": entity.get("lexicalCategory"),
                   "senses": len(entity.get("senses", [])),
                   "forms": len(entity.get("forms", [])),
+                  "formExamples": [
+                      representation.get("value")
+                      for form in entity.get("forms", [])
+                      for representation in form.get("representations", {}).values()
+                  ][:12],
+                  "formsWithFeatures": sum(
+                      bool(form.get("grammaticalFeatures"))
+                      for form in entity.get("forms", [])
+                  ),
               })
           if not any(item["senses"] >= 2 for item in report):
               raise SystemExit("Sample did not exercise a multi-sense lexeme")
@@ -65,6 +74,14 @@ jobs:
               raise SystemExit("Sample did not exercise a multi-form lexeme")
           if len({item["lexicalCategory"] for item in report}) < 2:
               raise SystemExit("Sample did not cover multiple lexical categories")
+          verb_ids = {"L5140", "L7385", "L37028", "L306424"}
+          verbs = [item for item in report if item["id"] in verb_ids]
+          if len(verbs) != len(verb_ids):
+              raise SystemExit("Sample is missing one or more verified Spanish verb lexemes")
+          if any(item["lexicalCategory"] != "Q24905" for item in verbs):
+              raise SystemExit("A selected irregular-verb lexeme is no longer categorized as a verb")
+          if any(item["forms"] < 2 or item["formsWithFeatures"] < 1 for item in verbs):
+              raise SystemExit("A selected verb lacks multiple forms or grammatical-feature metadata")
           (root / "lexemes.jsonl").write_text(
               "".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n" for item in direct_entities),
               encoding="utf-8",
