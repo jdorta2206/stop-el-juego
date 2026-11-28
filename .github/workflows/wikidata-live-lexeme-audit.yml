@@ -66,11 +66,11 @@ jobs:
           if len({item["lexicalCategory"] for item in report}) < 2:
               raise SystemExit("Sample did not cover multiple lexical categories")
           (root / "lexemes.jsonl").write_text(
-              "".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\\n" for item in direct_entities),
+              "".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n" for item in direct_entities),
               encoding="utf-8",
           )
           (root / "senses.jsonl").write_text(
-              "".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\\n" for item in wrapped_entities),
+              "".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n" for item in wrapped_entities),
               encoding="utf-8",
           )
           print(json.dumps({
