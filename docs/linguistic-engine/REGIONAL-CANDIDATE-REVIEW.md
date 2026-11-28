@@ -148,3 +148,40 @@ La inspección de `artifacts/api-server/src/lib/aiWordValidator.ts` confirma que
 - Hasta que exista el motor revisado, no presentar el fallback de IA como garantía de validez lexicográfica.
 
 Este hallazgo es documental: no se han modificado rutas, cachés, puntuaciones ni datos de producción.
+
+
+
+## Segunda auditoría Hunspell de 21 locales (2026-11-28)
+
+Se completó el workflow **Hunspell Spanish candidate inventory**, run `46138274949`, sobre el commit `8a6e93237cd4f3c7e18a938ed729581acc32d282`. Artefacto: `hunspell-spanish-candidates-79195b0` (ID `15260204399`, SHA-256 `f6ec0c5947bcaa342309034c65da86e1754b44308a2cd87b7f67f09a2095f805`).
+
+### Inventario y controles
+
+- 21 locales procesados; 1.203.534 entradas originales.
+- 65.558 formas normalizadas únicas; 10.293 aparecen en un solo locale; 53.833 aparecen en los 21.
+- 1.137.976 ocurrencias duplicadas al comparar el total bruto con las formas únicas globales.
+- 65.468 registros clasificados como candidatos alfabéticos simples; 48 registros con banderas de revisión manual (incluye puntuación, espacios, caracteres de control o formato).
+- Hunspell aceptó 1.203.486 entradas y rechazó 0. Es un autocontrol contra los mismos diccionarios de origen, no una prueba léxica independiente.
+- El cruce auxiliar registra 27.764 coincidencias MCR, 51.524 coincidencias RLA, 26.555 coincidencias en ambas, 12.721 sin coincidencia en esas fuentes y 134 análisis morfológicos argentinos de FreeLing.
+- Todos los registros mantienen `lexicalApproval=false` y `categoryApproval=false`.
+
+### Interpretación del cruce
+
+- **MCR 3.0** aporta sentidos auxiliares, pero su licencia CC BY 3.0 no está aprobada para el runtime; además, la definición puede corresponder a otro sentido o estar mal alineada.
+- **RLA-ES** declara dedicación de dominio público en el repositorio, pero no se ha establecido independencia de procedencia respecto a Hunspell. No contar coincidencias RLA como corroboración independiente hasta resolver el linaje.
+- **FreeLing argentino** aporta análisis morfológicos para un conjunto limitado de verbos, no un diccionario general. Sus resultados no aprueban automáticamente las formas de superficie ni su categoría.
+- La presencia en un único fichero regional tampoco prueba exclusividad geográfica. Las etiquetas es-XX son metadatos de procedencia del inventario, nunca filtros para el jugador.
+
+### Muestra de falsos positivos y revisión semántica
+
+El filtro «una sola región + definición MCR» devuelve 94 filas, pero no una lista de 94 regionalismos aprobables. La muestra contiene nombres propios y topónimos (`Allen`, `Arizona`, `Ariadna`, `Armando`, `Orinoco`), palabras comunes con sentidos no pertinentes (`a`, `C`, `paisa` como unidad monetaria, `guache` como técnica pictórica), y formas potencialmente útiles cuya acepción debe contrastarse con ASALE (`cochinera`, `natilla`, `profesionista`, `zaraza`). Por tanto, el cruce debe usarse para priorizar revisión, no para aprobar por lote.
+
+### Decisión
+
+1. Mantener el inventario completo como material de investigación, no como diccionario puntuable.
+2. Priorizar la revisión humana de formas con fuente primaria regional (por ejemplo, ASALE) y sentido/categoría claramente identificados.
+3. Separar nombres propios, topónimos, flexiones, derivaciones y homónimos antes de evaluar su utilidad en STOP.
+4. No aceptar una forma por su mera presencia en Hunspell, por una coincidencia MCR/RLA o por el resultado de un analizador morfológico.
+5. No importar el artefacto ni cambiar runtime, cachés, puntuaciones o datos de producción.
+
+**Resultado:** la extracción y el cruce han terminado correctamente; no se ha aprobado ninguna palabra ni se ha modificado el comportamiento del juego.
