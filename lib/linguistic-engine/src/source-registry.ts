@@ -158,8 +158,13 @@ export function validateCategoryAttestation(
   const matchingLexical = lexicalRecords.filter((item) => item.recordId === record.lexicalRecordId);
   const lexical = matchingLexical[0];
   if (matchingLexical.length > 1) errors.push("duplicate_lexical_record_id");
-  if (!lexical || lexical.reviewStatus !== "approved") errors.push("approved_lexical_record_required");
-  else if (!nonBlank(lexical.reviewedBy) || !nonBlank(lexical.reviewedAt) || !validTimestamp(lexical.reviewedAt)) errors.push("lexical_record_review_audit_required");
+  if (!lexical) errors.push("lexical_record_required");
+  else if (record.reviewStatus === "approved" && lexical.reviewStatus !== "approved") {
+    errors.push("approved_lexical_record_required");
+  } else if (record.reviewStatus === "approved" &&
+      (!nonBlank(lexical.reviewedBy) || !nonBlank(lexical.reviewedAt) || !validTimestamp(lexical.reviewedAt))) {
+    errors.push("lexical_record_review_audit_required");
+  }
   if (!nonBlank(record.recordId) || !nonBlank(record.normalizedForm) || !nonBlank(record.categoryId)) errors.push("category_record_fields_required");
   if (existingRecords.some((item) => item.recordId === record.recordId)) errors.push("duplicate_category_record_id");
   if (existingRecords.some((item) => item.lexicalRecordId === record.lexicalRecordId && item.categoryId === record.categoryId)) errors.push("duplicate_category_attestation");
