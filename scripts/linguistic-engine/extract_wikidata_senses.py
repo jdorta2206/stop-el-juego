@@ -51,11 +51,24 @@ def extract_senses(entity: Any, language_item_id: str = SPANISH_LANGUAGE_ID) -> 
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{sense_id}.glosses.{tag}: missing gloss")
             glosses.append({"languageTag": language_tag, "gloss": value})
+        claims = sense.get("claims", {})
+        if not isinstance(claims, dict):
+            raise ValueError(f"{sense_id}: claims must be an object keyed by property ID")
+        claim_count = 0
+        for property_id, statements in claims.items():
+            if not isinstance(property_id, str) or not re.fullmatch(r"P[1-9][0-9]*", property_id):
+                raise ValueError(f"{sense_id}.claims: invalid property ID")
+            if not isinstance(statements, list) or any(not isinstance(item, dict) for item in statements):
+                raise ValueError(f"{sense_id}.claims.{property_id}: expected an array of statement objects")
+            claim_count += len(statements)
         result.append({
             "senseId": sense_id,
             "lexemeId": lexeme_id,
             "languageItemId": language,
             "glosses": glosses,
+            "claims": claims,
+            "claimPropertyIds": sorted(claims),
+            "claimCount": claim_count,
             "source": "Wikidata Lexicographical Data",
             "researchOnly": True,
             "note": "Source glosses are not independently verified dictionary definitions.",
@@ -86,7 +99,7 @@ def main() -> None:
     if not ITEM_ID.fullmatch(args.language_item_id):
         parser.error("--language-item-id must be a Wikidata item ID")
     args.output_jsonl.parent.mkdir(parents=True, exist_ok=True)
-    counts = {"entitiesRead": 0, "senses": 0, "glosses": 0}
+    counts = {"entitiesRead": 0, "senses": 0, "glosses": 0, "senseClaims": 0}
     with args.output_jsonl.open("w", encoding="utf-8", newline="\n") as output:
         for line_number, entity in iter_entities(args.input_jsonl):
             try:
@@ -98,6 +111,7 @@ def main() -> None:
                 output.write(json.dumps(sense, ensure_ascii=False, sort_keys=True) + "\n")
                 counts["senses"] += 1
                 counts["glosses"] += len(sense["glosses"])
+                counts["senseClaims"] += sense["claimCount"]
     print(json.dumps({**counts, "researchOnly": True, "streaming": True}, sort_keys=True))
 
 
