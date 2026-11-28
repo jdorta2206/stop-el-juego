@@ -44,6 +44,43 @@ jobs:
         run: pnpm --filter @workspace/scripts linguistics:test
       - name: Run Hunspell extractor tests
         run: python3 -m unittest discover -s scripts/linguistic-engine -p 'test_*.py' -v
+      - name: Fetch and extract a real Wikidata Spanish lexeme
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            --user-agent "STOP-Lexical-Research/1.0 (https://github.com/jdorta2206/stop-el-juego)" \
+            "https://www.wikidata.org/wiki/Special:EntityData/L317.json" \
+            --output /tmp/wikidata-L317.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          raw = json.loads(Path("/tmp/wikidata-L317.json").read_text(encoding="utf-8"))
+          entities = raw.get("entities")
+          if not isinstance(entities, dict) or set(entities) != {"L317"}:
+              raise SystemExit("Expected exactly the live Wikidata L317 entity")
+          entity = entities["L317"]
+          if entity.get("id") != "L317" or entity.get("type") != "lexeme":
+              raise SystemExit("Live response is not the expected L317 Lexeme")
+          if entity.get("language") != "Q1321":
+              raise SystemExit("L317 is no longer marked as Spanish")
+          Path("/tmp/wikidata-L317.jsonl").write_text(
+              json.dumps(raw, ensure_ascii=False, separators=(",", ":")) + "\\n",
+              encoding="utf-8",
+          )
+          print(json.dumps({
+              "entity": entity["id"],
+              "language": entity["language"],
+              "sensesInSource": len(entity.get("senses", [])),
+              "formsInSource": len(entity.get("forms", [])),
+              "source": "live Wikidata Special:EntityData",
+              "syntheticFixture": False,
+          }, ensure_ascii=False, sort_keys=True))
+          PY
+          python3 scripts/linguistic-engine/extract_wikidata_senses.py \
+            --input-jsonl /tmp/wikidata-L317.jsonl \
+            --output-jsonl /tmp/wikidata-L317-senses.jsonl
+          test -s /tmp/wikidata-L317-senses.jsonl
       - name: Run linguistic engine tests
         run: pnpm --filter @workspace/linguistic-engine test
       - name: Type-check scripts package
