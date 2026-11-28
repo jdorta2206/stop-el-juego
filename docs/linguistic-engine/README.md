@@ -246,3 +246,26 @@ For each language and both API/offline adapters, assert identical outcomes for:
 - Impossible challenge decisions and historical AI-cache entries.
 
 Until this matrix passes, retain the current runtime unchanged and do not claim the linguistic engine is integrated. The findings above are from source inspection only; no live validation, cache, database, scoring or production setting was changed.
+
+
+## Existing regression coverage and safe next test boundary (2026-11-28)
+
+The current server test file `artifacts/api-server/src/routes/game.validation.test.ts` exercises dictionary-backed answers, language isolation, initial-letter checks and unsupported languages. `wordRules.test.ts` explicitly expects accent stripping while preserving `ñ`. There is no matching offline validator test file in the current tree, and the offline `isWordValid` helper is private to `offlineGame.ts`.
+
+Consequently, the current suite does not establish server/offline parity for player submissions. It also does not test:
+- fabricated extensions accepted by prefix matching (e.g. a dictionary seed plus arbitrary suffix);
+- invented words in open categories;
+- accented minimal pairs such as `si/sí` and `el/él`;
+- locale-independent acceptance of a reviewed regional word;
+- category evidence separately from lexical evidence;
+- cached AI approvals after a policy or dictionary update.
+
+Do not paper over this gap by duplicating more test-only logic. The safe implementation sequence is:
+1. extract a dependency-free shared validation contract into a package importable by both server and game client;
+2. make both adapters pass the same versioned dictionary/evidence bundle into that contract;
+3. keep network AI/cache behavior outside the deterministic shared decision;
+4. expose a narrow offline test seam (or test the exported round function with a controlled bundle) rather than exporting internal mutable state;
+5. add table-driven parity cases that execute the same fixture against both adapters and compare validity and score;
+6. only then replace either runtime validator, behind an explicit compatibility plan for existing accent-insensitive behavior.
+
+No runtime files were changed in this audit. This note records missing coverage, not a claim that the parity tests already exist.
