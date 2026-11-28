@@ -1,0 +1,179 @@
+name: Hunspell Spanish candidate inventory
+
+on:
+  push:
+    branches:
+      - feat/linguistic-engine-regional-foundation
+    paths:
+      - "scripts/linguistic-engine/**"
+      - "docs/linguistic-engine/HUNSPELL-EXTRACTOR.md"
+      - ".github/workflows/hunspell-spanish-inventory.yml"
+  pull_request:
+    paths:
+      - "scripts/linguistic-engine/**"
+      - "docs/linguistic-engine/HUNSPELL-EXTRACTOR.md"
+      - ".github/workflows/hunspell-spanish-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hunspell-spanish-inventory-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  extract-spanish-candidates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    steps:
+      - name: Checkout STOP branch
+        uses: actions/checkout@v4
+      - name: Install official Hunspell CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes hunspell
+          hunspell --version
+      - name: Run extractor unit tests
+        run: python3 -m unittest discover -s scripts/linguistic-engine -p 'test_*.py' -v
+      - name: Download pinned LibreOffice Spanish dictionaries
+        env:
+          UPSTREAM_REVISION: 79195b017e6d70151337856c59e7d13d311d6630
+        run: |
+          set -euo pipefail
+          mkdir -p research/hunspell/es research/output/hunspell-es
+          locales=(
+            es_AR es_BO es_CL es_CO es_CR es_CU es_DO es_EC es_ES es_GT
+            es_HN es_MX es_NI es_PA es_PE es_PR es_PY es_SV es_US es_UY es_VE
+          )
+          for locale in "${locales[@]}"; do
+            for extension in dic aff; do
+              url="https://raw.githubusercontent.com/LibreOffice/dictionaries/${UPSTREAM_REVISION}/es/${locale}.${extension}"
+              curl --fail --location --retry 3 --silent --show-error \
+                "$url" --output "research/hunspell/es/${locale}.${extension}"
+            done
+            echo "Downloaded ${locale}"
+          done
+      - name: Run extractor against all 21 Spanish locales
+        run: |
+          set -euo pipefail
+          for dic in research/hunspell/es/*.dic; do
+            locale="$(basename "$dic" .dic)"
+            python3 scripts/linguistic-engine/extract_hunspell_candidates.py \
+              --dic "$dic" \
+              --aff "research/hunspell/es/${locale}.aff" \
+              --locale "${locale//_/-}" \
+              --revision 79195b017e6d70151337856c59e7d13d311d6630 \
+              --hunspell hunspell \
+              --output "research/output/hunspell-es/${locale}.jsonl"
+          done
+      - name: Build deduplicated review-only catalogue
+        run: |
+          python3 scripts/linguistic-engine/build_hunspell_catalogue.py --input-dir research/output/hunspell-es --output research/output/hunspell-es/DEDUPLICATED-CANDIDATES.jsonl --summary research/output/hunspell-es/CATALOGUE-SUMMARY.json
+      - name: Download pinned independent lexical and morphology snapshots
+        run: |
+          set -euo pipefail
+          mkdir -p research/sources/spanish
+          curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/olea/lemarios/e4f3043c6d7c15e454d43e6e62dfba0c68378ecf/lemario-general-del-espanol.txt --output research/sources/spanish/lemario-general-del-espanol.txt
+          curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/omwn/omw-data/f75be19ec590da12a7a5665e361690b5badb7a25/wns/mcr/wn-data-spa.tab --output research/sources/spanish/wn-data-spa.tab
+          curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/omwn/omw-data/f75be19ec590da12a7a5665e361690b5badb7a25/wns/mcr/LICENSE --output research/sources/spanish/MCR-LICENSE
+          curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/TALP-UPC/FreeLing/0bae6b7f6d1b405e67658895de54b59bfb3b6338/data/es/es-ar/dictionary/entries/AR.verb --output research/sources/spanish/FreeLing-AR.verb
+          curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/TALP-UPC/FreeLing/0bae6b7f6d1b405e67658895de54b59bfb3b6338/COPYING --output research/sources/spanish/FreeLing-COPYING
+          curl --fail --location --retry 3 --silent --show-error https://raw.githubusercontent.com/TALP-UPC/FreeLing/0bae6b7f6d1b405e67658895de54b59bfb3b6338/LICENSES/Apache.license --output research/sources/spanish/FreeLing-Apache-LICENSE
+      - name: Cross-check candidates against pinned lexical and morphology sources (research only)
+        run: |
+          python3 scripts/linguistic-engine/crosscheck_spanish_sources.py --candidates research/output/hunspell-es/DEDUPLICATED-CANDIDATES.jsonl --rla research/sources/spanish/lemario-general-del-espanol.txt --mcr research/sources/spanish/wn-data-spa.tab --mcr-license research/sources/spanish/MCR-LICENSE --freeling-ar research/sources/spanish/FreeLing-AR.verb --freeling-copying research/sources/spanish/FreeLing-COPYING --freeling-apache-license research/sources/spanish/FreeLing-Apache-LICENSE --output research/output/hunspell-es/LEXICAL-CROSSCHECK.jsonl --summary research/output/hunspell-es/LEXICAL-CROSSCHECK-SUMMARY.json
+      - name: Build inventory summary
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import unicodedata
+          from collections import Counter
+          from pathlib import Path
+
+          rows = []
+          locale_forms = {}
+          status_totals = Counter()
+          raw_total = 0
+          for path in sorted(Path("research/output/hunspell-es").glob("es_*.jsonl")):
+              records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+              source, candidates = records[0], records[1:]
+              forms = {unicodedata.normalize("NFC", item["word"]).casefold() for item in candidates}
+              locale_forms[source["locale"]] = forms
+              counts = Counter(item["status"] for item in candidates)
+              status_totals.update(counts)
+              raw_total += len(candidates)
+              rows.append({
+                  "locale": source["locale"],
+                  "raw": len(candidates),
+                  "unique": len(forms),
+                  "manual": counts["manual_review"],
+                  "rejected": counts["rejected_by_hunspell"],
+              })
+
+          presence = Counter(form for forms in locale_forms.values() for form in forms)
+          union_size = len(presence)
+          locale_unique_total = sum(len(forms) for forms in locale_forms.values())
+          duplicate_rows = raw_total - locale_unique_total
+          lines = [
+              "# Spanish Hunspell candidate inventory",
+              "",
+              "| Locale | Raw entries | Unique normalized forms | Exclusive to locale | Duplicate rows | Manual review |",
+              "|---|---:|---:|---:|---:|---:|",
+          ]
+          for row in rows:
+              exclusive = sum(1 for form in locale_forms[row["locale"]] if presence[form] == 1)
+              lines.append(
+                  f"| {row['locale']} | {row['raw']:,} | {row['unique']:,} | "
+                  f"{exclusive:,} | {row['raw']-row['unique']:,} | {row['manual']:,} |"
+              )
+
+          distribution = Counter(presence.values())
+          lines.extend([
+              "",
+              "## Cross-locale totals",
+              "",
+              f"- Locales processed: **{len(locale_forms)}**",
+              f"- Raw dictionary entries: **{raw_total:,}**",
+              f"- Sum of per-locale unique normalized forms: **{locale_unique_total:,}**",
+              f"- Duplicate rows within locale dictionaries: **{duplicate_rows:,}**",
+              f"- Unique normalized spellings across all locales: **{union_size:,}**",
+              f"- Spellings present in only one locale: **{distribution[1]:,}**",
+              f"- Spellings present in all {len(locale_forms)} locales: **{distribution[len(locale_forms)]:,}**",
+              "",
+              "### Number of locales containing each spelling",
+              "",
+              "| Locales | Unique spellings |",
+              "|---:|---:|",
+          ])
+          for number in range(1, len(locale_forms) + 1):
+              lines.append(f"| {number} | {distribution[number]:,} |")
+          lines.extend([
+              "",
+              "## Hunspell self-check and interpretation",
+              "",
+              f"- Entries accepted by their own paired Hunspell dictionary: **{status_totals['accepted_by_hunspell']:,}**",
+              f"- Entries rejected by their own paired Hunspell dictionary: **{status_totals['rejected_by_hunspell']:,}**",
+              f"- Non-simple entries held for manual review: **{status_totals['manual_review']:,}**",
+              "",
+              "The zero-rejection result is expected because the input forms are taken from the same .dic files being checked. It confirms the paired files load and accept their own simple entries; it is **not independent proof** that a form is a real, current, appropriate game answer. The 48 manual-review records include abbreviations, names, punctuation, spacing or formatting anomalies.",
+              "",
+              "NFC + case-folding is used only to compare spelling identity across locale inventories. Accents are preserved. These counts still include inflections, proper names and other entries that require lexical and game-rule review.",
+              "",
+              "All results are research-only. No STOP runtime dictionary is modified and no word is approved for scoring.",
+          ])
+          report = "\n".join(lines) + "\n"
+          Path("research/output/hunspell-es/SUMMARY.md").write_text(report, encoding="utf-8")
+          Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text(report, encoding="utf-8")
+          PY
+      - name: Upload review-only candidate inventories
+        uses: actions/upload-artifact@v4
+        with:
+          name: hunspell-spanish-candidates-79195b0
+          path: research/output/hunspell-es/
+          if-no-files-found: error
+          retention-days: 7
