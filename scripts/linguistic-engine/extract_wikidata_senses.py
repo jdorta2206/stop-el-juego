@@ -15,6 +15,16 @@ SPANISH_LANGUAGE_ID = "Q1321"
 
 
 def extract_senses(entity: Any, language_item_id: str = SPANISH_LANGUAGE_ID) -> list[dict[str, Any]]:
+    # Special:EntityData wraps one entity in an "entities" map; dump JSONL
+    # records contain the entity directly. Accept both documented entry points.
+    if isinstance(entity, dict) and "entities" in entity:
+        wrapped = entity.get("entities")
+        if not isinstance(wrapped, dict) or len(wrapped) != 1:
+            raise ValueError("entities: expected exactly one entity in Special:EntityData response")
+        wrapper_id, unwrapped = next(iter(wrapped.items()))
+        if not isinstance(unwrapped, dict) or unwrapped.get("id") != wrapper_id:
+            raise ValueError("entities: key must match the enclosed entity ID")
+        entity = unwrapped
     if not isinstance(entity, dict) or entity.get("type") != "lexeme":
         raise ValueError("entity: expected a Wikibase Lexeme entity")
     lexeme_id = entity.get("id")
