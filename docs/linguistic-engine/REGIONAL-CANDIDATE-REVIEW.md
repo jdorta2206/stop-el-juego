@@ -102,3 +102,27 @@ Ejemplo de aceptación: una persona que juega desde España debe poder utilizar 
 - Voz inventada o con acepción que no corresponde a la categoría: rechazar o enviar a revisión, aunque la variante seleccionada coincida.
 
 Este requisito es una decisión de comportamiento para el diseño del motor; **no significa que las palabras candidatas actuales estén aprobadas ni que el comportamiento de producción haya cambiado**.
+
+
+## Auditoría de integración con el validador actual (2026-11-28)
+
+Se inspeccionó el flujo actual de validación en `artifacts/api-server/src/routes/game.ts`, `artifacts/api-server/src/lib/wordRules.ts` y `artifacts/api-server/src/lib/aiWordValidator.ts`.
+
+Hallazgos:
+
+1. El validador síncrono recibe un código de idioma (`es`, `en`, `pt`, `fr`, `it`) y consulta el diccionario de ese idioma. No recibe ubicación física ni locale regional del jugador; por tanto, la ubicación no aparece como filtro en ese punto.
+2. En español, el diccionario estático actual no demuestra todavía cobertura completa de las variantes regionales. La nueva base lingüística debe ampliar cobertura por evidencia, sin convertir `es-ES` en requisito.
+3. La ruta de respaldo con IA puede decidir sobre palabras ausentes del diccionario estático. Su prompt actual pide aceptar regionalismos, pero una respuesta afirmativa de IA no constituye por sí sola prueba lexicográfica independiente. No debe convertirse en aprobación definitiva del diccionario ni sustituir la revisión de fuentes.
+4. El validador estático permite actualmente que una respuesta empiece por una entrada del diccionario (`normalizedWord.startsWith(nw)`). Esto puede aceptar extensiones no documentadas. Se registra como riesgo separado para una futura corrección, que deberá respetar las reglas de flexión aprobadas y evitar regresiones.
+5. La normalización de juego actual elimina tildes para comparación. La futura validación léxica debe conservar la forma original y sus distinciones ortográficas; cualquier tolerancia de entrada debe ser una regla explícita, no una pérdida de evidencia.
+
+### Plan seguro de integración
+
+- Mantener la validación por idioma general (`es`) y consultar el conjunto de formas españolas revisadas de todas las regiones.
+- Conservar locale/procedencia como metadatos de cada acepción, nunca como filtro por país del jugador.
+- Separar existencia léxica, flexión/variantes ortográficas y elegibilidad de categoría.
+- La IA solo puede proponer una revisión; no aprobar por sí sola una forma.
+- Antes de sustituir el validador actual, añadir pruebas de regresión para todas las categorías, primera letra, flexiones, acentos, `ñ`, y los idiomas ya soportados.
+- No cambiar el comportamiento de producción hasta que haya fuentes licenciadas, corpus revisado y una migración probada.
+
+Esta auditoría es documental y no modifica el comportamiento del juego ni la producción.
