@@ -100,3 +100,29 @@ test("category claim must reference the exact approved lexical record", () => {
   assert.deepEqual(result.categoryEvidence, []);
   assert.ok(result.errors.includes("approved_lexical_record_required"));
 });
+
+test("adapter rejects duplicate lexical record identifiers", () => {
+  const result = buildReviewedEvidenceBundle([source], [lexical, lexical], [category]);
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.lexicalEvidence, []);
+  assert.deepEqual(result.categoryEvidence, []);
+  assert.ok(result.errors.includes("duplicate_lexical_record_id"));
+});
+
+test("adapter rejects duplicate category claims even with different record ids", () => {
+  const duplicate = { ...category, recordId: "cat-vehicle-duplicate" };
+  const result = buildReviewedEvidenceBundle([source], [lexical], [category, duplicate]);
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.lexicalEvidence, []);
+  assert.deepEqual(result.categoryEvidence, []);
+  assert.ok(result.errors.includes("duplicate_category_attestation"));
+});
+
+test("adapter rejects an approved source with an unapproved license", () => {
+  const unapprovedSource = { ...source, licenseId: "CC-BY-3.0" };
+  const result = buildReviewedEvidenceBundle([unapprovedSource], [lexical], [category]);
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.lexicalEvidence, []);
+  assert.deepEqual(result.categoryEvidence, []);
+  assert.ok(result.errors.includes("license_not_approved_for_stop_bundle"));
+});
