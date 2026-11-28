@@ -221,3 +221,28 @@ Before an API or offline adapter constructs `LexicalEvidence` or `CategoryEviden
 The pure category helper checks the form/category/source identifier fields supplied to it, but it cannot prove that a category source identifier resolves to the same approved lexical record. That relationship must be enforced by the registry/adapter before calling it. The same applies to morphology: validate the full source and lexical records before passing a relation to the morphology validator.
 
 **Do not treat a successful unit test of a helper with fabricated fixture evidence as approval of real vocabulary.** Fixtures test deterministic behavior only. No production word data, source licenses or category claims are approved by these helper tests.
+
+
+## Online/offline parity and orthography audit (2026-11-28)
+
+A second read-only pass against `master` confirmed these concrete integration points:
+
+- Server decision: `artifacts/api-server/src/routes/game.ts`, `isWordValid` (around lines 1427–1460) and `isWordValidAsync` (around 1391–1424).
+- Offline decision: `artifacts/stop-game/src/lib/offlineGame.ts`, its independent `isWordValid` (around lines 125–155).
+- Both implementations currently accept any safe, three-character answer in configured open categories. Both also use prefix matching for closed-category entries. They are separate implementations, so fixing only one will create different scores online and offline.
+- The API's AI fallback caches a boolean by `(word, category, lang)` and returns that cache before re-evaluation. Its prompt explicitly says to accept when uncertain. The Impossible challenge calls the same AI validator directly, bypassing the normal route.
+- The shared server `normalizeWord` strips most accent marks (while preserving `ñ`). Therefore forms such as `si/sí` and `el/él` collapse to the same comparison key in the current runtime. The new linguistic core intentionally preserves those distinctions. This is a compatibility change and must be introduced with a reviewed orthographic policy and regression tests, not by silently swapping normalization.
+
+### Required parity test matrix before runtime integration
+
+For each language and both API/offline adapters, assert identical outcomes for:
+- exact approved form, regional form from another locale, unknown form and invented string;
+- accent contrasts and canonical Unicode composed/decomposed input;
+- `ñ` versus `n`;
+- documented regular and irregular inflections versus fabricated suffix/prefix extensions;
+- valid word in the wrong category and a category with no evidence;
+- open categories (including names/places/brands) with both verified and invented entries;
+- stale/missing bundle and unavailable network/AI;
+- Impossible challenge decisions and historical AI-cache entries.
+
+Until this matrix passes, retain the current runtime unchanged and do not claim the linguistic engine is integrated. The findings above are from source inspection only; no live validation, cache, database, scoring or production setting was changed.
